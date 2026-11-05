@@ -115,7 +115,7 @@ def source_folders():
     without its dependencies' folders and Lean's own."""
     path = subprocess.run(["lake", "env", "printenv", "LEAN_SRC_PATH"], capture_output=True, text=True).stdout
     root = Path.cwd().resolve()
-    folders = [Path(folder).resolve() for folder in path.strip().split(os.pathsep) if folder]
+    folders = dict.fromkeys(Path(folder).resolve() for folder in path.strip().split(os.pathsep) if folder)
     return [folder for folder in folders
             if folder.is_relative_to(root) and ".lake" not in folder.relative_to(root).parts] or [root]
 
