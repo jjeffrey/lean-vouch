@@ -18,6 +18,10 @@ python3 ../lean-review/review.py MyProject
 Then open <http://127.0.0.1:8797/__review__/diagram>. The first run takes about 7 minutes, or about 35
 with Mathlib. Later runs take seconds. Commit `review/marks.json`: it's your review record.
 
+> [!WARNING]
+> Only run this on code you trust. Building a Lean project runs its macros and build scripts, and the
+> graph step runs its initializers, so reviewing a stranger's project runs their code on your machine.
+
 ## What you get
 
 - **Marks and notes** on every declaration.
