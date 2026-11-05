@@ -1,0 +1,14 @@
+# Builds the example's API documentation with doc-gen4.
+name = "docbuild"
+reservoir = false
+version = "0.1.0"
+packagesDir = "../.lake/packages"
+
+[[require]]
+name = "review-example"
+path = "../"
+
+[[require]]
+scope = "leanprover"
+name = "doc-gen4"
+rev = "v4.35.0"

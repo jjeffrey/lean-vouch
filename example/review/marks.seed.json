@@ -1,0 +1,240 @@
+{
+  "Nat.mod": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {},
+      "own": "f3b171f5c35ada13"
+    },
+    "notes": [
+      {
+        "by": "Ada",
+        "date": "2026-11-02",
+        "text": "m % 0 = m. Noted; gcd never takes a remainder by 0."
+      }
+    ],
+    "status": "agree"
+  },
+  "ReviewExample.Divides": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.mul": "6540b66d943bf0bb"
+      },
+      "own": "0dfe923a99c9aa54"
+    },
+    "notes": [
+      {
+        "by": "Ada",
+        "date": "2026-11-02",
+        "text": "Why define this as ∃ k, n = d * k rather than n % d = 0?"
+      },
+      {
+        "by": "assistant",
+        "date": "2026-11-02",
+        "text": "They agree for every d and n, but the existential form is what proofs need: to show d divides n you give the k, and from a proof you get the k back. It is also how Mathlib defines divisibility."
+      },
+      {
+        "by": "Ada",
+        "date": "2026-11-02",
+        "text": "So 0 divides only 0, and every number divides 0?"
+      },
+      {
+        "by": "assistant",
+        "date": "2026-11-02",
+        "text": "Yes. Both are now theorems: Divides.zero (every d divides 0) in this module, and Divides.zero_left (0 divides n exactly when n = 0) in ReviewExample.Zero."
+      }
+    ],
+    "status": "agree"
+  },
+  "ReviewExample.Divides.mod": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.mod": "f3b171f5c35ada13",
+        "Nat.mul": "6540b66d943bf0bb",
+        "ReviewExample.Divides": "0dfe923a99c9aa54"
+      },
+      "own": "71492c4ca5df6679"
+    },
+    "notes": [],
+    "status": "agree"
+  },
+  "ReviewExample.Divides.of_mod": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.mod": "f3b171f5c35ada13",
+        "Nat.mul": "6540b66d943bf0bb",
+        "ReviewExample.Divides": "0dfe923a99c9aa54"
+      },
+      "own": "e50f985bfa39afb8"
+    },
+    "notes": [],
+    "status": "agree"
+  },
+  "ReviewExample.Divides.refl": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.mul": "6540b66d943bf0bb",
+        "ReviewExample.Divides": "0dfe923a99c9aa54"
+      },
+      "own": "376db7f92d83c15d"
+    },
+    "notes": [],
+    "status": "agree"
+  },
+  "ReviewExample.Divides.zero": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.mul": "6540b66d943bf0bb",
+        "ReviewExample.Divides": "0dfe923a99c9aa54"
+      },
+      "own": "28c5f3ef7322fb11"
+    },
+    "notes": [],
+    "status": "agree"
+  },
+  "ReviewExample.divides_gcd": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "InvImage": "cb86e38fe61dc40c",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.add": "b22dc563ea09c091",
+        "Nat.lt": "a504b25cc7f8a015",
+        "Nat.mod": "f3b171f5c35ada13",
+        "Nat.mul": "6540b66d943bf0bb",
+        "PSigma": "027603f61043ad97",
+        "ReviewExample.Divides": "0000000000000000",
+        "ReviewExample.gcd": "dbdffe02f3928447",
+        "WellFounded.Nat.fix": "a15a8f77b9f99888"
+      },
+      "own": "9aefa9c1dbe03520"
+    },
+    "notes": [],
+    "status": "agree"
+  },
+  "ReviewExample.gcd": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "InvImage": "cb86e38fe61dc40c",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.add": "b22dc563ea09c091",
+        "Nat.lt": "a504b25cc7f8a015",
+        "Nat.mod": "f3b171f5c35ada13",
+        "PSigma": "027603f61043ad97",
+        "WellFounded.Nat.fix": "a15a8f77b9f99888"
+      },
+      "own": "dbdffe02f3928447"
+    },
+    "notes": [
+      {
+        "by": "Ada",
+        "date": "2026-11-02",
+        "text": "gcd 0 0 = 0. Is that right?"
+      },
+      {
+        "by": "assistant",
+        "date": "2026-11-02",
+        "text": "It is the usual convention: every number divides 0, and 0 is the greatest in the divisibility order. divides_gcd states exactly that."
+      }
+    ],
+    "status": "question"
+  },
+  "ReviewExample.gcd_divides_mul": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "InvImage": "cb86e38fe61dc40c",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.add": "b22dc563ea09c091",
+        "Nat.lt": "a504b25cc7f8a015",
+        "Nat.mod": "f3b171f5c35ada13",
+        "Nat.mul": "6540b66d943bf0bb",
+        "PSigma": "027603f61043ad97",
+        "ReviewExample.Divides": "0dfe923a99c9aa54",
+        "ReviewExample.gcd": "dbdffe02f3928447",
+        "WellFounded.Nat.fix": "a15a8f77b9f99888"
+      },
+      "own": "523ff39db45889a1"
+    },
+    "notes": [
+      {
+        "by": "Ada",
+        "date": "2026-11-02",
+        "text": "The statement is right, but is this proved?"
+      },
+      {
+        "by": "assistant",
+        "date": "2026-11-02",
+        "text": "Not yet: the proof uses gcd_mul_lcm, which is still a sorry. The mark stands, since it's about the statement. Follow the dashed red arrow to the gap."
+      }
+    ],
+    "status": "agree"
+  },
+  "ReviewExample.gcd_dvd": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {
+        "And": "b44379ec9afb6bcb",
+        "Eq": "d65236ee59b4fb4e",
+        "Exists": "9061cf3d424f1f3a",
+        "InvImage": "cb86e38fe61dc40c",
+        "Nat": "00f1b84d862fbf33",
+        "Nat.add": "b22dc563ea09c091",
+        "Nat.lt": "a504b25cc7f8a015",
+        "Nat.mod": "f3b171f5c35ada13",
+        "Nat.mul": "6540b66d943bf0bb",
+        "PSigma": "027603f61043ad97",
+        "ReviewExample.Divides": "0dfe923a99c9aa54",
+        "ReviewExample.gcd": "dbdffe02f3928447",
+        "WellFounded.Nat.fix": "a15a8f77b9f99888"
+      },
+      "own": "b9aac3338366be19"
+    },
+    "notes": [],
+    "status": "agree"
+  },
+  "ReviewExample.hcf": {
+    "date": "2026-11-01",
+    "notes": [
+      {
+        "by": "Ada",
+        "date": "2026-11-01",
+        "text": "Do we still need hcf here?"
+      }
+    ],
+    "status": "question"
+  },
+  "module ReviewExample.Divides": {
+    "date": "2026-11-02",
+    "fingerprint": {
+      "deps": {},
+      "own": "0"
+    },
+    "notes": [],
+    "status": "agree"
+  }
+}

@@ -1,0 +1,6 @@
+name = "review-example"
+version = "0.1.0"
+defaultTargets = ["ReviewExample"]
+
+[[lean_lib]]
+name = "ReviewExample"

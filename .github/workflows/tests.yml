@@ -1,0 +1,48 @@
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v6
+        with:
+          path: |
+            example/.lake
+            example/docbuild/.lake
+          key: example-${{ runner.os }}-${{ hashFiles('example/lean-toolchain', 'example/docbuild/lake-manifest.json') }}
+      - name: Build the example's docs and graph
+        working-directory: example
+        run: |
+          lake build -q
+          (cd docbuild && DOCGEN_SRC=file lake build -q ReviewExample:docs)
+          lake env lean --run ../graph/DeclGraph.lean ReviewExample > review/graph.json
+      - run: python3 -m unittest discover -s tests
+
+  # The oldest Lean that review.py accepts (MINIMUM there), on a small project with no dependencies.
+  minimum-lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - run: git clone --depth 1 --branch v4.30.0 https://github.com/leanprover/lean4-cli project
+      - uses: actions/cache@v6
+        with:
+          path: |
+            project/.lake
+            project/docbuild/.lake
+          key: minimum-lean-${{ runner.os }}-v4.30.0
+      - name: Set up the project, build its docs and graph
+        working-directory: project
+        run: python3 ../review.py Cli --no-serve
+      - name: The graph and the docs agree
+        working-directory: project
+        run: python3 ../tests/check_docs_match.py Cli

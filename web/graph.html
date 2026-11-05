@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dependency graph</title>
+<style>
+  /* The page fits the window: only the diagram (zoom, pan) and the sidebar (scroll) move. */
+  html, body { height: 100%; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 1em 1.5em; box-sizing: border-box;
+    display: flex; flex-direction: column; overflow: hidden; color: #222; background: #fff; }
+  body > * { flex: none; }
+  h1 { margin: 0 0 0.3em; font-size: 1.6em; }
+  header.views { display: flex; align-items: baseline; gap: 1.2em; flex-wrap: wrap; }
+  header.views nav { display: flex; gap: 1em; }
+  header.views nav a { color: #1a5fb4; }
+  .controls { display: flex; gap: 0.6em 1.5em; align-items: center; flex-wrap: wrap; margin-bottom: 0.8em; }
+  .legend span { display: inline-block; margin-right: 1em; }
+  .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; vertical-align: middle;
+    margin-right: 0.3em; border: 1px solid #888; }
+  .note { color: #555; max-width: 60em; margin: 0 0 0.6em; }
+  .note summary { cursor: pointer; color: #1a5fb4; }
+  .note p { margin: 0.4em 0 0; }
+  body > .layout { flex: 1; min-height: 0; display: flex; gap: 1em; align-items: stretch; }
+  #tree { width: 17em; flex: none; display: flex; flex-direction: column; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 0.88em; min-height: 0; }
+  #tree input[type=search] { margin: 0.5em; font: inherit; }
+  #tree-hint { color: #666; margin: 0 0.7em 0.4em; font-size: 0.92em; }
+  #tree-rows { flex: 1; overflow: auto; padding-bottom: 0.4em; }
+  .row { display: flex; align-items: center; gap: 0.25em; padding: 0.1em 0.5em 0.1em 0; cursor: pointer;
+    white-space: nowrap; }
+  .row:hover { background: #f3f5f8; }
+  .row .twisty { width: 1em; flex: none; text-align: center; color: #888; }
+  .row .label { overflow: hidden; text-overflow: ellipsis; }
+  .row .count { margin-left: auto; padding-left: 0.5em; color: #888; font-size: 0.9em; }
+  .row.pinned .label { font-weight: 600; }
+  .row.focus { background: #dcebfb; }
+  #diagram { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 6px;
+    overflow: hidden; cursor: grab; }
+  #diagram:active { cursor: grabbing; }
+  #diagram g.node { cursor: pointer; }
+  #diagram g.cluster text { cursor: pointer; }
+  #diagram svg { width: 100%; height: 100%; max-width: none !important; }
+  #sidebar { width: 36%; max-width: 40em; overflow: auto; border: 1px solid #ddd;
+    border-radius: 6px; padding: 0.8em 1em; box-sizing: border-box; font-size: 0.92em; }
+  #sidebar h2 { font-size: 1.05em; margin: 0 0 0.2em; word-break: break-all; }
+  #sidebar h3 { font-size: 0.95em; margin: 1em 0 0.3em; }
+  #sidebar .muted { color: #666; }
+  #sidebar pre { background: #f6f8fa; padding: 0.6em; border-radius: 4px; overflow-x: auto; font-size: 0.9em;
+    margin: 0.3em 0; white-space: pre; }
+  #sidebar ul { margin: 0.2em 0; padding-left: 1.2em; }
+  #sidebar .ref { cursor: pointer; color: #1a5fb4; text-decoration: none; border-bottom: 2px solid transparent; }
+  #sidebar .ref[data-status="agree"] { border-color: #33aa33; }
+  #sidebar .ref[data-status="question"] { border-color: #cc9900; }
+  #sidebar .ref[data-status="reject"] { border-color: #cc3333; }
+  #sidebar .marks button { width: 2em; height: 1.8em; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  #sidebar .marks button[data-status="agree"].active { background: #c8ecc8; border-color: #33aa33; }
+  #sidebar .marks button[data-status="question"].active { background: #fbe9b0; border-color: #cc9900; }
+  #sidebar .marks button[data-status="reject"].active { background: #f6c4c4; border-color: #cc3333; }
+  #sidebar textarea { width: 100%; box-sizing: border-box; font: inherit; }
+  #sidebar .stale { color: #b45f00; font-style: italic; }
+  #sidebar .gap { color: #c62828; margin: 0.4em 0; }
+  #sidebar .docs { margin: 0.3em -0.4em; }
+  #sidebar .review-notes { list-style: none; margin: 0.4em 0; padding-left: 0; }
+  #sidebar .review-notes li { margin: 0.4em 0; padding: 0.35em 0.6em; border-left: 3px solid; border-radius: 4px; color: #1e1e1e; }
+  #sidebar .review-notes .note-head { font-weight: 600; font-size: 0.85em; margin-bottom: 0.1em; }
+  #sidebar .review-notes .note-date { font-weight: normal; color: #777; margin-left: 0.3em; }
+  #sidebar .review-notes li > div:last-child { white-space: pre-wrap; }
+  #sidebar .review-notes .by-reviewer { background: #f3f3f3; border-color: #888; }
+  #sidebar .review-notes .by-assistant { background: #e8f1fd; border-color: #2a7de1; }
+  #sidebar .review-notes .by-tool { background: none; border-color: #ccc; color: #777; font-style: italic; font-size: 0.9em; }
+  /* Highlighting the selected node, what it depends on (below) and what depends on it (above). */
+  .hl-dim { opacity: 0.45; }
+  .hl-selected path, .hl-selected polygon, .hl-selected rect { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
+  .hl-down path, .hl-down polygon, .hl-down rect { stroke: #2a7de1 !important; stroke-width: 2.5px !important; }
+  .hl-up path, .hl-up polygon, .hl-up rect { stroke: #8e44ad !important; stroke-width: 2.5px !important; }
+  g.edge.hl-down path, path.hl-down { stroke: #2a7de1 !important; stroke-width: 2px !important; }
+  g.edge.hl-up path, path.hl-up { stroke: #8e44ad !important; stroke-width: 2px !important; }
+  .hl-both path, .hl-both polygon, .hl-both rect { stroke: #0a8f7a !important; stroke-width: 2.5px !important; }
+  g.edge.hl-both path { stroke: #0a8f7a !important; stroke-width: 2px !important; }
+  g.cluster.hl-down > polygon, g.cluster.hl-down > path { stroke: #2a7de1 !important; stroke-width: 2px !important; }
+  g.cluster.hl-up > polygon, g.cluster.hl-up > path { stroke: #8e44ad !important; stroke-width: 2px !important; }
+  g.cluster.hl-both > polygon, g.cluster.hl-both > path { stroke: #0a8f7a !important; stroke-width: 2px !important; }
+  g.cluster.hl-selected > polygon, g.cluster.hl-selected > path { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
+  #sidebar .reach-row { display: flex; justify-content: space-between; gap: 1em; }
+  #sidebar .reach-row a { cursor: pointer; color: #1a5fb4; }
+  #sidebar .reach-row span { color: #666; }
+  g.node.gap.hl-down path, g.node.gap.hl-down polygon, g.node.gap.hl-up path, g.node.gap.hl-up polygon,
+  g.edge.gap.hl-down path, g.edge.gap.hl-down polygon, g.edge.gap.hl-up path, g.edge.gap.hl-up polygon { stroke: #c62828 !important; }
+  .key-down { color: #2a7de1; font-weight: 600; }
+  .key-up { color: #8e44ad; font-weight: 600; }
+</style>
+</head>
+<body>
+<header class="views"><h1 id="project">Dependency graph</h1>
+  <nav><a id="docs-link" href="/">docs</a><a href="/__review__/quiz">quiz</a></nav></header>
+<details class="note"><summary>How to read this diagram</summary><p>Each arrow points from a declaration to one it depends on, with the arrows implied
+by others left out (a Hasse diagram). For a theorem, only its statement counts; for a definition,
+its statement and body. Colors are your marks; an orange border means something below changed
+since you marked it. Scroll to zoom, drag to pan. Click a node to see its code and notes, and to
+highlight <span class="key-down">what it depends on</span> and <span class="key-up">what depends
+on it</span>; click empty space to clear. Boxes are folders and modules, with how many of their
+declarations you have marked: click one to open it, and click an open box's label to close it.
+A thicker arrow between boxes stands for more dependencies. Arrows are drawn between neighbors in
+the same folder; "arrows across folders" draws the rest. <b>Shift-click</b> anything, a declaration
+or a box, to color everything it depends on and everything that uses it, however far away. Cmd- or
+Ctrl-click in the list to show only the folders and modules you pick, however distant, and the
+arrows between them. A red border means a declaration contains <code>sorry</code>, and a dashed one
+that it relies on one, even if only through a proof; dashed red arrows lead to the <code>sorry</code>
+step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></details>
+<div class="controls">
+  <button type="button" id="close-all">close all</button>
+  <button type="button" id="open-all" hidden>open all</button>
+  <button type="button" id="clear-pins" hidden>show everything</button>
+  <label><input type="checkbox" id="clusters" checked> group by module</label>
+  <label><input type="checkbox" id="across"> arrows across folders</label>
+  <label><input type="checkbox" id="library"> show library definitions</label>
+  <label id="gaps-label" hidden><input type="checkbox" id="gaps" checked> show sorry</label>
+  <span id="groups">plumbing:</span>
+  <div class="legend">
+    <span><i class="swatch" style="background:#c8ecc8"></i>agree / understood</span>
+    <span><i class="swatch" style="background:#fbe9b0"></i>question</span>
+    <span><i class="swatch" style="background:#f6c4c4"></i>reject</span>
+    <span><i class="swatch" style="background:#fff"></i>unmarked</span>
+    <span><i class="swatch" style="background:#eee"></i>library</span>
+    <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px solid #c62828"></i>contains sorry</span>
+    <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #c62828"></i>relies on sorry</span>
+    <span class="gaps-key" id="gaps-total" hidden></span>
+  </div>
+</div>
+<div class="layout">
+  <nav id="tree">
+    <input type="search" id="tree-search" placeholder="Find a folder or module">
+    <p id="tree-hint">Click to open or close. Cmd- or Ctrl-click to pick several.</p>
+    <div id="tree-rows"></div>
+  </nav>
+  <div id="diagram"></div>
+  <aside id="sidebar"><p class="muted">Click a node to see its code, notes and dependencies.</p></aside>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@2.13.0/dist/graphviz.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-graphviz@5.1.0/build/d3-graphviz.min.js"></script>
+<script src="/__review__/links.js"></script>
+<script src="/__review__/math.js"></script>
+<script>
+(async () => {
+  // A large project sends the folder tree and what the marks need; the declarations of a module
+  // arrive when it is opened. A small project sends everything at once.
+  let [marks, tree, graph] = await Promise.all([
+    fetch("/__review__/data").then(r => r.json()),
+    fetch("/__review__/tree").then(r => r.json()),
+    fetch("/__review__/graph?marked").then(r => r.json()),
+  ]);
+  const decls = graph.declarations ?? {}, library = graph.library ?? {};
+  const isGenerated = n => /\.inst(Repr|DecidableEq|BEq|Hashable|Inhabited|Nonempty)/.test(n);
+  const root = graph.root ?? "";
+  if (root) {
+    document.getElementById("project").textContent = root;
+    document.title = `${root}: dependency graph`;
+  }
+  const short = n => n.startsWith(root + ".") ? n.slice(root.length + 1) : n;
+  const info = n => decls[n] ?? library[n];
+  // The docs link goes back to the last docs page read (review.js records it), or else to the root
+  // module's page.
+  let lastDocs = null;
+  try { lastDocs = sessionStorage.getItem("lean-review-docs"); } catch {}
+  document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
+  const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
+  const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+
+  // Plumbing groups, shared with the review pages through this browser's storage.
+  const GROUPS = [["compiler", "compiler"], ["notation", "if / do / try"], ["internals", "internals"],
+    ["theorems", "library theorems"]];
+  const storageKey = "lean-review.shownGroups";
+  let shownGroups = new Set();
+  try { shownGroups = new Set(JSON.parse(localStorage.getItem(storageKey) ?? "[]")); } catch {}
+  const visible = n => !library[n] || decls[n] || !library[n].group || shownGroups.has(library[n].group);
+  const groupsBox = document.getElementById("groups");
+  for (const [group, label] of GROUPS) {
+    const l = document.createElement("label");
+    const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: shownGroups.has(group) });
+    box.onchange = () => {
+      if (box.checked) shownGroups.add(group); else shownGroups.delete(group);
+      try { localStorage.setItem(storageKey, JSON.stringify([...shownGroups])); } catch {}
+      draw();
+    };
+    l.append(" ", box, " " + label);
+    groupsBox.append(l);
+  }
+
+  // Everything below a declaration, for change tracking.
+  const closure = new Map();
+  const below = n => {
+    if (closure.has(n)) return closure.get(n);
+    const out = new Set(); closure.set(n, out);
+    for (const d of [...(decls[n]?.deps ?? []), ...(decls[n]?.uses ?? [])]) { out.add(d); for (const x of below(d)) out.add(x); }
+    return out;
+  };
+  const fingerprint = n => {
+    const deps = {};
+    for (const d of below(n)) deps[d] = info(d)?.own ?? null;
+    return info(n) ? { own: info(n).own, deps } : null;
+  };
+  // What changed since `n` was marked: itself, and which things below it.
+  const changes = n => {
+    const fp = marks[n]?.fingerprint;
+    if (!marks[n]?.status || !fp || !info(n)) return { self: false, deps: [] };
+    const now = below(n);
+    return { self: fp.own !== info(n).own,
+      deps: [...new Set([...Object.keys(fp.deps), ...now])].filter(d => visible(d) &&
+        (fp.deps[d] ?? null) !== (now.has(d) ? info(d)?.own ?? null : null)) };
+  };
+  const stale = n => { const c = changes(n); return c.self || c.deps.length > 0; };
+  // Whether a declaration's proof has a gap. The marks say whether a statement is right; this says
+  // whether it's proved, so it has its own border, and a mark can stand beside it.
+  const SORRY = "#c62828";
+  const showGaps = () => document.getElementById("gaps").checked;
+  const gapOf = n => !showGaps() ? null : decls[n]?.sorry ? "source" : decls[n]?.sorryFrom?.length ? "affected" : null;
+  const border = (isStale, gap, stroke) => gap === "source" ? { color: SORRY, width: 3 }
+    : gap === "affected" ? { color: SORRY, width: 2, dashed: true }
+    : isStale ? { color: "#f0a020", width: 3 } : { color: stroke, width: 1 };
+  // Direct dependents of each declaration: for the sidebar, and for arrows from closed boxes.
+  const usedBy = new Map();
+  const indexUsers = () => {
+    usedBy.clear();
+    for (const [n, d] of Object.entries(decls))
+      for (const x of [...d.deps, ...d.uses]) { if (!usedBy.has(x)) usedBy.set(x, []); usedBy.get(x).push(n); }
+  };
+  indexUsers();
+  // Bring declarations into the page, by module or by name.
+  const loaded = new Set();
+  async function load(query) {
+    const part = await fetch(`/__review__/graph?marked&${query}`).then(r => r.json());
+    Object.assign(decls, part.declarations);
+    Object.assign(library, part.library);
+    closure.clear();
+    indexUsers();
+  }
+  async function loadModules(modules) {
+    if (tree.complete) return;
+    const missing = [...modules].filter(m => !loaded.has(m));
+    if (!missing.length) return;
+    missing.forEach(m => loaded.add(m));
+    await load(missing.map(m => `module=${encodeURIComponent(m)}`).join("&"));
+  }
+
+  // The folder tree, from the module names. A folder with one child is drawn as that child, and a
+  // module that is also a folder (Order/Lattice.lean beside Order/Lattice/) becomes that folder's
+  // first entry.
+  // Declarations a diagram can show legibly: fewer than SMALL open fully at first; up to OPENABLE
+  // offer "open all". Beyond that, "open folders" shows each module as a box, up to OPENABLE of them.
+  const SMALL = 60, OPENABLE = 150;
+  const moduleCounts = tree.modules;
+  const makeNode = (name, path) => ({ name, path, children: new Map(), module: null, modules: [], count: 0 });
+  let treeRoot = makeNode(shortRoot(), "");
+  function shortRoot() { return root.split(".").at(-1); }
+  for (const m of Object.keys(moduleCounts)) {
+    const parts = m === root ? [] : (m.startsWith(root + ".") ? m.slice(root.length + 1) : m).split(".");
+    let node = treeRoot;
+    for (const part of parts) {
+      if (!node.children.has(part)) node.children.set(part, makeNode(part, node.path + "/" + part));
+      node = node.children.get(part);
+    }
+    node.module = m;
+  }
+  const settle = node => {
+    if (node.module && node.children.size) {
+      const self = makeNode(node.name + " (module)", node.path + "/");
+      self.module = node.module;
+      node.children = new Map([[self.path, self], ...node.children]);
+      node.module = null;
+    }
+    node.kids = [...node.children.values()];
+    node.kids.forEach(settle);
+    node.modules = node.module ? [node.module] : node.kids.flatMap(k => k.modules);
+    node.count = node.modules.reduce((sum, m) => sum + moduleCounts[m], 0);
+    if (node !== treeRoot && node.kids.length === 1) {
+      const only = node.kids[0];
+      Object.assign(node, { name: `${node.name}/${only.name}`, path: only.path, module: only.module, kids: only.kids });
+    }
+  };
+  settle(treeRoot);
+  while (!treeRoot.module && treeRoot.kids.length === 1) treeRoot = treeRoot.kids[0];
+  const allNodes = [];
+  const collect = (node, parent) => {
+    node.index = allNodes.length;
+    node.parent = parent;
+    allNodes.push(node);
+    node.kids.forEach(k => collect(k, node));
+  };
+  collect(treeRoot, null);
+  const moduleNodes = new Map(allNodes.filter(n => n.module).map(n => [n.module, n]));
+  let expanded = new Set(treeRoot.count <= SMALL ? allNodes.map(n => n.path) : [treeRoot.path]);
+  // The folders and modules picked in the list; when there are any, only these are drawn.
+  let pinned = new Set();
+  const underPin = node => { for (let n = node; n; n = n.parent) if (pinned.has(n)) return true; return false; };
+  const holdsPin = node => node.kids.some(k => pinned.has(k) || holdsPin(k));
+  let opened = new Set();   // what the current drawing shows open, pins included
+  const openAll = document.getElementById("open-all");
+  const modulesOnly = treeRoot.count > OPENABLE;
+  openAll.textContent = modulesOnly ? "open folders" : "open all";
+  openAll.hidden = allNodes.filter(n => n.module).length > OPENABLE;
+  // Open every box on the way to a module, keeping the rest as they are.
+  function openTo(module) {
+    const path = [];
+    const search = node => node.modules.includes(module) && (path.push(node), node.kids.some(search), true);
+    search(treeRoot);
+    expanded = new Set([...expanded, ...path.map(n => n.path)]);
+  }
+
+  let model = null, selected = null, target = null;
+
+  async function draw() {
+    const withLibrary = document.getElementById("library").checked;
+    // What's open decides what's drawn: a closed box stands for every module under it.
+    const boxOf = new Map(), modules = new Set();
+    opened = new Set();
+    const walkOpen = node => {
+      const under = !pinned.size || underPin(node);
+      if (!under && !holdsPin(node)) return;           // not picked: not drawn at all
+      if (under && !expanded.has(node.path) && node !== treeRoot) { node.modules.forEach(m => boxOf.set(m, node)); return; }
+      opened.add(node);
+      if (node.module) modules.add(node.module); else node.kids.forEach(walkOpen);
+    };
+    walkOpen(treeRoot);
+    document.getElementById("clear-pins").hidden = !pinned.size;
+    await loadModules(modules);
+    const nodes = Object.keys(decls).filter(n => !isGenerated(n) && modules.has(decls[n].module));
+    const inGraph = new Set(nodes);
+    const boxId = node => "b" + node.index;
+    // Arrows that leave a folder stretch the layout and bury what's inside it, so by default they
+    // are drawn only between neighbors: things with the same parent box.
+    const across = document.getElementById("across").checked || pinned.size > 0;
+    const neighbors = (a, b) => across || a === b || a.parent === b.parent;
+    // Edges among shown project declarations (through hidden ones) and to closed boxes, plus library
+    // uses if shown.
+    const edges = new Map();
+    const reach = (n, seen = new Set()) => {
+      const out = new Set();
+      for (const d of decls[n]?.deps ?? []) {
+        if (seen.has(d)) continue; seen.add(d);
+        const box = boxOf.get(decls[d]?.module);
+        if (inGraph.has(d)) out.add(d);
+        else if (box) { if (neighbors(moduleNodes.get(decls[n].module), box)) out.add(boxId(box)); }
+        else for (const x of reach(d, seen)) out.add(x);
+      }
+      return out;
+    };
+    for (const n of nodes) {
+      const out = reach(n);
+      if (withLibrary) for (const u of decls[n].uses.filter(visible)) { out.add(u); inGraph.add(u); }
+      edges.set(n, out);
+    }
+    // Transitive reduction: drop n → d when d is reachable through another of n's edges.
+    const reachable = new Map();
+    const reachAll = n => {
+      if (reachable.has(n)) return reachable.get(n);
+      const out = new Set(); reachable.set(n, out);
+      for (const d of edges.get(n) ?? []) { out.add(d); for (const x of reachAll(d)) out.add(x); }
+      return out;
+    };
+    // The diagram as data, drawn by drawGraphviz below.
+    const ids = new Map([...inGraph].map((n, i) => [n, "n" + i]));
+    model = { nodes: [], edges: [], name: new Map(), id: ids, box: new Map(), down: new Map(), up: new Map(), weight: new Map() };
+    for (const n of inGraph) {
+      const s = marks[n]?.status;
+      model.name.set(ids.get(n), n);
+      model.nodes.push({ id: ids.get(n), label: short(n).replaceAll('"', "'"), stale: stale(n), gap: gapOf(n),
+        cls: library[n] && !decls[n] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked"),
+        module: decls[n] ? decls[n].module : null });                    // library: no module box
+    }
+    // Closed boxes, with how much of each has been marked.
+    for (const node of new Set(boxOf.values())) {
+      const reviewed = Object.keys(marks).filter(n => marks[n]?.status && boxOf.get(decls[n]?.module) === node);
+      const changed = reviewed.filter(stale).length;
+      model.name.set(boxId(node), node.path);
+      model.box.set(boxId(node), node);
+      const [contains, relies] = showGaps() ? node.modules.reduce(([a, b], m) =>
+        [a + (tree.gaps[m]?.[0] ?? 0), b + (tree.gaps[m]?.[1] ?? 0)], [0, 0]) : [0, 0];
+      model.nodes.push({ id: boxId(node), box: node, stale: changed > 0, gap: contains ? "source" : relies ? "affected" : null,
+        label: node.name.replaceAll('"', "'") +
+          `\\n${reviewed.length} of ${node.count} marked` + (changed ? `, ${changed} to re-check` : "") +
+          (contains + relies ? `\\n${contains} sorry, ${relies} relying on one` : "") });
+    }
+    const addEdge = (a, b, weight) => {
+      model.edges.push([a, b]);
+      (model.down.get(a) ?? model.down.set(a, []).get(a)).push(b);
+      (model.up.get(b) ?? model.up.set(b, []).get(b)).push(a);
+      if (weight) model.weight.set(`${a}>${b}`, weight);
+    };
+    // Between boxes, the dependencies of what's inside them, without those another path implies.
+    // Boxes can depend on each other in a cycle, so an arrow is dropped only if a path remains.
+    const between = new Map();
+    for (const [a, b, n] of tree.edges) {
+      const [x, y] = [boxOf.get(a), boxOf.get(b)];
+      if (x && y && x !== y && neighbors(x, y)) {
+        const key = `${boxId(x)}>${boxId(y)}`;
+        between.set(key, (between.get(key) ?? 0) + n);
+      }
+    }
+    const next = new Map();
+    for (const key of between.keys()) {
+      const [a, b] = key.split(">");
+      (next.get(a) ?? next.set(a, new Set()).get(a)).add(b);
+    }
+    const pathExists = (from, to) => {
+      const seen = new Set([from]), stack = [from];
+      while (stack.length) for (const x of next.get(stack.pop()) ?? []) {
+        if (x === to) return true;
+        if (!seen.has(x)) { seen.add(x); stack.push(x); }
+      }
+      return false;
+    };
+    for (const key of [...between.keys()].sort((p, q) => between.get(p) - between.get(q))) {
+      const [a, b] = key.split(">");
+      next.get(a).delete(b);
+      if (!pathExists(a, b)) next.get(a).add(b);
+    }
+    for (const [a, out] of next) for (const b of out) addEdge(a, b, between.get(`${a}>${b}`));
+    // From a closed box to what it uses in an open module.
+    const fromBoxes = new Set();
+    for (const n of nodes) for (const u of usedBy.get(n) ?? []) {
+      const box = boxOf.get(decls[u]?.module);
+      if (box && neighbors(box, moduleNodes.get(decls[n].module)) && !fromBoxes.has(`${box.index}>${n}`)) {
+        fromBoxes.add(`${box.index}>${n}`);
+        addEdge(boxId(box), ids.get(n));
+      }
+    }
+    for (const [n, out] of edges) for (const d of out)
+      if (![...out].some(o => o !== d && reachAll(o).has(d))) addEdge(ids.get(n), ids.get(d) ?? d);
+    // Toward each `sorry`, step by step, whichever boxes are open. These can run inside proofs, where
+    // no other arrow goes, so they're how you see why something relies on one.
+    model.gapEdges = new Set();
+    if (showGaps()) {
+      const known = new Set(model.edges.map(([a, b]) => `${a}>${b}`));
+      const itemOf = (name, module) => ids.get(name) ?? (boxOf.has(module) ? boxId(boxOf.get(module)) : null);
+      for (const [from, fromModule, to, toModule] of tree.sorryHops) {
+        const [a, b] = [itemOf(from, fromModule), itemOf(to, toModule)];
+        if (!a || !b || a === b) continue;
+        if (!known.has(`${a}>${b}`)) { addEdge(a, b); known.add(`${a}>${b}`); }
+        model.gapEdges.add(`${a}>${b}`);
+      }
+    }
+    // A fresh container each time.
+    const old = document.getElementById("diagram");
+    target = document.createElement("div");
+    target.id = "diagram";
+    old.replaceWith(target);
+    await drawGraphviz(model, target);
+    retitle();
+    // Clicking a node selects it; clicking empty space clears the selection.
+    target.addEventListener("click", e => {
+      // A click on an open box's label closes it.
+      const id = nodeIdOf(e.target);
+      const cluster = !id && e.target.closest("g.cluster");
+      const group = model.box.get(id) ?? (cluster && model.cluster.get(cluster.dataset.key));
+      if (e.shiftKey) {
+        if (group) focusOn({ group });
+        else if (id) focusOn({ name: model.name.get(id) });
+        return;
+      }
+      // A click on a closed box opens it; a click on an open box's label closes it.
+      if (group && (model.box.has(id) || e.target.closest("text"))) return toggle(group);
+      if (id) select(model.name.get(id));
+      else if (!e.target.closest("a")) select(null);
+    });
+    if (selected && model.id.has(selected)) highlight(model.id.get(selected)); else if (selected) highlight(null);
+    renderTree();
+    if (focus) await showFocus();
+  }
+  function toggle(node) {
+    expanded = new Set(expanded);
+    if (expanded.has(node.path)) expanded.delete(node.path); else expanded.add(node.path);
+    draw();
+  }
+
+  // Shift-click: color everything a declaration or group depends on and is used by. The server
+  // works it out, since it may be most of the project; nothing moves in the diagram.
+  let focus = null;
+  const clearFocus = () => {
+    focus = null;
+    for (const el of target.querySelectorAll("g.cluster")) el.classList.remove("hl-selected", "hl-down", "hl-up", "hl-both");
+  };
+  async function focusOn(what) { focus = what; selected = null; await showFocus(); renderTree(); }
+  async function showFocus() {
+    const { group, name } = focus;
+    // POST, since a folder can hold thousands of modules.
+    const reach = await post("/__review__/reach", { modules: group?.modules ?? [], names: name ? [name] : [],
+      shown: [...opened].filter(n => n.module).map(n => n.module) });
+    if (focus?.group !== group || focus?.name !== name) return;   // superseded by another click
+    focus.reach = reach;
+    const below = new Set(reach.below.names), above = new Set(reach.above.names);
+    const members = new Set(group?.modules);
+    const inner = n => group ? members.has(decls[n]?.module) : n === name;
+    const paint = (el, down, up, self) => {
+      el.classList.remove("hl-dim", "hl-selected", "hl-down", "hl-up", "hl-both");
+      el.classList.add(self ? "hl-selected" : down && up ? "hl-both" : down ? "hl-down" : up ? "hl-up" : "hl-dim");
+    };
+    const state = new Map();
+    for (const [id, el] of nodeElements()) {
+      const node = model.box.get(id), n = model.name.get(id);
+      const s = node ? [node.modules.some(m => reach.below.modules[m]), node.modules.some(m => reach.above.modules[m]), node === group]
+        : [below.has(n), above.has(n), inner(n)];
+      state.set(id, s);
+      paint(el, ...s);
+    }
+    for (const [a, b, el] of edgeElements()) {
+      const [x, y] = [state.get(a), state.get(b)];
+      const down = x && y && (x[0] || x[2]) && (y[0] || y[2]), up = x && y && (x[1] || x[2]) && (y[1] || y[2]);
+      paint(el, down, up, false);
+    }
+    for (const el of target.querySelectorAll("g.cluster")) {
+      const node = model.cluster.get(el.dataset.key);
+      el.classList.remove("hl-selected", "hl-down", "hl-up", "hl-both");
+      if (!node) continue;
+      const down = node.modules.some(m => reach.below.modules[m]), up = node.modules.some(m => reach.above.modules[m]);
+      if (node === group) el.classList.add("hl-selected");
+      else if (down || up) el.classList.add(down && up ? "hl-both" : down ? "hl-down" : "hl-up");
+    }
+    if (group) renderGroup(group, reach);
+    else { await renderSidebar(name); sidebar.append(reachList(reach)); }
+  }
+  // How much lies in each top-level folder, nearest the top of the tree first.
+  function reachList(reach) {
+    const box = el("div");
+    const section = (title, cls, side) => {
+      const counts = new Map();
+      for (const [m, n] of Object.entries(side.modules)) {
+        const node = moduleNodes.get(m);
+        let top = node;
+        while (top?.parent && top.parent !== treeRoot) top = top.parent;
+        if (top) counts.set(top, (counts.get(top) ?? 0) + n);
+      }
+      const total = [...counts.values()].reduce((a, b) => a + b, 0);
+      box.append(el("h3", cls, `${title}: ${total} in ${Object.keys(side.modules).length} modules`));
+      for (const [node, n] of [...counts].sort((a, b) => b[1] - a[1])) {
+        const row = el("div", "reach-row"), a = el("a", null, node.name);
+        a.title = "Open";
+        a.onclick = () => { expanded = new Set(expanded).add(node.path); draw(); };
+        row.append(a, el("span", null, String(n)));
+        box.append(row);
+      }
+      if (!total) box.append(el("p", "muted", "none"));
+    };
+    section("Everything it depends on", "key-down", reach.below);
+    section("Everything that uses it", "key-up", reach.above);
+    return box;
+  }
+  function renderGroup(group, reach) {
+    const marked = Object.keys(marks).filter(n => marks[n]?.status && group.modules.includes(decls[n]?.module)).length;
+    const scope = group.module ?? root + group.path.replaceAll("/", ".");
+    const quiz = el("a", null, "Quiz this");
+    quiz.href = `/__review__/quiz?scope=${encodeURIComponent(scope)}`;
+    sidebar.replaceChildren(el("h2", null, group.name),
+      el("p", "muted", `${group.module ? "module" : "folder"}, ${group.count} declarations, ${marked} marked`),
+      quiz, reachList(reach));
+  }
+
+  // The list of folders and modules: open or close each one, pick several, or find one by name.
+  const rows = document.getElementById("tree-rows"), search = document.getElementById("tree-search");
+  function treeRow(node, depth, label = node.name) {
+    const row = el("div", "row");
+    row.style.paddingLeft = `${depth * 0.9 + 0.3}em`;
+    if (pinned.has(node)) row.classList.add("pinned");
+    if (focus?.group === node) row.classList.add("focus");
+    row.title = node.path.replace(/^\//, "") + "\nShift-click for everything it depends on and that uses it";
+    row.append(el("span", "twisty", expanded.has(node.path) ? "▾" : "▸"),
+      el("span", "label", label), el("span", "count", String(node.count)));
+    row.onclick = e => {
+      if (e.shiftKey) return focusOn({ group: node });
+      if (e.metaKey || e.ctrlKey) {
+        pinned = new Set(pinned);
+        if (pinned.has(node)) pinned.delete(node); else pinned.add(node);
+        return draw();
+      }
+      toggle(node);
+    };
+    return row;
+  }
+  function renderTree() {
+    const term = search.value.trim().toLowerCase();
+    const items = [];
+    if (term) {
+      for (const node of allNodes) {
+        if (node.path.toLowerCase().includes(term)) items.push(treeRow(node, 0, node.path.replace(/^\//, "").replace(/\/$/, " (module)")));
+        if (items.length >= 200) break;
+      }
+    } else {
+      const add = (node, depth) => {
+        for (const kid of node.kids) {
+          items.push(treeRow(kid, depth));
+          if (expanded.has(kid.path)) add(kid, depth + 1);
+        }
+      };
+      add(treeRoot, 0);
+    }
+    rows.replaceChildren(...items);
+  }
+  search.oninput = renderTree;
+
+  // Graphviz titles each element with its id, and the browser shows a title on hover. So keep the
+  // id in data-key and give the title what a person wants to read.
+  const pathOf = node => node.path.replace(/^\//, "").replace(/\/$/, " (module)") || node.name;
+  const nameOfId = id => model.box.has(id) ? pathOf(model.box.get(id)) : model.name.get(id) ?? id;
+  function retitle() {
+    for (const g of target.querySelectorAll("g.node, g.edge, g.cluster")) {
+      const title = g.querySelector(":scope > title");
+      if (!title) continue;
+      const key = g.dataset.key = title.textContent;
+      // Highlighting mustn't hide what's a `sorry`: these keep their red.
+      const [from, to] = key.split("->");
+      if (to ? model.gapEdges.has(`${from}>${to}`) : model.nodes.find(n => n.id === key)?.gap) g.classList.add("gap");
+      if (g.classList.contains("cluster")) {
+        const node = model.cluster.get(key);
+        title.textContent = node ? `${pathOf(node)}: ${node.count} declarations` : "";
+      } else if (g.classList.contains("edge")) {
+        const [a, b] = key.split("->"), weight = model.weight.get(`${a}>${b}`);
+        title.textContent = model.gapEdges.has(`${a}>${b}`) ? `${nameOfId(a)} relies on ${nameOfId(b)}, which leads to a sorry`
+          : `${nameOfId(a)} depends on ${nameOfId(b)}` + (weight ? ` (${weight} dependencies)` : "");
+      } else title.textContent = nameOfId(key);
+    }
+  }
+  // The node a click landed on.
+  function nodeIdOf(element) {
+    const key = element.closest("g.node")?.dataset.key;
+    return key && model.name.has(key) ? key : null;
+  }
+  const nodeElements = () => {
+    const map = new Map();
+    for (const g of target.querySelectorAll("g.node")) {
+      if (model.name.has(g.dataset.key)) map.set(g.dataset.key, g);
+    }
+    return map;
+  };
+  const edgeElements = () => {
+    const list = [];
+    for (const g of target.querySelectorAll("g.edge:not(.layout)")) { // key "a->b"
+      const [a, b] = (g.dataset.key ?? "").split("->");
+      if (a && b) list.push([a, b, g]);
+    }
+    return list;
+  };
+  const walk = (start, next) => {
+    const seen = new Set(), stack = [start];
+    while (stack.length) for (const x of next.get(stack.pop()) ?? []) if (!seen.has(x)) { seen.add(x); stack.push(x); }
+    return seen;
+  };
+  function highlight(id) {
+    const nodes = nodeElements(), edges = edgeElements();
+    for (const el of [...nodes.values(), ...edges.map(e => e[2])])
+      el.classList.remove("hl-dim", "hl-selected", "hl-down", "hl-up", "hl-both");
+    if (!id) return;
+    const down = walk(id, model.down), up = walk(id, model.up);
+    for (const [n, el] of nodes)
+      el.classList.add(n === id ? "hl-selected" : down.has(n) ? "hl-down" : up.has(n) ? "hl-up" : "hl-dim");
+    for (const [a, b, el] of edges)
+      el.classList.add((a === id || down.has(a)) && (b === id || down.has(b)) ? "hl-down"
+        : (b === id || up.has(b)) && (a === id || up.has(a)) ? "hl-up" : "hl-dim");
+  }
+
+  // Update one node's colors after its mark changes, without redrawing (which would reset zoom).
+  function recolor(name) {
+    const id = model.id.get(name);
+    const g = id && nodeElements().get(id);
+    if (!g) return;
+    const s = marks[name]?.status;
+    const cls = library[name] && !decls[name] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked");
+    const [fill, stroke] = COLORS[cls], isStale = stale(name), b = border(isStale, gapOf(name), stroke);
+    for (const shape of g.querySelectorAll("path, polygon, rect")) {
+      shape.setAttribute("fill", fill);
+      shape.setAttribute("stroke", b.color);
+      shape.style.fill = fill;
+      shape.style.stroke = b.color;
+      shape.style.strokeWidth = `${b.width}px`;
+    }
+    const node = model.nodes.find(n => n.id === id);
+    if (node) Object.assign(node, { cls, stale: isStale });
+  }
+
+  function select(name) {
+    if (focus) clearFocus();
+    selected = name;
+    highlight(name && model.id.has(name) ? model.id.get(name) : null);
+    renderSidebar(name);
+  }
+
+  // The sidebar: mark and notes, code, and direct dependencies and dependents.
+  const sidebar = document.getElementById("sidebar");
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  };
+  const ref = n => {
+    const a = el("a", "ref", short(n));
+    a.title = n;
+    if (marks[n]?.status) a.dataset.status = marks[n].status;
+    a.onclick = () => select(n);
+    return a;
+  };
+  const refList = names => {
+    const ul = el("ul");
+    for (const n of names.sort()) { const li = el("li"); li.append(ref(n)); ul.append(li); }
+    return names.length ? ul : el("p", "muted", "none");
+  };
+
+  async function renderSidebar(name) {
+    sidebar.replaceChildren();
+    if (!name) { sidebar.append(el("p", "muted", "Click a node to see its code, notes and dependencies.")); return; }
+    const i = info(name), isLibrary = !decls[name];
+    sidebar.append(el("h2", null, name), el("p", "muted", `${i?.kind ?? ""} in ${i?.module ?? "?"}`));
+
+    // Documentation first, as on the docs pages: the declaration as doc-gen4 renders it.
+    const docsHeading = el("h3", null, "Documentation ");
+    const docs = el("a", "muted", "open in docs");
+    docs.href = docUrl(name);
+    docs.style.fontWeight = "normal";
+    docsHeading.append(docs);
+    sidebar.append(docsHeading, await renderedDocs(name));
+
+    // Mark and note thread, editable here.
+    const STATUS = isLibrary
+      ? [["agree", "✓", "I understand this"], ["question", "?", "I have a question about this"], ["reject", "✗", "This surprises me or seems wrong"]]
+      : [["agree", "✓", "I agree with this"], ["question", "?", "I have a question"], ["reject", "✗", "I reject how this is defined"]];
+    const markRow = el("div", "marks");
+    const c = changes(name);
+    for (const [status, label, title] of STATUS) {
+      const b = el("button", marks[name]?.status === status ? "active" : null, label);
+      b.title = title; b.dataset.status = status;
+      b.onclick = async () => {
+        const next = marks[name]?.status === status ? null : status;
+        marks[name] = await post("/__review__/data", { name, status: next, fingerprint: fingerprint(name) });
+        recolor(name);   // only this node's color changes, so keep the current zoom and layout
+        renderSidebar(name);
+      };
+      markRow.append(b, " ");
+    }
+    if (c.self) markRow.append(el("span", "stale", " changed since you marked it"));
+    else if (c.deps.length) {
+      const s = el("span", "stale", " depends on ");
+      c.deps.forEach((d, k) => { if (k) s.append(", "); s.append(ref(d)); });
+      s.append(", which changed since you marked it");
+      markRow.append(s);
+    }
+    sidebar.append(el("h3", null, "Review"), markRow);
+    if (decls[name]?.sorry || decls[name]?.sorryFrom?.length || decls[name]?.axioms?.length) {
+      const status = el("p", "gap");
+      if (decls[name].sorry) status.append("Contains sorry. ");
+      if (decls[name].sorryFrom?.length) {
+        status.append("Proved only if these are: ");
+        decls[name].sorryFrom.forEach((s, k) => { if (k) status.append(", "); status.append(ref(s)); });
+        const steps = (decls[name].sorryVia ?? []).filter(v => !decls[name].sorryFrom.includes(v));
+        if (steps.length) status.append(", by way of ");
+        steps.forEach((s, k) => { if (k) status.append(", "); status.append(ref(s)); });
+        status.append(". ");
+      }
+      if (decls[name].axioms?.length) status.append(`Also trusts: ${decls[name].axioms.join(", ")}.`);
+      sidebar.append(status);
+    }
+    const notes = el("ul", "review-notes");
+    for (const n of marks[name]?.notes ?? []) {
+      // The author and date on a line of their own, then the text, styled by who wrote it.
+      const li = el("li", n.by === "assistant" ? "by-assistant" : n.by === "lean-review" ? "by-tool" : "by-reviewer");
+      const head = el("div", "note-head", n.by + (n.quiz ? " · quiz answer " : " "));
+      head.append(el("span", "note-date", n.date));
+      li.append(head, el("div", null, n.text));
+      notes.append(li);
+    }
+    sidebar.append(notes.children.length ? notes : el("p", "muted", "No notes yet."));
+    const input = el("textarea"); input.rows = 2; input.placeholder = "Add a note or question…";
+    const add = el("button", null, "Add note");
+    add.onclick = async () => {
+      const note = input.value.trim();
+      if (!note) return;
+      marks[name] = await post("/__review__/data", { name, note });
+      renderSidebar(name);
+    };
+    sidebar.append(input, add);
+
+    // Code: a theorem's proof is collapsed, since Lean checks it.
+    if (!isLibrary) {
+      sidebar.append(el("h3", null, "Code"));
+      const src = await fetch(`/__review__/source?name=${encodeURIComponent(name)}`).then(r => r.json());
+      if (src.error) sidebar.append(el("p", "muted", src.error));
+      else {
+        sidebar.append(el("p", "muted", `${src.file}, lines ${src.start}–${src.end}`));
+        // A theorem's statement ends where its proof starts: at `:= by`, a trailing `:=`, or the
+        // first `|` case of a proof by pattern matching.
+        const starts = [/:=\s*by\b/, /:=\s*$/m, /^\s*\|/m].map(r => src.text.search(r)).filter(k => k > 0);
+        const split = src.kind === "theorem" && starts.length ? Math.min(...starts) : -1;
+        if (split > 0) {
+          sidebar.append(el("pre", null, src.text.slice(0, split).trimEnd()));
+          const proof = el("details");
+          proof.append(el("summary", "muted", "proof (checked by Lean)"), el("pre", null, src.text.slice(split)));
+          sidebar.append(proof);
+        } else sidebar.append(el("pre", null, src.text));
+      }
+    }
+
+    // Direct neighbours; the diagram highlights everything reachable.
+    const deps = isLibrary ? [] : [...decls[name].deps, ...decls[name].uses.filter(visible)];
+    sidebar.append(el("h3", "key-down", `Depends on (${deps.length})`), refList(deps));
+    const users = usedBy.get(name) ?? [];
+    sidebar.append(el("h3", "key-up", `Used by (${users.length})`), refList(users));
+  }
+
+  // doc-gen4 pages, fetched once per module; a declaration's entry is the element with its name.
+  // It is shown in a shadow root with doc-gen4's own stylesheet, so it looks exactly as in the
+  // docs without that stylesheet restyling this page.
+  const pages = new Map();
+  let docStyle = null;
+  async function docgenStyle() {
+    if (!docStyle) docStyle = fetch("/style.css").then(r => r.text()).then(css => {
+      // Fonts must be declared in the page itself, not inside a shadow root.
+      for (const href of css.match(/@import url\('([^']+)'\);/g)?.map(m => m.slice(13, -3)) ?? []) {
+        const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href });
+        document.head.append(link);
+      }
+      // Variables declared on :root apply to the shadow root's host instead.
+      return css.replace(/@import[^;]+;/g, "").replaceAll(":root", ":host");
+    });
+    return docStyle;
+  }
+  async function renderedDocs(name) {
+    const url = docUrl(name)?.split("#")[0];
+    if (!url) return el("p", "muted", "No documentation page.");
+    if (!pages.has(url))
+      pages.set(url, fetch(url).then(r => r.text()).then(t => new DOMParser().parseFromString(t, "text/html")));
+    const [page, css] = await Promise.all([pages.get(url), docgenStyle()]);
+    const decl = page.getElementById(name);
+    if (!decl) return el("p", "muted", "Not found on its documentation page.");
+    const host = el("div", "docs");
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    // Light theme, like this page; a little less spacing than a full docs page.
+    style.textContent = css + " .wrap { font-family: 'Lato Medium', sans-serif; font-size: 15px; " +
+      "line-height: 1.5; color: var(--text-color); } .decl { margin: 0; }" + reviewMath.css;
+    const wrap = el("div", "wrap");
+    wrap.dataset.theme = "light";
+    const copy = document.importNode(decl, true);
+    copy.removeAttribute("id");
+    // Project declarations show their equations open, as on the review pages (same setting).
+    let openEquations = true;
+    try { openEquations = localStorage.getItem("lean-review.openEquations") !== "0"; } catch {}
+    if (decls[name] && openEquations)
+      for (const d of copy.querySelectorAll("details"))
+        if (d.querySelector(":scope > summary")?.textContent.trim() === "Equations") d.open = true;
+    // Links in the page are relative to it; make them absolute.
+    for (const a of copy.querySelectorAll("a[href]"))
+      a.href = new URL(a.getAttribute("href"), new URL(url, location.href)).href;
+    await reviewLinks.rewrite(copy, () => decls[name]?.lines?.[0]);
+    wrap.append(copy);
+    shadow.append(style, wrap);
+    reviewMath.typeset(wrap);
+    return host;
+  }
+
+  const COLORS = { unmarked: ["#ffffff", "#888888"], agree: ["#c8ecc8", "#33aa33"],
+    question: ["#fbe9b0", "#cc9900"], reject: ["#f6c4c4", "#cc3333"], lib: ["#eeeeee", "#aaaaaa"],
+    lib_agree: ["#e3f3e3", "#33aa33"], lib_question: ["#fbf1d0", "#cc9900"],
+    lib_reject: ["#f9dede", "#cc3333"] };   // six-digit: Graphviz doesn't read the three-digit form
+
+  // A soft color per box (pale fill, matching border and label), the same everywhere.
+  const BOX_COLORS = [["#eef4ff", "#7a9fd9"], ["#f4eefc", "#a487d1"], ["#ebf7f1", "#6fb391"],
+    ["#fff3e6", "#d9a066"], ["#fdeef3", "#d98aa6"], ["#eaf7fa", "#64aebf"], ["#f6f6e6", "#b3ad5c"]];
+  const boxColor = node => BOX_COLORS[node.index % BOX_COLORS.length];
+
+  // Graphviz's layered layout, as on Lean blueprint pages; d3-graphviz provides zoom and pan.
+  async function drawGraphviz(model, target) {
+    const attrs = n => {
+      if (n.box) {
+        const [fill, stroke] = boxColor(n.box), b = border(n.stale, n.gap, stroke);
+        return `label="${n.label}", fillcolor="${fill}", color="${b.color}", penwidth=${b.width}, fontcolor="#444444"` +
+          (b.dashed ? `, style="rounded,filled,dashed"` : "");
+      }
+      const [fill, stroke] = COLORS[n.cls], b = border(n.stale, n.gap, stroke);
+      return `label="${n.label}", fillcolor="${fill}", color="${b.color}", penwidth=${b.width}` +
+        (b.dashed ? `, style="rounded,filled,dashed"` : "");
+    };
+    // Nodes in boxes that mirror the open part of the tree; each list is laid out as a group below.
+    const byId = new Map(model.nodes.map(n => [n.id, n])), lists = [];
+    model.cluster = new Map();
+    const boxed = document.getElementById("clusters").checked;
+    const inModule = new Map();
+    for (const n of model.nodes) if (n.module) (inModule.get(n.module) ?? inModule.set(n.module, []).get(n.module)).push(n);
+    const emit = (node, depth) => {
+      const pad = "  ".repeat(depth + 1);
+      if (!opened.has(node)) return byId.has("b" + node.index) ? [`${pad}${"b" + node.index} [${attrs(byId.get("b" + node.index))}];`] : [];
+      let inner;
+      if (node.module) {
+        const ns = inModule.get(node.module) ?? [];
+        lists.push(ns);
+        inner = ns.map(n => `${pad}  ${n.id} [${attrs(n)}];`);
+      } else {
+        lists.push(node.kids.map(k => byId.get("b" + k.index)).filter(Boolean));
+        inner = node.kids.flatMap(k => emit(k, depth + 1));
+      }
+      if (node === treeRoot || !boxed) return inner;
+      const [fill, stroke] = boxColor(node), name = `cluster_${node.index}`;
+      model.cluster.set(name, node);
+      return [`${pad}subgraph ${name} {`, `${pad}  label="${node.name.replaceAll('"', "'")}"; fontname="Helvetica"; fontsize=10;`,
+        `${pad}  style="rounded,filled"; fillcolor="${fill}"; color="${stroke}"; fontcolor="${stroke}";`,
+        ...inner, `${pad}}`];
+    };
+    const nodeLines = [...emit(treeRoot, 0),
+      ...model.nodes.filter(n => !n.box && !n.module).map(n => `  ${n.id} [${attrs(n)}];`)];
+    // Declarations nothing shown depends on (top-level theorems, say) would all share the top rank,
+    // in a long row, and so would many siblings with one set of neighbors (the rows of a table). Stack
+    // each into a near-square grid with invisible edges (class "layout", which the highlighting ignores).
+    // A sibling's edges are drawn for the grid's first row only: each one drawn past that takes a slot
+    // in every rank it crosses. Selecting a node still shows all of them.
+    const TABLE = 24, stacked = new Set();
+    const neighbors = n => [model.up.get(n.id) ?? [], model.down.get(n.id) ?? []].map(s => [...s].sort().join()).join("|");
+    const gridEdges = lists.flatMap(ns => {
+      const rows = new Map();
+      for (const n of ns) {
+        const key = model.up.has(n.id) ? neighbors(n) : "";
+        (rows.get(key) ?? rows.set(key, []).get(key)).push(n);
+      }
+      return [...rows].flatMap(([key, row]) => {
+        if (key && row.length < TABLE) return [];
+        const k = Math.ceil(Math.sqrt(row.length * 0.6));
+        if (key) for (const n of row.slice(k)) stacked.add(n.id);
+        return row.slice(k).map((n, i) => `  ${row[i].id} -> ${n.id} [style=invis, class="layout"];`);
+      });
+    });
+    let dot = ["digraph {", "  rankdir=TB; nodesep=0.25; ranksep=0.45;",
+      '  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];',
+      '  edge [color="#888888", arrowsize=0.6];',
+      ...nodeLines,
+      ...model.edges.filter(e => !e.some(n => stacked.has(n))).map(([a, b]) => {
+        const weight = model.weight.get(`${a}>${b}`);
+        if (model.gapEdges.has(`${a}>${b}`)) return `  ${a} -> ${b} [color="${SORRY}", style=dashed];`;
+        return weight ? `  ${a} -> ${b} [penwidth=${(1 + Math.log10(weight)).toFixed(1)}];`
+          : `  ${a} -> ${b};`;
+      }),
+      ...gridEdges, "}"].join("\n");
+    // A wide group reads as a thin band. Lay it out once to see Graphviz's rows, then wrap each row
+    // of a group with invisible edges, which can't contradict anything: nodes in one row never
+    // depend on each other. Twice, since wrapping one row can widen another.
+    if (model.nodes.length > 30) {
+      const graphviz = await window["@hpcc-js/wasm"].Graphviz.load();
+      const groupOf = new Map(lists.flatMap((ns, k) => ns.map(n => [n.id, k])));
+      for (let pass = 0; pass < 2; pass++) {
+        const rows = new Map();
+        for (const o of JSON.parse(graphviz.layout(dot, "json", "dot")).objects ?? []) {
+          if (!o.pos || !groupOf.has(o.name) || stacked.has(o.name)) continue;
+          const [x, y] = o.pos.split(",").map(Number), key = `${groupOf.get(o.name)} ${y}`;
+          (rows.get(key) ?? rows.set(key, []).get(key)).push([x, o.name]);
+        }
+        const wrap = [...rows.values()].flatMap(row => {
+          const width = Math.max(8, Math.ceil(Math.sqrt(lists[groupOf.get(row[0][1])].length * 0.7)));
+          row.sort((a, b) => a[0] - b[0]);
+          return row.slice(width).map(([, id], i) => `  ${row[i][1]} -> ${id} [style=invis, class="layout"];`);
+        });
+        dot = dot.replace(/}\s*$/, wrap.join("\n") + "\n}");
+      }
+    }
+    return new Promise(resolve =>
+      d3.select(target).graphviz({ useWorker: false }).zoom(true).fit(true)
+        .width(target.clientWidth).height(target.clientHeight).renderDot(dot, resolve));
+  }
+
+  // Refit when the panel changes size (opening the notes, resizing the window).
+  let resizing, panelSize = "";
+  new ResizeObserver(([entry]) => {
+    const size = `${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
+    if (panelSize && size !== panelSize) { clearTimeout(resizing); resizing = setTimeout(draw, 200); }
+    panelSize = size;
+  }).observe(document.getElementById("diagram"));
+  for (const id of ["clusters", "across", "gaps"]) document.getElementById(id).onchange = draw;
+  // The sorry controls appear only for a project that has one.
+  const gapTotals = Object.values(tree.gaps).reduce(([a, b], [x, y]) => [a + x, b + y], [0, 0]);
+  if (gapTotals[0] + gapTotals[1]) {
+    document.getElementById("gaps-label").hidden = false;
+    for (const key of document.querySelectorAll(".gaps-key")) key.hidden = false;
+    document.getElementById("gaps-total").textContent = `${gapTotals[0]} sorry, ${gapTotals[1]} relying on one`;
+  }
+  document.getElementById("close-all").onclick = () => { expanded = new Set([treeRoot.path]); draw(); };
+  document.getElementById("clear-pins").onclick = () => { pinned = new Set(); draw(); };
+  openAll.onclick = () => { expanded = new Set(allNodes.filter(n => !modulesOnly || !n.module).map(n => n.path)); draw(); };
+  document.getElementById("library").onchange = draw;
+  // Open a declaration directly with diagram#Name.
+  const fromHash = decodeURIComponent(location.hash.slice(1));
+  if (fromHash && !info(fromHash) && !tree.complete) await load(`name=${encodeURIComponent(fromHash)}`);
+  if (fromHash && decls[fromHash]) openTo(decls[fromHash].module);
+  await draw();
+  if (fromHash && info(fromHash)) select(fromHash);
+})();
+</script>
+</body>
+</html>

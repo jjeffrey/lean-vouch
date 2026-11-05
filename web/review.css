@@ -1,0 +1,52 @@
+/* Review controls in doc-gen4 pages. Colors come from doc-gen4's theme variables (--body-bg,
+   --code-bg, --text-color, --link-color), so they follow its light, dark and system themes; accents
+   are semi-transparent so they read on either background. */
+.review { margin: 0.6em 0 0.2em; padding-top: 0.4em; border-top: 1px dashed #8886; font-size: 0.9em;
+  color: var(--text-color); }
+.review-uses { margin-bottom: 0.3em; opacity: 0.8; }
+.review-ref { text-decoration: none; border-bottom: 2px solid #8884; }
+.review-ref[data-status="agree"] { border-color: #3a3; }
+.review-ref[data-status="question"] { border-color: #d9a400; }
+.review-ref[data-status="reject"] { border-color: #d44; }
+.review-row { display: flex; gap: 0.4em; align-items: center; flex-wrap: wrap; }
+.review-row button, .review-add, #review-summary button, .review-orphans button {
+  border: 1px solid #8888; border-radius: 4px; background: var(--body-bg); color: var(--text-color);
+  cursor: pointer; }
+.review-row button { width: 2em; height: 1.8em; }
+.review-row button[data-status="agree"].active { background: #3a33; border-color: #3a3; }
+.review-row button[data-status="question"].active { background: #d9a40040; border-color: #d9a400; }
+.review-row button[data-status="reject"].active { background: #d4444040; border-color: #d44; }
+.review-stale { color: #e08a10; font-style: italic; }
+.review-notes { list-style: none; margin: 0.4em 0; padding-left: 0; }
+.review-notes li { margin: 0.4em 0; padding: 0.35em 0.6em; border-left: 3px solid; border-radius: 4px; }
+.review-notes .note-head { font-weight: 600; font-size: 0.85em; margin-bottom: 0.1em; }
+.review-notes .note-date { font-weight: normal; opacity: 0.65; margin-left: 0.3em; }
+.review-notes li > div:last-child { white-space: pre-wrap; }
+.review-notes .by-reviewer { background: var(--code-bg); border-color: #888; }
+.review-notes .by-assistant { background: #2a7de124; border-color: #2a7de1; }
+.review-notes .by-tool { background: none; border-color: #8886; opacity: 0.75; font-style: italic; font-size: 0.9em; }
+.review textarea, .review-orphans input { width: 100%; box-sizing: border-box; font: inherit;
+  background: var(--body-bg); color: var(--text-color); border: 1px solid #8888; border-radius: 4px; }
+.review-add { margin-top: 0.2em; padding: 0.1em 0.5em; }
+.decl[data-review-status="agree"] { border-left: 4px solid #3a3; }
+.decl[data-review-status="question"] { border-left: 4px solid #d9a400; }
+.decl[data-review-status="reject"] { border-left: 4px solid #d44; }
+.decl[data-review-stale="yes"] { box-shadow: -4px 0 0 #f0a020; }
+.review-hide-generated .review-generated { display: none; }
+#review-summary { position: fixed; right: 1em; bottom: 1em; z-index: 10; display: flex; gap: 1em; align-items: center;
+  padding: 0.5em 0.8em; background: var(--body-bg); color: var(--text-color); border: 1px solid #8888;
+  border-radius: 6px; box-shadow: 0 1px 6px #0004; font-size: 0.9em; }
+#review-summary a { color: var(--link-color); }
+.review-orphans { position: fixed; inset: 5% 15%; z-index: 20; overflow: auto; padding: 1em 1.5em;
+  background: var(--body-bg); color: var(--text-color); border: 1px solid #8888; border-radius: 8px;
+  box-shadow: 0 4px 20px #0006; font-size: 0.9em; }
+.review-orphans .review-close { position: absolute; right: 1em; top: 1em; }
+.review-orphan { margin: 0.8em 0; padding: 0.5em; border: 1px solid #8886; border-radius: 4px; }
+.review-orphan input { width: 24em; margin-right: 0.4em; }
+.review-filters { position: relative; }
+.review-filters summary { cursor: pointer; color: var(--link-color); }
+.review-filters[open] { padding-bottom: 0.2em; }
+.review-filters label { display: block; white-space: nowrap; }
+.review-gap { margin-bottom: 0.3em; color: #d33; }
+.review-gap.source { font-weight: 600; }
+.review-axioms { margin-bottom: 0.3em; color: #e08a10; }

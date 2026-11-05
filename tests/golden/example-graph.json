@@ -1,0 +1,497 @@
+{
+ "declarations": {
+  "ReviewExample.Coprime": {
+   "deep": "f18ec42330116483",
+   "deps": [
+    "ReviewExample.gcd"
+   ],
+   "kind": "def",
+   "lines": [
+    11,
+    13
+   ],
+   "module": "ReviewExample.Multiples.Coprime",
+   "own": "ed1db53d3909db03",
+   "uses": [
+    "Eq",
+    "Nat"
+   ]
+  },
+  "ReviewExample.Coprime.divides_one": {
+   "deep": "0dc65bb6e899a0e7",
+   "deps": [
+    "ReviewExample.Coprime",
+    "ReviewExample.Divides"
+   ],
+   "kind": "theorem",
+   "lines": [
+    21,
+    25
+   ],
+   "module": "ReviewExample.Multiples.Coprime",
+   "own": "a5cb1f2e5043c27d",
+   "uses": [
+    "Nat"
+   ]
+  },
+  "ReviewExample.Coprime.lcm_eq": {
+   "deep": "fe64c9e10baf4594",
+   "deps": [
+    "ReviewExample.Coprime",
+    "ReviewExample.lcm"
+   ],
+   "kind": "theorem",
+   "lines": [
+    15,
+    19
+   ],
+   "module": "ReviewExample.Multiples.Coprime",
+   "own": "91d9499d13cca7d5",
+   "sorryFrom": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "sorryVia": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "uses": [
+    "Eq",
+    "Nat",
+    "Nat.mul"
+   ]
+  },
+  "ReviewExample.Divides": {
+   "deep": "6c671e7e68b9c10f",
+   "deps": [],
+   "kind": "def",
+   "lines": [
+    10,
+    12
+   ],
+   "module": "ReviewExample.Divides",
+   "own": "0dfe923a99c9aa54",
+   "uses": [
+    "Eq",
+    "Exists",
+    "Nat",
+    "Nat.mul"
+   ]
+  },
+  "ReviewExample.Divides.mod": {
+   "deep": "392ebbbafb8da760",
+   "deps": [
+    "ReviewExample.Divides"
+   ],
+   "kind": "theorem",
+   "lines": [
+    34,
+    41
+   ],
+   "module": "ReviewExample.Divides",
+   "own": "71492c4ca5df6679",
+   "uses": [
+    "Nat",
+    "Nat.mod"
+   ]
+  },
+  "ReviewExample.Divides.of_mod": {
+   "deep": "994403b8ee60e04d",
+   "deps": [
+    "ReviewExample.Divides"
+   ],
+   "kind": "theorem",
+   "lines": [
+    22,
+    32
+   ],
+   "module": "ReviewExample.Divides",
+   "own": "e50f985bfa39afb8",
+   "uses": [
+    "Nat",
+    "Nat.mod"
+   ]
+  },
+  "ReviewExample.Divides.refl": {
+   "deep": "66a5cf12dbf7d8e0",
+   "deps": [
+    "ReviewExample.Divides"
+   ],
+   "kind": "theorem",
+   "lines": [
+    14,
+    16
+   ],
+   "module": "ReviewExample.Divides",
+   "own": "376db7f92d83c15d",
+   "uses": [
+    "Nat"
+   ]
+  },
+  "ReviewExample.Divides.zero": {
+   "deep": "f2a923c6f5d3cf4c",
+   "deps": [
+    "ReviewExample.Divides"
+   ],
+   "kind": "theorem",
+   "lines": [
+    18,
+    20
+   ],
+   "module": "ReviewExample.Divides",
+   "own": "28c5f3ef7322fb11",
+   "uses": [
+    "Nat"
+   ]
+  },
+  "ReviewExample.Divides.zero_left": {
+   "deep": "e112b593f85f4a61",
+   "deps": [
+    "ReviewExample.Divides"
+   ],
+   "kind": "theorem",
+   "lines": [
+    12,
+    20
+   ],
+   "module": "ReviewExample.Zero",
+   "own": "d38cdde06bbf153e",
+   "uses": [
+    "Eq",
+    "Iff",
+    "Nat"
+   ]
+  },
+  "ReviewExample.Steps": {
+   "deep": "861c832294ea2572",
+   "deps": [],
+   "kind": "inductive",
+   "lines": [
+    9,
+    12
+   ],
+   "module": "ReviewExample.Steps",
+   "own": "861c832294ea2572",
+   "uses": []
+  },
+  "ReviewExample.Steps.count": {
+   "deep": "ae510acb10650333",
+   "deps": [
+    "ReviewExample.Steps"
+   ],
+   "kind": "def",
+   "lines": [
+    14,
+    17
+   ],
+   "module": "ReviewExample.Steps",
+   "own": "8616944b6a2345c2",
+   "uses": [
+    "Nat",
+    "PProd",
+    "PUnit",
+    "Unit",
+    "Nat.add",
+    "Unit.unit"
+   ]
+  },
+  "ReviewExample.divides_gcd": {
+   "deep": "f69e0be99c047c61",
+   "deps": [
+    "ReviewExample.Divides",
+    "ReviewExample.gcd"
+   ],
+   "kind": "theorem",
+   "lines": [
+    35,
+    44
+   ],
+   "module": "ReviewExample.Gcd",
+   "own": "9aefa9c1dbe03520",
+   "uses": [
+    "Nat"
+   ]
+  },
+  "ReviewExample.gcd": {
+   "deep": "27155ff3b019a9de",
+   "deps": [],
+   "kind": "def",
+   "lines": [
+    12,
+    18
+   ],
+   "module": "ReviewExample.Gcd",
+   "own": "dbdffe02f3928447",
+   "uses": [
+    "InvImage",
+    "Nat",
+    "PSigma",
+    "Nat.add",
+    "Nat.lt",
+    "Nat.mod",
+    "WellFounded.Nat.fix"
+   ]
+  },
+  "ReviewExample.gcd_divides": {
+   "deep": "19a784f93827fe6f",
+   "deps": [
+    "ReviewExample.Divides",
+    "ReviewExample.gcd"
+   ],
+   "kind": "theorem",
+   "lines": [
+    20,
+    28
+   ],
+   "module": "ReviewExample.Gcd",
+   "own": "b9aac3338366be19",
+   "uses": [
+    "And",
+    "Nat"
+   ]
+  },
+  "ReviewExample.gcd_divides_mul": {
+   "deep": "5f7666f9df1a1e36",
+   "deps": [
+    "ReviewExample.Divides",
+    "ReviewExample.gcd"
+   ],
+   "kind": "theorem",
+   "lines": [
+    26,
+    28
+   ],
+   "module": "ReviewExample.Multiples.Lcm",
+   "own": "523ff39db45889a1",
+   "sorryFrom": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "sorryVia": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "uses": [
+    "Nat",
+    "Nat.mul"
+   ]
+  },
+  "ReviewExample.gcd_divides_mul_comm": {
+   "deep": "962da3656a195d7d",
+   "deps": [
+    "ReviewExample.Divides",
+    "ReviewExample.gcd"
+   ],
+   "kind": "theorem",
+   "lines": [
+    30,
+    33
+   ],
+   "module": "ReviewExample.Multiples.Lcm",
+   "own": "7c396db722bbf8ca",
+   "sorryFrom": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "sorryVia": [
+    "ReviewExample.gcd_divides_mul"
+   ],
+   "uses": [
+    "Nat",
+    "Nat.mul"
+   ]
+  },
+  "ReviewExample.gcd_mul_lcm": {
+   "deep": "3319614ab08c35ba",
+   "deps": [
+    "ReviewExample.gcd",
+    "ReviewExample.lcm"
+   ],
+   "kind": "theorem",
+   "lines": [
+    17,
+    19
+   ],
+   "module": "ReviewExample.Multiples.Lcm",
+   "own": "bdf52440b3b5130c",
+   "sorry": true,
+   "uses": [
+    "Eq",
+    "Nat",
+    "Nat.mul"
+   ]
+  },
+  "ReviewExample.lcm": {
+   "deep": "6befd4447aea1c97",
+   "deps": [
+    "ReviewExample.gcd"
+   ],
+   "kind": "def",
+   "lines": [
+    13,
+    15
+   ],
+   "module": "ReviewExample.Multiples.Lcm",
+   "own": "3ad3e0d064f54865",
+   "uses": [
+    "Nat",
+    "Nat.div",
+    "Nat.mul"
+   ]
+  },
+  "ReviewExample.lcm_mul_gcd": {
+   "deep": "31419fa8c88705ee",
+   "deps": [
+    "ReviewExample.gcd",
+    "ReviewExample.lcm"
+   ],
+   "kind": "theorem",
+   "lines": [
+    21,
+    24
+   ],
+   "module": "ReviewExample.Multiples.Lcm",
+   "own": "593469f4c051e208",
+   "sorryFrom": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "sorryVia": [
+    "ReviewExample.gcd_mul_lcm"
+   ],
+   "uses": [
+    "Eq",
+    "Nat",
+    "Nat.mul"
+   ]
+  }
+ },
+ "format": 1,
+ "lean": "4.35.0",
+ "library": {
+  "And": {
+   "group": null,
+   "kind": "structure",
+   "module": "Init.Prelude",
+   "own": "b44379ec9afb6bcb"
+  },
+  "Eq": {
+   "group": null,
+   "kind": "inductive",
+   "module": "Init.Prelude",
+   "own": "d65236ee59b4fb4e"
+  },
+  "Exists": {
+   "group": null,
+   "kind": "inductive",
+   "module": "Init.Core",
+   "own": "9061cf3d424f1f3a"
+  },
+  "Iff": {
+   "group": null,
+   "kind": "structure",
+   "module": "Init.Core",
+   "own": "4b131838a6331927"
+  },
+  "InvImage": {
+   "group": "compiler",
+   "kind": "def",
+   "module": "Init.Core",
+   "own": "cb86e38fe61dc40c"
+  },
+  "Nat": {
+   "group": null,
+   "kind": "inductive",
+   "module": "Init.Prelude",
+   "own": "00f1b84d862fbf33"
+  },
+  "Nat.add": {
+   "group": null,
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "b22dc563ea09c091"
+  },
+  "Nat.div": {
+   "group": null,
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "194be92d938693d3"
+  },
+  "Nat.lt": {
+   "group": null,
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "a504b25cc7f8a015"
+  },
+  "Nat.mod": {
+   "group": null,
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "f3b171f5c35ada13"
+  },
+  "Nat.mul": {
+   "group": null,
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "6540b66d943bf0bb"
+  },
+  "PProd": {
+   "group": "compiler",
+   "kind": "structure",
+   "module": "Init.Prelude",
+   "own": "c345f4323f0cf765"
+  },
+  "PSigma": {
+   "group": "compiler",
+   "kind": "structure",
+   "module": "Init.Core",
+   "own": "027603f61043ad97"
+  },
+  "PUnit": {
+   "group": "compiler",
+   "kind": "inductive",
+   "module": "Init.Prelude",
+   "own": "43012de336f6c568"
+  },
+  "Unit": {
+   "group": "compiler",
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "a0d8ca4cd89f4d49"
+  },
+  "Unit.unit": {
+   "group": "compiler",
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "c1dd9350469fafd4"
+  },
+  "WellFounded.Nat.fix": {
+   "group": "internals",
+   "kind": "def",
+   "module": "Init.WF",
+   "own": "a15a8f77b9f99888"
+  }
+ },
+ "modules": {
+  "ReviewExample": [
+   "ReviewExample.Divides",
+   "ReviewExample.Gcd",
+   "ReviewExample.Multiples.Coprime",
+   "ReviewExample.Multiples.Lcm",
+   "ReviewExample.Steps",
+   "ReviewExample.Zero"
+  ],
+  "ReviewExample.Divides": [],
+  "ReviewExample.Gcd": [
+   "ReviewExample.Divides"
+  ],
+  "ReviewExample.Multiples.Coprime": [
+   "ReviewExample.Multiples.Lcm"
+  ],
+  "ReviewExample.Multiples.Lcm": [
+   "ReviewExample.Gcd"
+  ],
+  "ReviewExample.Steps": [],
+  "ReviewExample.Zero": [
+   "ReviewExample.Divides"
+  ]
+ },
+ "renames": {
+  "ReviewExample.gcd_dvd": "ReviewExample.gcd_divides"
+ },
+ "root": "ReviewExample"
+}
