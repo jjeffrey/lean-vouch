@@ -13,4 +13,5 @@ First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4
 - A list of folders and modules to open, search and pick from; shift-click for everything something depends on and that uses it.
 - `review.py` keeps `docbuild/` on the project's Lean version when that changes.
 - The server answers only its own pages, so other sites open in the browser can't read or change a review.
+- Projects whose libraries set `srcDir` show their declarations' code.
 - `marks.json` and the graph record a format; the server refuses a format it doesn't read, and a `marks.json` it can't parse, instead of overwriting it.

@@ -110,6 +110,16 @@ def set_up_folders(tag, package):
         print(f"lean-review: moved docbuild/ to doc-gen4 {tag}, for the project's Lean.", flush=True)
 
 
+def source_folders():
+    """Where the project's modules are, as a library's `srcDir` can move them: Lake's source path,
+    without its dependencies' folders and Lean's own."""
+    path = subprocess.run(["lake", "env", "printenv", "LEAN_SRC_PATH"], capture_output=True, text=True).stdout
+    root = Path.cwd().resolve()
+    folders = [Path(folder).resolve() for folder in path.strip().split(os.pathsep) if folder]
+    return [folder for folder in folders
+            if folder.is_relative_to(root) and ".lake" not in folder.relative_to(root).parts] or [root]
+
+
 def run(command, cwd=".", env=None):
     if subprocess.run(command, cwd=cwd, env={**os.environ, **(env or {})}).returncode:
         fail(f"`{' '.join(command)}` failed; see above.")
@@ -178,7 +188,8 @@ def main():
         return
     reviewer = args.reviewer or subprocess.run(["git", "config", "user.name"], capture_output=True, text=True).stdout.strip()
     command = [sys.executable, str(HERE / "server/server.py"), "--docs", "docbuild/.lake/build/doc",
-               "--marks", "review/marks.json", "--graph", "review/graph.json", "--source", ".",
+               "--marks", "review/marks.json", "--graph", "review/graph.json",
+               *[option for folder in source_folders() for option in ("--source", str(folder))],
                "--prefix", args.modules[0], "--reviewer", reviewer or "reviewer", "--port", str(args.port)]
     os.execv(sys.executable, command)
 

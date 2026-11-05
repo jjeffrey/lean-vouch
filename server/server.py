@@ -222,10 +222,11 @@ def source_of(name):
     decl = graph.current().get("declarations", {}).get(name)
     if not decl or not decl.get("lines") or not args.source:
         return {"error": "no source"}
-    file = args.source / (decl["module"].replace(".", "/") + ".lean")
-    if not file.exists():
-        return {"error": f"{file} not found"}
-    lines = file.read_text().splitlines()
+    module = Path(decl["module"].replace(".", "/") + ".lean")
+    folder = next((folder for folder in args.source if (folder / module).exists()), None)
+    if folder is None:
+        return {"error": f"{module} not found"}
+    lines = (folder / module).read_text().splitlines()
     start, end = decl["lines"][0] - 1, decl["lines"][1]
     # Include a doc comment (and attributes) directly above the declaration.
     if start > 0 and lines[start - 1].rstrip().endswith("-/"):
@@ -235,8 +236,17 @@ def source_of(name):
         start = i
     while start > 0 and lines[start - 1].lstrip().startswith("@["):
         start -= 1
-    return {"file": str(file.relative_to(args.source)), "start": start + 1, "end": end,
+    return {"file": str(module), "start": start + 1, "end": end,
             "text": "\n".join(lines[start:end]), "kind": decl.get("kind")}
+
+
+def well_formed(body):
+    """Whether a POST has the types the handlers rely on; they decide whether its values make sense."""
+    return (isinstance(body, dict)
+            and all(isinstance(body.get(key, ""), str) for key in ("name", "from", "to", "verdict", "note"))
+            and isinstance(body.get("status"), (str, type(None)))
+            and all(isinstance(body.get(key, []), list) and all(isinstance(item, str) for item in body.get(key, []))
+                    for key in ("modules", "names", "shown")))
 
 
 def current_marks():
@@ -300,11 +310,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_body((WEB / name).read_bytes(), kind)
         # Every page gets the script: project pages for review, library pages so the library
         # definitions the project uses can be marked as understood.
-        if path.endswith(".html") or path == "/":
-            file = args.docs / ("index.html" if path == "/" else path.lstrip("/"))
-            if file.exists():
-                return self.send_body(file.read_bytes().replace(b"</body>", INJECT + b"</body>", 1),
-                                      "text/html; charset=utf-8")
+        # translate_path decodes the URL, since a module's name needn't be ASCII, and stays in the docs.
+        file = Path(self.translate_path(self.path))
+        file = file / "index.html" if path == "/" else file
+        if file.suffix == ".html" and file.is_file():
+            return self.send_body(file.read_bytes().replace(b"</body>", INJECT + b"</body>", 1),
+                                  "text/html; charset=utf-8")
         return super().do_GET()
 
     def do_POST(self):
@@ -313,7 +324,12 @@ class Handler(SimpleHTTPRequestHandler):
         # Another site can't send this type without asking first, and the server never agrees.
         if self.headers.get_content_type() != "application/json":
             return self.send_json({"error": "expected JSON"}, 415)
-        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", ""))))
+        except ValueError:
+            return self.send_json({"error": "bad request"}, 400)
+        if not well_formed(body):
+            return self.send_json({"error": "bad request"}, 400)
         if self.path == "/__review__/reach":   # a POST, since a folder can hold thousands of modules
             with lock:
                 return self.send_json(graph.reach(body.get("modules", []), body.get("names", []), body.get("shown", [])))
@@ -380,7 +396,8 @@ def main():
     p.add_argument("--marks", type=Path, required=True, help="JSON file for marks and notes")
     p.add_argument("--graph", type=Path, help="declaration graph from graph/DeclGraph.lean")
     p.add_argument("--prefix", required=True, help="root module, e.g. MyProject")
-    p.add_argument("--source", type=Path, help="project root, for showing declarations' code")
+    p.add_argument("--source", type=Path, action="append",
+                   help="a folder holding the project's modules, for showing declarations' code; can be repeated")
     p.add_argument("--reviewer", default="reviewer", help="name shown on notes added in the page")
     p.add_argument("--links", type=Path,
                    help="JSON file linking references to your own copies (default: links.local.json beside the marks)")

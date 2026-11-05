@@ -1,5 +1,6 @@
 """The server's promises about marks.json: nothing is lost, whatever happens. Needs only Python."""
 
+import http.client
 import json
 import subprocess
 import sys
@@ -24,6 +25,9 @@ class ServerTest(unittest.TestCase):
         root = Path(self.folder.name)
         (root / "docs").mkdir()
         (root / "docs" / "Page.html").write_text("<html><body>page</body></html>")
+        (root / "docs" / "Bär.html").write_text("<html><body>page</body></html>")
+        (root / "outside.html").write_text("<html><body>outside</body></html>")
+        self.root = root
         self.marks = root / "marks.json"
         self.graph = root / "graph.json"
         server.args = Namespace(docs=root / "docs", marks=self.marks, graph=self.graph, links=root / "links.json",
@@ -51,6 +55,43 @@ class ServerTest(unittest.TestCase):
 
     def stored(self):
         return json.loads(self.marks.read_text())["marks"]
+
+    def raw(self, method, path, body=None, headers={}):
+        connection = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port)
+        self.addCleanup(connection.close)
+        connection.request(method, path, body, headers)
+        response = connection.getresponse()
+        return response.status, response.read()
+
+    def test_pages_outside_the_docs_arent_served(self):
+        for path in ("/../outside.html", "/%2e%2e/outside.html", "/..%2Foutside.html"):
+            status, body = self.raw("GET", path)
+            self.assertEqual(status, 404, path)
+            self.assertNotIn(b"outside", body)
+
+    def test_a_page_with_a_non_ascii_name_gets_the_controls(self):
+        self.assertIn(b"review.js", self.get("/B%C3%A4r.html"))
+        self.assertIn(b"review.js", self.get("/Page.html?focus=a"))
+
+    def test_a_malformed_post_is_a_bad_request(self):
+        json_type = {"Content-Type": "application/json"}
+        for path, body in (("/__review__/data", "not json"), ("/__review__/data", "[]"), ("/__review__/data", ""),
+                           ("/__review__/data", '{"name": "A.b", "status": []}'), ("/__review__/data", '{"name": "A.b", "note": {}}'),
+                           ("/__review__/delete", '{"name": []}'), ("/__review__/move", '{"from": [], "to": "B"}'),
+                           ("/__review__/verdict", '{"name": {}, "verdict": "match"}'), ("/__review__/reach", '{"modules": [[]]}')):
+            self.assertEqual(self.raw("POST", path, body, json_type)[0], 400, body)
+        self.assertFalse(self.marks.exists())
+        self.assertEqual(self.post("/__review__/data", {"name": "A.b", "status": "agree"})[0], 200)
+
+    def test_a_declarations_source_is_found_in_any_source_folder(self):
+        (self.root / "src" / "P").mkdir(parents=True)
+        (self.root / "src" / "P" / "M.lean").write_text("theorem t : True := trivial\n")
+        self.graph.write_text(json.dumps({"declarations": {"P.t": {"module": "P.M", "lines": [1, 1], "kind": "theorem"}}}))
+        server.args.source = [self.root / "lib", self.root / "src"]
+        found = json.loads(self.get("/__review__/source?name=P.t"))
+        self.assertEqual((found["file"], found["text"]), (str(Path("P/M.lean")), "theorem t : True := trivial"))
+        server.args.source = [self.root / "lib"]
+        self.assertIn("not found", json.loads(self.get("/__review__/source?name=P.t"))["error"])
 
     def test_another_site_cant_change_marks(self):
         json_type = {"Content-Type": "application/json"}
