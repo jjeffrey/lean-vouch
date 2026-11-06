@@ -26,9 +26,9 @@ The first docs build takes time, because doc-gen4 documents everything the proje
 | --- | --- | --- |
 | No dependencies | about 7 minutes, mostly compiling doc-gen4 | about 1 GB |
 | Using Mathlib | about 35 minutes | 2 GB |
-| All of Mathlib | about 2 hours | 4 GB, and about 4 GB of memory |
+| All of Mathlib | about 70 minutes | 4 GB, and about 6 GB of memory |
 
-It doesn't recompile Mathlib. The graph step needs about 4 GB of memory for a Mathlib project. Lake's `[n/m]` total grows as it finds more to build, so the progress can seem to go backwards.
+It doesn't recompile Mathlib. The graph step needs up to about 6 GB of memory for a project on the scale of Mathlib. Lake's `[n/m]` total grows as it finds more to build, so the progress can seem to go backwards.
 
 When the project moves to another Lean version, the next run moves `docbuild/` to the matching doc-gen4 and builds the docs again, which takes about as long as the first run.
 

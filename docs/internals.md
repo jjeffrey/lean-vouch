@@ -37,7 +37,7 @@
 - Above 5,000 declarations the server sends each page what it needs: a module's declarations, what's
   below them, and what directly uses them. So on a library page "Used by the project in" lists only
   what's loaded, and quiz mode still downloads the whole graph. For all of Mathlib the graph takes under
-  ten minutes and about 4 GB to build and is about 190 MB; the server needs a few seconds and about 1 GB
+  ten minutes and about 6 GB to build and is about 190 MB; the server needs a few seconds and about 1 GB
   to read it.
 - The server runs on your own machine: it binds to 127.0.0.1 and refuses requests from other sites, but has no login, so anyone logged in to the machine can reach it. People working together each run their own, and share marks with git.
 - Splits and merges can't be remapped automatically; their marks show up as orphans.
