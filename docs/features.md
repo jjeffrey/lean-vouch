@@ -7,7 +7,8 @@ Under every declaration:
 - **Change tracking:** the mark is flagged when the declaration has changed since it was made, or
   when anything it depends on has ("depends on `Divides`, which changed since you marked it").
   For a theorem only its statement counts, since Lean checks the proof; for a definition, its
-  statement and body.
+  statement and body. A change only to how an argument is passed, such as `(n : Nat)` to
+  `{n : Nat}`, isn't flagged: it changes how the declaration is called, not what it says.
 - **The library definitions it uses** ("Uses from libraries: `Nat`, `Nat.mod`").
 - **Its equations, open.** doc-gen4 folds a definition's equations; for review they are what you
   check, so project declarations show them open, on the pages and in the diagram's sidebar.
