@@ -85,7 +85,7 @@ class PagesTest(unittest.TestCase):
         graph_file.write_text(json.dumps(graph))
         for who, (name, entries) in people.items():
             (marks_folder / f"{who}.json").write_text(json.dumps({"format": 3, "name": name, "marks": entries}))
-        server = subprocess.Popen([sys.executable, str(ROOT / "server" / "server.py"), "--docs", str(docs),
+        server = subprocess.Popen([sys.executable, str(ROOT / "lean_review" / "server.py"), "--docs", str(docs),
                                    "--marks", str(marks_folder), "--graph", str(graph_file), "--source", str(EXAMPLE),
                                    "--prefix", "ReviewExample", "--id", "ada", "--name", "Ada", "--port", str(self.port)], stdout=subprocess.DEVNULL)
         self.addCleanup(server.wait)

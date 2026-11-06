@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check that a project's graph and docs list the same declarations. From a project set up by
-review.py: python3 path/to/check_docs_match.py"""
+lean-review: python3 path/to/check_docs_match.py"""
 import html
 import json
 import re

@@ -1,5 +1,5 @@
 // Review controls for doc-gen4 pages. Each declaration gets a mark (✓ / ? / ✗) and a thread of
-// notes, saved through server/server.py. With a declaration graph, a mark is flagged when the
+// notes, saved through server.py. With a declaration graph, a mark is flagged when the
 // declaration or anything it depends on has changed since it was made, project declarations list
 // the library definitions they use, and those library definitions can be marked as understood.
 (() => {
@@ -21,7 +21,7 @@
   let marks = {}, graph = { declarations: {}, library: {}, renames: {} };
   const info = name => graph.declarations[name] ?? graph.library[name];
 
-  // Groups of Core Lean plumbing (tagged by graph/DeclGraph.lean), hidden unless switched on. The
+  // Groups of Core Lean plumbing (tagged by DeclGraph.lean), hidden unless switched on. The
   // choice is remembered in this browser. Hidden library uses are neither listed nor counted as
   // changes.
   const GROUPS = [

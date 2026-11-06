@@ -3,15 +3,15 @@
 Lean checks proofs. lean-review helps a person check the rest: that definitions and theorem
 statements mean what they should. It adds review tools to a project's doc-gen4 pages.
 
-![a dependency diagram colored by review marks, with a sorry and what relies on it](docs/images/sorry-diagram.png)
+![a dependency diagram colored by review marks, with a sorry and what relies on it](https://raw.githubusercontent.com/jjeffrey/lean-review/main/docs/images/sorry-diagram.png)
 
 ## Try it
 
 You need Lean v4.30 or newer through elan, and Python 3. From the root of a Lake project:
 
 ```bash
-git clone https://github.com/jjeffrey/lean-review ../lean-review
-python3 ../lean-review/review.py
+pipx install lean-review
+lean-review
 ```
 
 Then open <http://127.0.0.1:8797/review/diagram>. The first run takes about 7 minutes, or about 35
@@ -30,14 +30,14 @@ tracks unless you opt out; quiz answers stay local.
 - **`sorry` tracing:** everything that relies on one, even through proofs.
 - **A quiz:** read a statement with its name hidden, say what it means, then compare.
 
-It's a review aid, not a checker: for soundness, use
-[lean4checker](https://github.com/leanprover/lean4checker) or Comparator. It's early, and has been used
-on small projects.
+lean-review is a review aid, not a checker: for soundness, use
+[lean4checker](https://github.com/leanprover/lean4checker) or Comparator. lean-review is still early: it handles
+projects as large as Mathlib, but has mostly been used to review small ones.
 
 ## More
 
-[Features](docs/features.md) · [Usage](docs/usage.md) · [The quiz](docs/quiz.md) ·
-[How it works](docs/internals.md) · [Developing](docs/development.md) ·
-[Changelog](CHANGELOG.md)
+[Features](https://github.com/jjeffrey/lean-review/blob/main/docs/features.md) · [Usage](https://github.com/jjeffrey/lean-review/blob/main/docs/usage.md) · [The quiz](https://github.com/jjeffrey/lean-review/blob/main/docs/quiz.md) ·
+[How it works](https://github.com/jjeffrey/lean-review/blob/main/docs/internals.md) · [Developing](https://github.com/jjeffrey/lean-review/blob/main/docs/development.md) ·
+[Changelog](https://github.com/jjeffrey/lean-review/blob/main/CHANGELOG.md)
 
 Apache License 2.0. Copyright 2026 Jonathan Jeffrey.

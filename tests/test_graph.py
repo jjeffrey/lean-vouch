@@ -16,7 +16,7 @@ DIVIDES = "ReviewExample/Divides.lean"
 def graph_of(project, *roots):
     roots = roots or ("ReviewExample",)
     subprocess.run(["lake", "build", "-q", *roots], cwd=project, check=True, capture_output=True, text=True)
-    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "graph" / "DeclGraph.lean"), *roots],
+    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_review" / "graph" / "DeclGraph.lean"), *roots],
                             cwd=project, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 

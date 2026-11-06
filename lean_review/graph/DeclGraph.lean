@@ -387,7 +387,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         if g.inScope i.module then some i.module.toString else none).qsort (· < ·)))
     else none
   IO.println (Json.mkObj [
-    ("format", (1 : Nat)),  -- GRAPH_FORMAT in server/server.py
+    ("format", (1 : Nat)),  -- GRAPH_FORMAT in server.py
     ("lean", Lean.versionString),
     ("root", root),
     ("roots", toJson (outermost.map (·.toString))),

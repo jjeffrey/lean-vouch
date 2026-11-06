@@ -6,8 +6,8 @@ set -e
 cd "$(dirname "$0")"
 lake build -q
 (cd docbuild && DOCGEN_SRC=file lake build -q ReviewExample:docs)
-lake env lean --run ../graph/DeclGraph.lean ReviewExample > review/graph.json
+lake env lean --run ../lean_review/graph/DeclGraph.lean ReviewExample > review/graph.json
 if [ "$1" = "--reset" ] || [ ! -d review/marks ]; then rm -rf review/marks review/quiz; cp -R review/seed review/marks; fi
-exec python3 ../server/server.py --docs docbuild/.lake/build/doc --marks review/marks \
+exec python3 ../lean_review/server.py --docs docbuild/.lake/build/doc --marks review/marks \
   --graph review/graph.json --source . --prefix ReviewExample --id ada --name Ada \
   --port "${PORT:-8798}"

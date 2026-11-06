@@ -9,7 +9,7 @@ OUT=../docs/images
 mkdir -p "$OUT"
 REVIEW=$(mktemp -d -t lean-review-marks)
 cp -R review/seed "$REVIEW/marks"
-python3 ../server/server.py --docs docbuild/.lake/build/doc --marks "$REVIEW/marks" --graph review/graph.json \
+python3 ../lean_review/server.py --docs docbuild/.lake/build/doc --marks "$REVIEW/marks" --graph review/graph.json \
   --source . --prefix ReviewExample --id ada --name Ada --port $PORT > /dev/null &
 SERVER=$!
 trap 'kill $SERVER; rm -rf "$REVIEW"' EXIT

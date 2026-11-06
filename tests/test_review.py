@@ -1,4 +1,4 @@
-"""review.py's checks and failures, with a stand-in for lake. Needs only Python."""
+"""The lean-review command's checks and failures, with a stand-in for lake. Needs only Python."""
 
 import json
 import os
@@ -20,7 +20,7 @@ mkdir -p .lake/build/doc
 
 
 sys.path.insert(0, str(REVIEW.parent))
-import review  # noqa: E402
+from lean_review import cli as review  # noqa: E402
 
 
 class CleanTest(unittest.TestCase):

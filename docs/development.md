@@ -20,6 +20,20 @@ cd example
 The first docs build compiles doc-gen4 and takes several minutes. Marks made while trying it go to
 `example/review/marks/`, which is not committed.
 
+To run it from a clone, use `python3 path/to/lean-review/review.py`, which takes the same options as
+`lean-review`.
+
+## Releasing
+
+Set `VERSION` in `lean_review/server.py` and date the [changelog](../CHANGELOG.md), then, with
+[`build`](https://pypi.org/project/build/) and [`twine`](https://pypi.org/project/twine/):
+
+```bash
+python3 -m build
+twine check dist/*
+twine upload dist/*
+```
+
 ## Tests
 
 ```bash

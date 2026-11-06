@@ -8,12 +8,12 @@ First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4
 - The diagram opens large projects as folders, click to expand; tested on all of Mathlib.
 - The quiz can be limited to a folder or module, or asked in random order, and records whether your reading matched.
 - `sorry` and non-standard axioms are shown wherever they reach, even through proofs.
-- `review.py` sets a project up and serves it in one command.
+- `lean-review` sets a project up and serves it in one command. It installs with pip or pipx.
 - The graph lists exactly what the docs list, using doc-gen4's rule for what a person wrote.
 - A list of folders and modules to open, search and pick from; shift-click for everything something depends on and that uses it.
-- `review.py` keeps `docbuild/` on the project's Lean version when that changes.
+- `lean-review` keeps its docs build on the project's Lean version when that changes.
 - The server answers only its own pages, so other sites open in the browser can't read or change a review.
-- `review.py` reviews every library in the project by default, or the libraries and modules you name.
+- `lean-review` reviews every library in the project by default, or the libraries and modules you name.
 - Projects whose libraries set `srcDir` show their declarations' code.
 - Each person has their own marks file, shown together: your marks by default, anyone else's or everyone's in the diagram, with disagreements marked. Someone's `?` needs your attention until you mark or reply. An older `review/marks.json` is imported.
 - Everything lives in `.lean-review/`, which git ignores but for the marks. Quiz answers stay local.

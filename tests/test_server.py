@@ -14,8 +14,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "server"))
-import server  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from lean_review import server  # noqa: E402
 
 
 class ServerTest(unittest.TestCase):
@@ -424,7 +424,7 @@ class SliceTest(unittest.TestCase):
 
 class StartupTest(unittest.TestCase):
     def run_server(self, *extra):
-        return subprocess.run([sys.executable, str(ROOT / "server" / "server.py"), *extra],
+        return subprocess.run([sys.executable, str(ROOT / "lean_review" / "server.py"), *extra],
                               capture_output=True, text=True, timeout=20)
 
     def test_refuses_an_unsafe_id(self):

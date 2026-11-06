@@ -32,8 +32,8 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 
 | Option | Meaning |
 | --- | --- |
-| `review.py` | Review every library in the project, tests included |
-| `review.py MyLibrary My.Module` | Review only these libraries and modules. A library that doesn't build needs leaving out this way. |
+| `lean-review` | Review every library in the project, tests included |
+| `lean-review MyLibrary My.Module` | Review only these libraries and modules. Use this to leave out a library that doesn't build, or a project's large test libraries. |
 | `--port N` | Serve on another port, for reviewing two projects at once (default 8797) |
 | `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
 | `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git email changes, pass your old id to stay the same person. |

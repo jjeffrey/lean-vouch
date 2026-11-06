@@ -3,11 +3,11 @@
 Each person's marks and notes are saved to a file of their own in a folder, and their quiz answers to
 one in another, so that what's shared and what isn't can be committed separately. Pages get one view:
 the marks of whoever runs the server, everyone's notes, and everyone else's marks beside them. With
-a declaration graph from graph/DeclGraph.lean, marks are flagged when the declaration or anything it
+a declaration graph from DeclGraph.lean, marks are flagged when the declaration or anything it
 depends on changes, renames recorded as deprecated aliases move marks automatically, and marks whose
 declaration no longer exists are listed as orphans. Local use only: it binds to 127.0.0.1.
 
-    python3 server/server.py --docs .lean-review/docbuild/.lake/build/doc --marks .lean-review/marks \
+    python3 lean_review/server.py --docs .lean-review/docbuild/.lake/build/doc --marks .lean-review/marks \
         --graph .lean-review/graph.json --prefix MyProject --id ada --name Ada
 """
 
@@ -29,7 +29,7 @@ VERSION = "0.1.0"
 MARKS_FORMAT = 3
 GRAPH_FORMAT = 1  # stored in the graph as "format"
 
-WEB = Path(__file__).resolve().parent.parent / "web"
+WEB = Path(__file__).resolve().parent / "web"
 STATUSES = {"agree", "question", "reject", None}
 ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")   # plain, so that a file can't differ between machines
 VERDICTS = {"match", "partly", "miss"}   # how a quiz answer compared with the real name and docstring
@@ -462,7 +462,7 @@ def main():
     p.add_argument("--quiz", type=Path, help="folder for quiz answers (default: quiz beside the marks)")
     p.add_argument("--id", required=True, help="who this is: the name of their file, which never changes")
     p.add_argument("--name", help="the name to show for them (default: the id)")
-    p.add_argument("--graph", type=Path, help="declaration graph from graph/DeclGraph.lean")
+    p.add_argument("--graph", type=Path, help="declaration graph from DeclGraph.lean")
     p.add_argument("--prefix", required=True, help="root module, e.g. MyProject")
     p.add_argument("--source", type=Path, action="append",
                    help="a folder holding the project's modules, for showing declarations' code; can be repeated")
@@ -483,7 +483,7 @@ def main():
     graph_format = graph.current().get("format", GRAPH_FORMAT)
     if graph_format != GRAPH_FORMAT:
         sys.exit(f"lean-review: {args.graph} has format {graph_format}; this server reads format "
-                 f"{GRAPH_FORMAT}. Rerun this version's graph/DeclGraph.lean.")
+                 f"{GRAPH_FORMAT}. Rerun lean-review to rebuild it.")
     print(f"lean-review {VERSION}: http://127.0.0.1:{args.port}/review/diagram\n"
           f"Docs: http://127.0.0.1:{args.port}/{args.prefix.replace('.', '/')}.html", flush=True)
     try:

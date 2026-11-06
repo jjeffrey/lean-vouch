@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lean-review"
+dynamic = ["version"]
+description = "Review tools for Lean definitions and statements, in doc-gen4 pages"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Jonathan Jeffrey" }]
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["lean", "lean4", "formal verification", "code review", "doc-gen4"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/jjeffrey/lean-review"
+Issues = "https://github.com/jjeffrey/lean-review/issues"
+Changelog = "https://github.com/jjeffrey/lean-review/blob/main/CHANGELOG.md"
+
+[project.scripts]
+lean-review = "lean_review.cli:main"
+
+[tool.setuptools]
+packages = ["lean_review"]
+
+[tool.setuptools.dynamic]
+version = { attr = "lean_review.server.VERSION" }
+
+[tool.setuptools.package-data]
+lean_review = ["web/*", "graph/*.lean"]
