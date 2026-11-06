@@ -37,6 +37,10 @@
 - Binder names outside a type's fields don't count, so renaming an argument flags nothing.
 - On a large project, a page loads everything below every mark, to compare it. With many marks
   high up in a project this can approach the size of the whole graph.
+- Instances that `deriving` writes for `Repr`, `DecidableEq`, `BEq`, `Hashable`, `Inhabited` and
+  `Nonempty` are hidden, and left out of the counts, the diagram and the quiz. Lean records them
+  differently from written code, but an instance a project's own macro makes looks the same, so
+  it's hidden too. "hide generated" on a docs page shows them.
 - Library tracking covers the library definitions listed under a declaration. Type classes and instances
   stand for the operations they provide, so a change to a class itself isn't followed.
 - Lean v4.30 to v4.35 (see [Versions](#versions)). `DeclGraph.lean` uses Lean's internals, which change between versions. It works with and without the module system (`module`); it reads private data, so unexposed bodies are covered.

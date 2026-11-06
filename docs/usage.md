@@ -30,7 +30,7 @@ The first docs build takes time, because doc-gen4 documents everything the proje
 
 It doesn't recompile Mathlib. The graph step needs up to about 6 GB of memory for a project on the scale of Mathlib. Lake's `[n/m]` total grows as it finds more to build, so the progress can seem to go backwards.
 
-When the project moves to another Lean version, the next run moves `docbuild/` to the matching doc-gen4 and builds the docs again, which takes about as long as the first run.
+When the project moves to another Lean version, the next run moves `docbuild/` to the matching doc-gen4 and builds the docs again, which takes about as long as the first run. When the project's dependencies change on the same Lean, the next run's docs follow them.
 
 | Option | Meaning |
 | --- | --- |
@@ -54,7 +54,9 @@ docs, adding `?page=N` if the link text ends in `(p. N)` or `(page N)`.
 Leave the server running. After changing the code, run `lean-review` again, or `lean-review --rebuild`,
 in another terminal. An agent can do the same when it has finished its changes. It builds once, when
 you ask, and never on every save. Open pages say when a rebuild is running, and offer to reload when
-it's done, so a note you're writing isn't lost. If a build fails, changes are still tracked from the last good build, though a failure during the docs step can leave some pages newer than that.
+it's done, so a note you're writing isn't lost, and asks first if reloading would lose one. A page from
+before a rebuild can't be used to mark until it's reloaded, since it may not show what's there now, though
+notes still save. If a build fails, changes are still tracked from the last good build, though a failure during the docs step can leave some pages newer than that.
 
 Marks and notes need no rebuild. They appear on open pages by themselves, from anyone, within a few seconds.
 

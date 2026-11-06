@@ -8,8 +8,9 @@ Under every declaration:
   when anything below it has, however far, in libraries too ("depends on `Divides`, which changed since
   you marked it").
   For a theorem only its statement counts, since Lean checks the proof; for a definition, its
-  statement and body. A change only to how an argument is passed, such as `(n : Nat)` to
-  `{n : Nat}`, isn't flagged: it changes how the declaration is called, not what it says.
+  statement and body; for a type, its fields and constructors, names and order included. A change
+  only to how an argument is passed, such as `(n : Nat)` to `{n : Nat}`, or to an argument's name,
+  isn't flagged: it changes how the declaration is called, not what it says.
 - **Accept change** keeps a flagged mark for the current version. It covers that one mark: accepting a
   change below doesn't accept what's built on it.
 - **The library definitions it uses** ("Uses from libraries: `Nat`, `Nat.mod`").
