@@ -318,6 +318,47 @@ class PagesTest(unittest.TestCase):
         """, frame="review/diagram", graph=graph)
         self.assertEqual(results, ["what changed (1)"])
 
+    def test_accepting_a_change_on_a_docs_page_keeps_the_mark_and_only_that_one(self):
+        marks, graph = self.changed_below()
+        below = "ReviewExample.gcd_divides_mul"
+        marks[below] = {"status": "question", "notes": [], "date": "2026-01-01T00:00:00", "fingerprint": fingerprint(self.graph, below)}
+        results = self.click_through(marks, """
+            await ready(".decl[data-review-change=affected]");
+            const decl = doc.getElementById("ReviewExample.gcd_divides");
+            decl.querySelector(".review-accept").click();
+            await until(() => decl.dataset.reviewChange === "");
+            results.push(decl.dataset.reviewStatus, decl.dataset.reviewStale, !!decl.querySelector(".review-accept"));
+            results.push(doc.getElementById("ReviewExample.gcd").dataset.reviewChange);
+            results.push([...doc.querySelectorAll("#review-summary button")].find(b => b.textContent.startsWith("what changed")).textContent);
+        """, graph=graph)
+        self.assertEqual(results, ["agree", "", False, "changed", "what changed (1)"])
+
+    def test_accepting_the_last_mark_clears_what_changed(self):
+        marks, graph = self.changed_below()
+        results = self.click_through(marks, """
+            await ready(".decl[data-review-change=affected]");
+            const decl = doc.getElementById("ReviewExample.gcd_divides");
+            decl.querySelector(".review-accept").click();
+            await until(() => doc.getElementById("ReviewExample.gcd").dataset.reviewChange === "");
+            results.push(doc.getElementById("ReviewExample.gcd").dataset.reviewChange, doc.getElementById("ReviewExample.gcd").querySelector(".review-stale").textContent);
+            results.push([...doc.querySelectorAll("#review-summary button")].find(b => b.textContent.startsWith("what changed")).style.display);
+        """, graph=graph)
+        self.assertEqual(results, ["", "", "none"])
+
+    def test_accepting_a_change_in_the_diagram_keeps_the_mark(self):
+        marks, graph = self.changed_below()
+        results = self.click_through(marks, """
+            await ready("#sidebar .marks button.accept");
+            results.push(doc.querySelector("#sidebar .marks button.active").dataset.status);
+            doc.querySelector("#sidebar .marks button.accept").click();
+            await until(() => doc.getElementById("what-changed").hidden);
+            await until(() => !doc.querySelector("#sidebar .stale"));
+            results.push(doc.querySelector("#sidebar .marks button.active").dataset.status, !!doc.querySelector("#sidebar .marks button.accept"), doc.getElementById("what-changed").hidden);
+            const lit = [...doc.querySelectorAll("#diagram g.node")].filter(g => g.querySelector("path, polygon").getAttribute("stroke") === "#f0a020");
+            results.push(lit.length);
+        """, frame="review/diagram#ReviewExample.gcd_divides", graph=graph)
+        self.assertEqual(results, ["agree", "agree", False, True, 0])
+
     def test_what_changed_lists_the_lowest_first(self):
         marks, graph = self.changed_below()
         graph["declarations"]["ReviewExample.Divides"]["own"] = "1111111111111111"
@@ -377,6 +418,28 @@ class PagesTest(unittest.TestCase):
             results.push([...doc.getElementById("viewer").options].map(o => o.text));
         """, frame=f"review/diagram#{GCD}")
         self.assertEqual(results, [True, 0, False, 1, ["mine", "Claude", "everyone"]])
+
+    def test_pages_say_who_is_reviewing(self):
+        results = self.click_through({}, """
+            await ready(".review-me:not(:empty)");
+            results.push(doc.querySelector(".review-me").textContent, doc.querySelector(".review-me").title.includes("ada"));
+        """, frame="review/diagram")
+        self.assertEqual(results, ["reviewing as Ada", True])
+        results = self.click_through({}, """
+            await ready(".review-me:not(:empty)");
+            results.push(doc.querySelector(".review-me").textContent);
+        """)
+        self.assertEqual(results, ["reviewing as Ada"])
+
+    def test_a_disagreement_says_who_with(self):
+        bo = {GCD: {"status": "reject", "date": "2026-01-01T00:00:00", "notes": [], "fingerprint": fingerprint(self.graph, GCD)}}
+        cy = {GCD: {"status": "question", "date": "2026-01-01T00:00:00", "notes": [], "fingerprint": fingerprint(self.graph, GCD)}}
+        script = """
+            await ready(".decl[data-review-disagree=yes]");
+            results.push(doc.getElementById("ReviewExample.gcd").querySelector(".disagree").textContent);
+        """
+        self.assertEqual(self.click_through(self.marked(), script, people={"bo": ("Bo", bo)}), ["Bo disagrees with you"])
+        self.assertEqual(self.click_through({}, script, people={"bo": ("Bo", bo), "cy": ("Cy", cy)}), ["others disagree"])
 
     def test_a_running_build_is_announced(self):
         results = self.click_through({}, """

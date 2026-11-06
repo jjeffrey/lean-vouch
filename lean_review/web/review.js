@@ -132,6 +132,12 @@
   };
 
   const renderers = new Map();   // how to redraw each declaration on this page
+  // A change to one mark can change what others show, since they count what relies on what.
+  const redraw = () => {
+    for (const [name, render] of renderers) render(marks[name] ?? {});
+    showBar();
+  };
+  let showBar = () => {};
 
   // What changed, and how many of your marks rely on each. Every mark recorded what lay below it,
   // so this includes declarations you never marked.
@@ -222,6 +228,13 @@
         c.deps.forEach((d, i) => { if (i) stale.append(", "); stale.append(link(d, short(d))); });
         stale.append(", which changed since you marked it");
       }
+      if (c.self || c.deps.length) {
+        // Keeps the mark, for what's there now. Clicking it again would clear it.
+        const accept = el("button", "review-accept", "Accept change");
+        accept.title = "Keep your mark for the current version. Only this declaration's mark is affected.";
+        accept.onclick = async () => { await post("/review/data", { name, status: e.status, fingerprint: fingerprint(name) }).then(render); redraw(); };
+        stale.append(" ", accept);
+      }
       element.dataset.reviewStale = c.self || c.deps.length ? "yes" : "";
       element.dataset.reviewChange = c.self || relying ? "changed" : c.deps.length ? "affected" : "";
       // Only marks of what's there now can disagree.
@@ -233,7 +246,8 @@
       element.dataset.reviewAttention = e.attention?.length ? "yes" : "";
       others.replaceChildren(...(e.others ?? []).map(o =>
         el("span", isCurrent(o) ? null : "old", `${o.name}: ${SYMBOL[o.status]}${isCurrent(o) ? "" : " (changed since)"}`)));
-      if (disagree) others.append(el("span", "disagree", "disagreement"));
+      const differing = reviewDisagreement(e.status && isCurrent(e) ? e.status : null, (e.others ?? []).filter(isCurrent));
+      if (differing) others.append(el("span", "disagree", differing));
       if (e.attention?.length) others.append(el("span", "attention", `needs your attention: ${e.attention.join(", ")}`));
       notes.replaceChildren(...(e.notes ?? []).map(noteItem));
       summarize();
@@ -358,7 +372,7 @@
     await reviewLinks.rewrite(document, a => graph.declarations[a.closest(".decl")?.id]?.lines?.[0]);
     const bar = el("div");
     bar.id = "review-summary";
-    bar.append(el("span", "counts"));
+    bar.append(el("span", "review-me"), el("span", "counts"));
     // So the graph and quiz pages can link back here.
     try { sessionStorage.setItem("lean-review-docs", location.href); } catch {}
     const graphLink = el("a", null, "dependency graph");
@@ -392,6 +406,7 @@
       changedButton.textContent = `what changed (${found})`;
       changedButton.style.display = found ? "" : "none";
     };
+    showBar = () => { showAsked(); showChanged(); summarize(); };
     showChanged();
     bar.append(changedButton);
     if (location.hash === "#review-attention" && needingAttention().length) attentionPanel();
@@ -449,12 +464,8 @@
     summarize();
     reviewWatch(async () => {
       const fresh = await fetch("/review/data").then(checked);
-      for (const [name, render] of renderers)
-        if (JSON.stringify(marks[name]) !== JSON.stringify(fresh[name])) render(fresh[name] ?? {});
       marks = fresh;
-      showAsked();
-      showChanged();
-      summarize();
+      redraw();
     });
     // ?focus=A,B scrolls to those declarations once the review controls are in place; adding
     // &only hides the page's other declarations instead (used for screenshots).

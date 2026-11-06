@@ -8,8 +8,9 @@ Under every declaration:
   when anything it depends on has ("depends on `Divides`, which changed since you marked it"), however
   far below. In the diagram a solid orange border is what changed and a dashed one what relies on it, and
   selecting one lights the way down to the change. "What changed" lists every change, lowest first, with
-  how many marks rely on it. Each mark stays flagged until you've looked at it: accepting a change below
-  doesn't accept what's built on it.
+  how many marks rely on it. Each mark stays flagged until you've looked at it, and **Accept change**
+  keeps it for the current version. That covers one mark: accepting a change below doesn't accept
+  what's built on it.
   For a theorem only its statement counts, since Lean checks the proof; for a definition, its
   statement and body. A change only to how an argument is passed, such as `(n : Nat)` to
   `{n : Nat}`, isn't flagged: it changes how the declaration is called, not what it says.

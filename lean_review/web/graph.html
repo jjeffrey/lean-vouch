@@ -17,6 +17,7 @@
   .controls { display: flex; gap: 0.6em 1.5em; align-items: center; flex-wrap: wrap; margin-bottom: 0.8em; }
   .legend span { display: inline-block; margin-right: 1em; }
   .legend span[hidden] { display: none; }
+  .review-me { color: #666; font-size: 0.9em; margin-left: 1.2em; }
   .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; vertical-align: middle;
     margin-right: 0.3em; border: 1px solid #888; }
   .note { color: #555; max-width: 60em; margin: 0 0 0.6em; }
@@ -60,6 +61,7 @@
   #sidebar .ref[data-status="question"] { border-color: #cc9900; }
   #sidebar .ref[data-status="reject"] { border-color: #cc3333; }
   #sidebar .marks button { width: 2em; height: 1.8em; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  #sidebar .marks button.accept { width: auto; padding: 0 0.5em; }
   #sidebar .marks button[data-status="agree"].active { background: #c8ecc8; border-color: #33aa33; }
   #sidebar .marks button[data-status="question"].active { background: #fbe9b0; border-color: #cc9900; }
   #sidebar .marks button[data-status="reject"].active { background: #f6c4c4; border-color: #cc3333; }
@@ -109,7 +111,7 @@
 </head>
 <body>
 <header class="views"><h1 id="project">Dependency graph</h1>
-  <nav><a id="docs-link" href="/">docs</a><a href="/review/quiz">quiz</a></nav></header>
+  <nav><a id="docs-link" href="/">docs</a><a href="/review/quiz">quiz</a><span class="review-me"></span></nav></header>
 <details class="note"><summary>How to read this diagram</summary><p>Each arrow points from a declaration to one it depends on, with the arrows implied
 by others left out (a Hasse diagram). For a theorem, only its statement counts; for a definition,
 its statement and body. Colors are your marks; a solid orange border means it changed since a mark that relies on it, a
@@ -789,10 +791,17 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   };
 
   // Update one node's colors after its mark changes, without redrawing (which would reset zoom).
-  function recolor(name) {
+  function recolorAll() {
+    const elements = nodeElements();
+    for (const name of model.id.keys()) repaint(name, elements);
     renderTree();
+    drawBadges();
+    showChanged();
+  }
+  const recolor = recolorAll;
+  function repaint(name, elements) {
     const id = model.id.get(name);
-    const g = id && nodeElements().get(id);
+    const g = id && elements.get(id);
     if (!g) return;
     const [fill, stroke] = COLORS[nodeClass(name)], change = changeOf(name), b = border(change, gapOf(name), stroke);
     for (const shape of g.querySelectorAll("path, polygon, rect")) {
@@ -805,8 +814,6 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     }
     const node = model.nodes.find(n => n.id === id);
     if (node) Object.assign(node, { cls: nodeClass(name), stale: change });
-    drawBadges();
-    showChanged();
   }
 
   function select(name) {
@@ -878,14 +885,26 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       s.append(", which changed since you marked it");
       markRow.append(s);
     }
+    if (c.self || c.deps.length) {
+      // Keeps the mark, for what's there now. Clicking it again would clear it.
+      const accept = el("button", "accept", "Accept change");
+      accept.title = "Keep your mark for the current version. Only this declaration's mark is affected.";
+      accept.onclick = async () => {
+        marks[name] = await post("/review/data", { name, status: marks[name].status, fingerprint: fingerprint(name) });
+        recolorAll();
+        renderSidebar(name);
+      };
+      markRow.append(" ", accept);
+    }
     sidebar.append(el("h3", null, "Review"), markRow);
     const others = marks[name]?.others ?? [];
     if (others.length) {
       const line = el("p", "others");
       for (const o of others) line.append(el("span", isOld(name, o) ? "old" : null,
         `${o.name}: ${SYMBOL[o.status]}${isOld(name, o) ? " (changed since)" : ""}`));
-      if (new Set(everyMark(name).filter(m => !isOld(name, m)).map(m => m.status)).size > 1)
-        line.append(el("span", "disagree", "disagreement"));
+      const mine = marks[name]?.status && !isOld(name, marks[name]) ? marks[name].status : null;
+      const differing = reviewDisagreement(mine, others.filter(o => !isOld(name, o)));
+      if (differing) line.append(el("span", "disagree", differing));
       sidebar.append(line);
     }
     if (asked(name)) {
@@ -1137,7 +1156,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       if (!people.has(id)) { people.set(id, name); viewer.add(new Option(name, id), viewer.options[viewer.options.length - 1]); }
     }
     document.getElementById("viewer-label").hidden = !people.size;
-    changed.forEach(recolor);
+    recolorAll();
     showAskedKey();
     // Redraw the sidebar's thread, unless that would lose a note being written.
     const input = sidebar.querySelector("textarea");

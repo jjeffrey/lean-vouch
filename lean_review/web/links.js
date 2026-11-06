@@ -5,6 +5,13 @@
 //
 // With DOCGEN_SRC=file the source links are file:// URLs, which browsers won't follow from a web
 // page. They open in VS Code instead, at the line `lineOf(a)` gives, if any.
+// Who disagrees with whom, among marks that are current: `mine` is your status, if any.
+window.reviewDisagreement = (mine, others) => {
+  const differ = others.filter(o => o.status !== mine);
+  if (mine && differ.length) return `${differ.map(o => o.name).join(", ")} ${differ.length === 1 ? "disagrees" : "disagree"} with you`;
+  return new Set(others.map(o => o.status)).size > 1 ? "others disagree" : null;
+};
+
 // A person's color in note threads, the same wherever their name appears.
 window.reviewHue = name => [...name].reduce((hue, c) => (hue * 31 + c.codePointAt(0)) % 360, 7);
 
@@ -30,6 +37,10 @@ window.reviewWatch = onMarks => {
   const tick = async () => {
     const now = await fetch("/review/status").then(r => r.json()).catch(() => null);
     if (!now) return;
+    for (const me of document.querySelectorAll(".review-me")) {
+      me.textContent = `reviewing as ${now.me.name}`;
+      me.title = `Your id is ${now.me.id}: the name of your marks file. --name and --id change them.`;
+    }
     if (first) built = now.built;
     else if (now.marks !== marks) await onMarks();
     first = false;

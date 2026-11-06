@@ -312,14 +312,15 @@ def alive(pid):
 def status():
     """What open pages poll: when anyone's marks last changed, and how the latest build went, which
     a build reports in a file. A build that died can't say so itself. `marks_folder` tells
-    lean-review which project this server is for."""
+    lean-review which project this server is for, and `me` shows who's reviewing."""
     files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
     build = load_json(args.build, {})
     state, message = build.get("state"), build.get("message")
     if state == "building" and not alive(build.get("pid")):
         state, message = "failed", "The build stopped before it finished."
     return {"marks": ",".join(f"{path.stem}:{path.stat().st_mtime_ns}" for path in files), "state": state,
-            "message": message, "built": build.get("built"), "marks_folder": str(args.marks.resolve())}
+            "message": message, "built": build.get("built"), "marks_folder": str(args.marks.resolve()),
+            "me": {"id": args.id, "name": person(args.id, args.name)["name"]}}
 
 
 def well_formed(body):

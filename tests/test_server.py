@@ -118,8 +118,9 @@ class ServerTest(unittest.TestCase):
         server.args.build.write_text(json.dumps({"state": "building", "pid": dead.pid}))
         self.assertEqual(self.status()["state"], "failed")
 
-    def test_status_names_the_marks_folder(self):
+    def test_status_names_the_marks_folder_and_who_this_is(self):
         self.assertEqual(self.status()["marks_folder"], str(self.folder_marks.resolve()))
+        self.assertEqual(self.status()["me"], {"id": "ada", "name": "Ada"})
 
     def test_source_edited_since_the_build_says_so(self):
         (self.root / "src").mkdir()
