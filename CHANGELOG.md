@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-06)
 
 First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4.
 
@@ -11,5 +11,5 @@ First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4
 - Quiz mode: read a statement with its name hidden, say what it means, then compare.
 - Each person has their own marks file. The diagram shows yours, anyone's or everyone's, with disagreements marked, and someone's question needs your attention until you mark or reply.
 - Marks and notes appear on open pages by themselves, and the server can stay up through a rebuild.
-- `lean-review` sets a project up and serves it in one command, reviewing every library or those you name. It installs with pipx, pip or uv.
-- Everything lives in `.lean-review/`, which git ignores but for the marks.
+- `lean-vouch` sets a project up and serves it in one command, reviewing every library or those you name. It installs with pipx, pip or uv.
+- Everything lives in `.lean-vouch/`, which git ignores but for the marks.

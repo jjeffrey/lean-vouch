@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lean-review"
+name = "lean-vouch"
 dynamic = ["version"]
 description = "Review tools for Lean definitions and statements, in doc-gen4 pages"
 readme = "README.md"
@@ -21,18 +21,19 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jjeffrey/lean-review"
-Issues = "https://github.com/jjeffrey/lean-review/issues"
-Changelog = "https://github.com/jjeffrey/lean-review/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/jjeffrey/lean-vouch"
+Issues = "https://github.com/jjeffrey/lean-vouch/issues"
+Changelog = "https://github.com/jjeffrey/lean-vouch/blob/main/CHANGELOG.md"
 
 [project.scripts]
-lean-review = "lean_review.cli:main"
+lean-vouch = "lean_vouch.cli:main"
 
 [tool.setuptools]
-packages = ["lean_review"]
+packages = ["lean_vouch", "lean_vouch.graph", "lean_vouch.web"]
 
 [tool.setuptools.dynamic]
-version = { attr = "lean_review.server.VERSION" }
+version = { attr = "lean_vouch.server.VERSION" }
 
 [tool.setuptools.package-data]
-lean_review = ["web/*", "graph/*.lean"]
+"lean_vouch.graph" = ["*.lean"]
+"lean_vouch.web" = ["*"]

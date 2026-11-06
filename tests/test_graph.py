@@ -17,7 +17,7 @@ DIVIDES = "ReviewExample/Divides.lean"
 def graph_of(project, *roots):
     roots = roots or ("ReviewExample",)
     subprocess.run(["lake", "build", "-q", *roots], cwd=project, check=True, capture_output=True, text=True)
-    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_review" / "graph" / "DeclGraph.lean"), *roots],
+    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_vouch" / "graph" / "DeclGraph.lean"), *roots],
                             cwd=project, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 
@@ -199,8 +199,8 @@ class GraphTest(unittest.TestCase):
         copy = Path(tempfile.mkdtemp(dir=self.folder.name)) / "project"
         shutil.copytree(self.original, copy)
         out = copy / "out.json"
-        subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_review" / "graph" / "DeclGraph.lean"), "ReviewExample"], cwd=copy,
-                       check=True, capture_output=True, text=True, env={**os.environ, "LEAN_REVIEW_GRAPH": str(out)})
+        subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_vouch" / "graph" / "DeclGraph.lean"), "ReviewExample"], cwd=copy,
+                       check=True, capture_output=True, text=True, env={**os.environ, "LEAN_VOUCH_GRAPH": str(out)})
         self.assertEqual(json.loads(out.read_text())["root"], "ReviewExample")
 
     def test_changing_a_proof_changes_no_fingerprint(self):
@@ -226,6 +226,31 @@ class GraphTest(unittest.TestCase):
     def test_a_docstring_changes_no_fingerprint(self):
         after = self.edited(DIVIDES, "/-- Every number divides itself. -/", "/-- Reworded. -/")
         self.assertEqual(self.changed(after, "own"), set())
+
+    PLACED = """def usesPanic (n : Nat) : Nat := if n = 0 then panic! "no" else n
+def usesUnreachable (n : Nat) : Nat := if n = 0 then unreachable! else n
+def usesAssert (n : Nat) : Nat := assert! n > 0; n
+def usesSorry : Nat := sorry
+def usesTactic : Nat := by sorry
+def nested (n : Nat) : Nat := if n = 0 then panic! (toString (sorry : Nat)) else n
+theorem stmtSorry : (sorry : Nat) = 1 := sorry
+
+end ReviewExample"""
+
+    def placed(self, code):
+        declarations = self.edited(GCD, "end ReviewExample", code)["declarations"]
+        return {n.rsplit(".")[-1]: declarations[n]["own"] for n in declarations
+                if n.rsplit(".")[-1] in ("usesPanic", "usesUnreachable", "usesAssert", "usesSorry", "usesTactic", "nested", "stmtSorry")}
+
+    def test_where_code_was_written_changes_no_fingerprint(self):
+        here = self.placed(self.PLACED)
+        self.assertEqual(len(here), 7)
+        self.assertEqual(here, self.placed("-- A line, and each column moved.\n" + self.PLACED.replace(" :=", "  :=")))
+
+    def test_what_a_panic_says_still_changes_its_fingerprint(self):
+        here = self.placed(self.PLACED)
+        there = self.placed(self.PLACED.replace('panic! "no"', 'panic! "yes"'))
+        self.assertEqual({n for n in here if here[n] != there[n]}, {"usesPanic"})
 
     def test_a_name_with_a_space_cant_look_like_a_module_mark(self):
         after = self.edited(GCD, "namespace ReviewExample", "def «module Foo» : Nat := 1\n\nnamespace ReviewExample")

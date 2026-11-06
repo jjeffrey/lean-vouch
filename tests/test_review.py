@@ -1,4 +1,4 @@
-"""The lean-review command's checks and failures, with a stand-in for lake. Needs only Python."""
+"""The lean-vouch command's checks and failures, with a stand-in for lake. Needs only Python."""
 
 import json
 import os
@@ -24,7 +24,7 @@ mkdir -p .lake/build/doc
 
 
 sys.path.insert(0, str(REVIEW.parent))
-from lean_review import cli as review  # noqa: E402
+from lean_vouch import cli as review  # noqa: E402
 
 
 class CleanTest(unittest.TestCase):
@@ -200,7 +200,7 @@ class ReportTest(unittest.TestCase):
 
     def test_an_interrupted_build_has_a_reason(self):
         self.assertEqual(review.reason(KeyboardInterrupt()), "The build was interrupted.")
-        self.assertEqual(review.reason(SystemExit("lean-review: first\nsecond")), "lean-review: first")
+        self.assertEqual(review.reason(SystemExit("lean-vouch: first\nsecond")), "lean-vouch: first")
 
     def test_no_server_is_none(self):
         with socket.socket() as probe:
@@ -240,7 +240,7 @@ class ReviewTest(unittest.TestCase):
         result = self.run_review("v4.24.0")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("needs v4.30 or newer", result.stderr)
-        self.assertFalse((self.root / ".lean-review").exists())
+        self.assertFalse((self.root / ".lean-vouch").exists())
 
     def test_a_newer_lean_is_warned_about(self):
         self.assertIn("newer than it's been tested on", self.run_review("v4.99.0").stdout)
@@ -249,11 +249,11 @@ class ReviewTest(unittest.TestCase):
         result = self.run_review("v4.35.0")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Invalid field", result.stderr)
-        self.assertFalse((self.root / ".lean-review" / "graph.json.new").exists())
+        self.assertFalse((self.root / ".lean-vouch" / "graph.json.new").exists())
 
     def test_docbuild_matches_the_project(self):
         self.run_review("v4.35.0")
-        lakefile = (self.root / ".lean-review" / "docbuild" / "lakefile.toml").read_text()
+        lakefile = (self.root / ".lean-vouch" / "docbuild" / "lakefile.toml").read_text()
         self.assertIn('rev = "v4.35.0"', lakefile)
         self.assertIn('name = "my-project"', lakefile)
         self.assertIn('path = "../../"', lakefile)
@@ -261,7 +261,7 @@ class ReviewTest(unittest.TestCase):
 
     def test_docbuild_follows_the_projects_lean(self):
         self.run_review("v4.34.0")
-        docbuild = self.root / ".lean-review" / "docbuild"
+        docbuild = self.root / ".lean-vouch" / "docbuild"
         (docbuild / "lake-manifest.json").write_text("{}")
         self.assertIn("moved to doc-gen4 v4.35.0", self.run_review("v4.35.0").stdout)
         self.assertIn('rev = "v4.35.0"', (docbuild / "lakefile.toml").read_text())
@@ -271,7 +271,7 @@ class ReviewTest(unittest.TestCase):
     def test_a_new_lean_clears_only_doc_gen4s_packages(self):
         self.run_review("v4.34.0")
         manifest = '{"packages": [{"name": "%s"}, {"name": "Cli"}]}'
-        (self.root / ".lean-review" / "docbuild" / "lake-manifest.json").write_text(manifest % "«doc-gen4»")
+        (self.root / ".lean-vouch" / "docbuild" / "lake-manifest.json").write_text(manifest % "«doc-gen4»")
         (self.root / "lake-manifest.json").write_text(manifest % "mathlib")
         builds = {name: self.root / ".lake" / "packages" / name / ".lake" / "build"
                   for name in ("doc-gen4", "Cli", "mathlib")}
@@ -284,25 +284,25 @@ class ReviewTest(unittest.TestCase):
 
     def test_the_same_lean_keeps_the_manifest(self):
         self.run_review("v4.35.0")
-        manifest = self.root / ".lean-review" / "docbuild" / "lake-manifest.json"
+        manifest = self.root / ".lean-vouch" / "docbuild" / "lake-manifest.json"
         manifest.write_text("{}")
         self.run_review("v4.35.0")
         self.assertTrue(manifest.exists())
 
     def test_git_keeps_only_the_marks(self):
         self.run_review("v4.35.0")
-        home = self.root / ".lean-review"
+        home = self.root / ".lean-vouch"
         for name in ("marks/ada.json", "quiz/ada.json", "graph.json", "docbuild/.lake/build/doc/index.html", "links.local.json"):
             (home / name).parent.mkdir(parents=True, exist_ok=True)
             (home / name).write_text("{}")
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
-        listed = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", ".lean-review"], cwd=self.root,
+        listed = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", ".lean-vouch"], cwd=self.root,
                                 capture_output=True, text=True, check=True).stdout.split()
-        self.assertEqual(sorted(listed), [".lean-review/.gitignore", ".lean-review/marks/ada.json"])
+        self.assertEqual(sorted(listed), [".lean-vouch/.gitignore", ".lean-vouch/marks/ada.json"])
 
     def test_a_failed_build_says_so_for_open_pages(self):
         self.run_review("v4.35.0")
-        status = json.loads((self.root / ".lean-review" / "build.json").read_text())
+        status = json.loads((self.root / ".lean-vouch" / "build.json").read_text())
         self.assertEqual(status["state"], "failed")
         self.assertIn("declaration graph", status["message"])
 
@@ -313,7 +313,7 @@ class ReviewTest(unittest.TestCase):
         process = subprocess.Popen([sys.executable, str(REVIEW), "MyProject", "--rebuild"], cwd=self.root, env=env,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.addCleanup(process.kill)
-        status = self.root / ".lean-review" / "build.json"
+        status = self.root / ".lean-vouch" / "build.json"
         for _ in range(100):
             if status.exists():
                 break
@@ -328,31 +328,31 @@ class ReviewTest(unittest.TestCase):
 
     def stub_graph(self, script):
         (self.root / "bin" / "lake").write_text("#!/bin/sh\n" + script)
-        (self.root / ".lean-review").mkdir(exist_ok=True)
-        (self.root / ".lean-review" / "graph.json").write_text('{"good": true}')
+        (self.root / ".lean-vouch").mkdir(exist_ok=True)
+        (self.root / ".lean-vouch" / "graph.json").write_text('{"good": true}')
 
     def test_an_unreadable_new_graph_leaves_the_old_one(self):
-        self.stub_graph('case "$*" in env*) echo garbage > "$LEAN_REVIEW_GRAPH" ;; esac\n')
+        self.stub_graph('case "$*" in env*) echo garbage > "$LEAN_VOUCH_GRAPH" ;; esac\n')
         result = self.run_review("v4.35.0")
         self.assertIn("unreadable", result.stderr)
-        self.assertEqual((self.root / ".lean-review" / "graph.json").read_text(), '{"good": true}')
+        self.assertEqual((self.root / ".lean-vouch" / "graph.json").read_text(), '{"good": true}')
 
     def test_what_a_project_prints_cant_reach_the_graph(self):
-        self.stub_graph('case "$*" in env*) echo noise; echo \'{"modules": {}, "roots": []}\' > "$LEAN_REVIEW_GRAPH" ;; esac\n')
+        self.stub_graph('case "$*" in env*) echo noise; echo \'{"modules": {}, "roots": []}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n')
         self.assertEqual(self.run_review("v4.35.0").returncode, 0)
-        self.assertEqual(json.loads((self.root / ".lean-review" / "graph.json").read_text())["roots"], [])
+        self.assertEqual(json.loads((self.root / ".lean-vouch" / "graph.json").read_text())["roots"], [])
 
     def test_a_failed_docs_build_leaves_the_old_graph(self):
-        self.stub_graph('case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_REVIEW_GRAPH" ;;\n'
+        self.stub_graph('case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;;\n'
                         '  *docs*) exit 1 ;; esac\n')
         self.assertNotEqual(self.run_review("v4.35.0").returncode, 0)
-        self.assertEqual((self.root / ".lean-review" / "graph.json").read_text(), '{"good": true}')
+        self.assertEqual((self.root / ".lean-vouch" / "graph.json").read_text(), '{"good": true}')
 
     def test_an_edited_gitignore_survives_losing_docbuild(self):
         self.run_review("v4.35.0")
-        ignore = self.root / ".lean-review" / ".gitignore"
+        ignore = self.root / ".lean-vouch" / ".gitignore"
         ignore.write_text("*\n")
-        shutil.rmtree(self.root / ".lean-review" / "docbuild")
+        shutil.rmtree(self.root / ".lean-vouch" / "docbuild")
         self.run_review("v4.35.0")
         self.assertEqual(ignore.read_text(), "*\n")
 

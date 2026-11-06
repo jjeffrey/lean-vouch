@@ -21,7 +21,9 @@
   declaration and of everything below it when it was made, worked out by the server however the
   mark was made; the page compares them with the current graph. A `partial def` counts its body, a
   structure its default field values and field names, an inductive type its constructors' names, and
-  a module doc its text. Names of helpers Lean generates don't count, only what's in them. What a declaration uses through a
+  a module doc its text. Names of helpers Lean generates don't count, only what's in them, and nor
+  does where a `panic!`, `assert!` or `sorry` was written, though Lean records it in the expression. A mark also
+  records the Lean version it was made on. What a declaration uses through a
   deprecated name counts as part of it. A library definition's fingerprint takes in everything it's built on, down
   through the library, leaving out proofs, so upgrading Lean or a dependency flags marks when something
   beneath what they use really changed, even if the change is harmless.
@@ -59,16 +61,16 @@
 
 Three things are versioned separately:
 
-- **lean-review** has a version (`lean-review --version`) and a [changelog](../CHANGELOG.md). Until 1.0, a minor
+- **lean-vouch** has a version (`lean-vouch --version`) and a [changelog](../CHANGELOG.md). Until 1.0, a minor
   version may need a new toolchain or a regenerated graph.
 - **Lean and doc-gen4.** `DeclGraph.lean` uses Lean's internals and `review.js` uses doc-gen4's HTML, so
-  each release of lean-review is tested on a range of toolchains, with the oldest and newest in CI:
+  each release of lean-vouch is tested on a range of toolchains, with the oldest and newest in CI:
 
-  | lean-review | Lean and doc-gen4 |
+  | lean-vouch | Lean and doc-gen4 |
   | --- | --- |
   | 0.1.0 | v4.30.0 to v4.35.0 |
 
-  `lean-review` stops on an older Lean, since the graph needs newer library functions, and warns on a newer one.
+  `lean-vouch` stops on an older Lean, since the graph needs newer library functions, and warns on a newer one.
 
 - **Marks files** are the review record, so their format changes only with a migration. `marks/ID.json` is
   `{"format": 3, "name": "...", "marks": {declaration: entry}}`, where the filename is the person's id and the
@@ -80,10 +82,10 @@ Three things are versioned separately:
 
 | Path | What it does |
 | --- | --- |
-| `lean_review/cli.py` | The `lean-review` command: sets up `.lean-review/`, builds the docs and graph, and starts the server. `review.py` runs it from a clone. |
-| `lean_review/graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and each one's fingerprint, `own`. |
-| `lean_review/server.py` | Serves the doc-gen4 output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames. Python standard library only. |
-| `lean_review/web/review.js`, `review.css` | The controls in the pages. |
-| `lean_review/web/links.js`, `math.js` | What the pages share: rewriting links, noticing changes while a page is open, and typesetting math. |
-| `lean_review/web/quiz.html` | Quiz mode: blind descriptions of declarations at the edge of what you have marked. |
-| `lean_review/web/graph.html` | The dependency diagram, laid out by Graphviz (via d3-graphviz, as on Lean blueprint pages). It zooms with the scroll wheel and pans by dragging. |
+| `lean_vouch/cli.py` | The `lean-vouch` command: sets up `.lean-vouch/`, builds the docs and graph, and starts the server. `review.py` runs it from a clone. |
+| `lean_vouch/graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and each one's fingerprint, `own`. |
+| `lean_vouch/server.py` | Serves the doc-gen4 output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames. Python standard library only. |
+| `lean_vouch/web/review.js`, `review.css` | The controls in the pages. |
+| `lean_vouch/web/links.js`, `math.js` | What the pages share: rewriting links, noticing changes while a page is open, and typesetting math. |
+| `lean_vouch/web/quiz.html` | Quiz mode: blind descriptions of declarations at the edge of what you have marked. |
+| `lean_vouch/web/graph.html` | The dependency diagram, laid out by Graphviz (via d3-graphviz, as on Lean blueprint pages). It zooms with the scroll wheel and pans by dragging. |

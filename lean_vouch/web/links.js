@@ -24,7 +24,7 @@ window.reviewChecked = async response => {
 window.reviewPost = (path, body) => fetch(path, {
   method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ ...body, built: window.reviewBuilt ?? undefined }),
-}).catch(error => { alert("Couldn't reach the lean-review server, so this wasn't saved."); throw error; })
+}).catch(error => { alert("Couldn't reach the lean-vouch server, so this wasn't saved."); throw error; })
   .then(window.reviewChecked);
 
 // Reloads, unless that would lose a note being written.

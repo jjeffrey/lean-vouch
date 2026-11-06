@@ -7,9 +7,9 @@ CHROME="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 OUT=../docs/images
 mkdir -p "$OUT"
-REVIEW=$(mktemp -d -t lean-review-marks)
+REVIEW=$(mktemp -d -t lean-vouch-marks)
 cp -R review/seed "$REVIEW/marks"
-python3 ../lean_review/server.py --docs docbuild/.lake/build/doc --marks "$REVIEW/marks" --graph review/graph.json \
+python3 ../lean_vouch/server.py --docs docbuild/.lake/build/doc --marks "$REVIEW/marks" --graph review/graph.json \
   --source . --prefix ReviewExample --id ada --name Ada --port $PORT > /dev/null &
 SERVER=$!
 trap 'kill $SERVER; rm -rf "$REVIEW"' EXIT

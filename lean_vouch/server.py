@@ -7,8 +7,8 @@ a declaration graph from DeclGraph.lean, marks are flagged when the declaration 
 depends on changes, renames recorded as deprecated aliases move marks automatically, and marks whose
 declaration no longer exists are listed as orphans. Local use only: it binds to 127.0.0.1.
 
-    python3 lean_review/server.py --docs .lean-review/docbuild/.lake/build/doc --marks .lean-review/marks \
-        --graph .lean-review/graph.json --prefix MyProject --id ada --name Ada
+    python3 lean_vouch/server.py --docs .lean-vouch/docbuild/.lake/build/doc --marks .lean-vouch/marks \
+        --graph .lean-vouch/graph.json --prefix MyProject --id ada --name Ada
 """
 
 import argparse
@@ -96,9 +96,10 @@ class Graph:
         a mark is right however it was made, and whatever part of the graph a page has."""
         graph = self.current()
         decls, library = graph.get("declarations", {}), graph.get("library", {})
+        lean = {"lean": graph["lean"]} if graph.get("lean") else {}
         if name.startswith("module "):
             own = graph.get("moduleDocs", {}).get(name[len("module "):])
-            return {"deps": {}, **({"own": own} if own else {})}
+            return {"deps": {}, **({"own": own} if own else {}), **lean}
         if name not in decls and name not in library:
             return None
         own = lambda n: (decls.get(n) or library.get(n) or {}).get("own")
@@ -109,7 +110,7 @@ class Graph:
                 if dep not in below:
                     below.add(dep)
                     stack.append(dep)
-        return {"own": own(name), "deps": {dep: own(dep) for dep in below}}
+        return {"own": own(name), "deps": {dep: own(dep) for dep in below}, **lean}
 
     def tree(self):
         """What the diagram draws folders from, however large the project is."""
@@ -205,7 +206,7 @@ def load_file(path, key):
     if not isinstance(data, dict):
         raise MarksError(f"{path} is not a JSON object")
     if data.get("format") != MARKS_FORMAT or not isinstance(data.get(key), dict):
-        raise MarksError(f"{path} has format {data.get('format')}; this lean-review reads format {MARKS_FORMAT}. "
+        raise MarksError(f"{path} has format {data.get('format')}; this lean-vouch reads format {MARKS_FORMAT}. "
                          "Use a matching version.")
     return data
 
@@ -274,7 +275,7 @@ def apply_renames(marks, graph):
         if old in marks and new not in marks:
             entry = marks.pop(old)
             entry.setdefault("notes", []).append(
-                {"by": "lean-review", "date": now(), "text": f"Moved automatically: {old} was renamed to {new}."})
+                {"by": "lean-vouch", "date": now(), "text": f"Moved automatically: {old} was renamed to {new}."})
             marks[new] = entry
             moved = True
     return moved
@@ -314,7 +315,7 @@ def view():
                 people[path.stem] = person(path.stem)
             except MarksError as error:
                 unreadable.append(path.stem)
-                print(f"lean-review: leaving out {error}", file=sys.stderr, flush=True)
+                print(f"lean-vouch: leaving out {error}", file=sys.stderr, flush=True)
     shown = {}
 
     def at(name):
@@ -335,9 +336,9 @@ def view():
     for item in shown.values():
         item["notes"].sort(key=lambda note: note["date"])
         seen = max([item.get("date", ""), *(n["date"] for n in item["notes"]
-                                            if n["mine"] and "quiz" not in n and n["by"] != "lean-review")])
-        new = [note for note in item["notes"] if note["date"] > seen and not note["mine"] and note["by"] != "lean-review"]
-        wrote = {note["who"] for note in item["notes"] if note["by"] != "lean-review"}
+                                            if n["mine"] and "quiz" not in n and n["by"] != "lean-vouch")])
+        new = [note for note in item["notes"] if note["date"] > seen and not note["mine"] and note["by"] != "lean-vouch"]
+        wrote = {note["who"] for note in item["notes"] if note["by"] != "lean-vouch"}
         asking = [other for other in item["others"] if other["status"] == "question" and other["id"] in wrote]
         waiting = {other["name"] for other in asking if other.get("date", "") > seen}
         waiting |= {note["by"] for note in new if item["status"] == "question" or note["who"] in {o["id"] for o in asking}}
@@ -377,7 +378,7 @@ def alive(pid):
 def status():
     """What open pages poll: when anyone's marks last changed, and how the latest build went, which
     a build reports in a file. A build that died can't say so itself. `marks_folder` tells
-    lean-review which project this server is for, and `me` shows who's reviewing."""
+    lean-vouch which project this server is for, and `me` shows who's reviewing."""
     files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
     build = load_json(args.build, {})
     build = build if isinstance(build, dict) else {}
@@ -551,7 +552,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": "cannot move"}, 400)
             if old in marks:
                 entry = marks.pop(old)
-                entry["notes"].append({"by": "lean-review", "date": now(), "text": f"Moved from {old}."})
+                entry["notes"].append({"by": "lean-vouch", "date": now(), "text": f"Moved from {old}."})
                 marks[new] = entry
                 save_person(who, data)
             if old in answers:
@@ -590,28 +591,28 @@ def main():
     p.add_argument("--links", type=Path,
                    help="JSON file linking references to your own copies (default: links.local.json beside the marks)")
     p.add_argument("--port", type=int, default=8797)
-    p.add_argument("--version", action="version", version=f"lean-review {VERSION}")
+    p.add_argument("--version", action="version", version=f"lean-vouch {VERSION}")
     args = p.parse_args()
     args.links = args.links or args.marks.parent / "links.local.json"
     args.quiz = args.quiz or args.marks.parent / "quiz"
     args.build = args.build or args.marks.parent / "build.json"
     if not ID.fullmatch(args.id):
-        sys.exit(f"lean-review: {args.id} can't be an id: use lowercase letters, digits and hyphens.")
+        sys.exit(f"lean-vouch: {args.id} can't be an id: use lowercase letters, digits and hyphens.")
     graph = Graph(args.graph)
     try:
         view()
     except MarksError as error:
-        sys.exit(f"lean-review: {error}")
+        sys.exit(f"lean-vouch: {error}")
     graph_format = graph.current().get("format", GRAPH_FORMAT)
     if graph_format != GRAPH_FORMAT:
-        sys.exit(f"lean-review: {args.graph} has format {graph_format}; this server reads format "
-                 f"{GRAPH_FORMAT}. Rerun lean-review to rebuild it.")
-    print(f"lean-review {VERSION}: http://127.0.0.1:{args.port}/review/diagram\n"
+        sys.exit(f"lean-vouch: {args.graph} has format {graph_format}; this server reads format "
+                 f"{GRAPH_FORMAT}. Rerun lean-vouch to rebuild it.")
+    print(f"lean-vouch {VERSION}: http://127.0.0.1:{args.port}/review/diagram\n"
           f"Docs: http://127.0.0.1:{args.port}/{args.prefix.replace('.', '/')}.html", flush=True)
     try:
         httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     except OSError as error:
-        sys.exit(f"lean-review: can't use port {args.port} ({error.strerror}). Choose another with --port.")
+        sys.exit(f"lean-vouch: can't use port {args.port} ({error.strerror}). Choose another with --port.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

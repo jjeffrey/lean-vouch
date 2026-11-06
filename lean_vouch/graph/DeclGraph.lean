@@ -208,14 +208,38 @@ def reviewedExprs (g : Graph) (n : Name) : Array Expr :=
   | some info => #[info.type]
   | none => #[]
 
-/-- An expression's hash, without the names of the project's helpers. Lean shares a `match` helper
-between declarations and names it after the first, so that name can change while nothing here does.
-What a helper contains counts anyway, through `collect`. Each is numbered by first use, so which
-helper is used where still counts. -/
+/-- Which arguments of a call say where it was written: the module, declaration, line and column of
+a `panic!`, `unreachable!` or `assert!`, and the label of a `sorry`, which holds its position. -/
+def placeArgs (c : Name) (args : Array Expr) : Array Nat :=
+  if c == ``panicWithPosWithDecl && args.size ≥ 6 then #[2, 3, 4, 5]
+  else if c == ``panicWithPos && args.size ≥ 5 then #[2, 3, 4]
+  else if c == ``sorryAx && args.size ≥ 3 && (args[0]!).isForall &&
+      (args[0]!).bindingDomain! == mkConst ``Lean.Name then #[2]
+  else #[]
+
+/-- `e` without what says where it was written, so that moving code changes nothing. -/
+partial def withoutPlace (e : Expr) : Expr :=
+  e.replace fun x =>
+    if !x.isApp then none else
+    match x.getAppFn with
+    | fn@(.const c _) =>
+      let args := x.getAppArgs
+      let place := placeArgs c args
+      if place.isEmpty then none else
+        some (mkAppN fn (args.mapIdx fun i a => if place.contains i then mkStrLit "" else withoutPlace a))
+    | _ => none
+
+/-- An expression's hash, without where it was written or the names of the project's helpers. Lean
+shares a `match` helper between declarations and names it after the first, so that name can change
+while nothing here does. What a helper contains counts anyway, through `collect`. Each is numbered
+by first use, so which helper is used where still counts. -/
 def contentHash (g : Graph) (e : Expr) : UInt64 :=
-  let helpers := e.getUsedConstants.filter fun c => g.inProject c && isDetail g.env c
-  if helpers.isEmpty then e.hash else
+  let used := e.getUsedConstants
+  let placed := used.any fun c => c == ``panicWithPosWithDecl || c == ``panicWithPos || c == ``sorryAx
+  let helpers := used.filter fun c => g.inProject c && isDetail g.env c
+  if helpers.isEmpty && !placed then e.hash else
     let number : Std.HashMap Name Nat := helpers.foldl (fun found c => found.insert c found.size) {}
+    let e := if placed then withoutPlace e else e
     (e.replace fun
       | .const c levels => (number.get? c).map fun i => .const (.num `_helper i) levels
       | _ => none).hash
@@ -401,7 +425,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     library := library.union l
   -- A library constant's fingerprint by itself: its statement and, for a definition, its body.
   let libraryFlat (n : Name) : UInt64 :=
-    mixHash (hash n) ((g.reviewedExprs n).map (·.hash) |>.foldl mixHash 7)
+    mixHash (hash n) ((g.reviewedExprs n).map g.contentHash |>.foldl mixHash 7)
   -- And with everything it rests on, down through the library.
   let depths := g.libraryDepths library.toArray libraryFlat
   let libraryOwn (n : Name) : UInt64 := (depths.get? n).getD 0
@@ -480,7 +504,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("library", Json.mkObj libraryDecls.toList),
     ("renames", Json.mkObj renames.toList)]).pretty
   -- A file if asked for one: a project's initializers can print to stdout.
-  match ← IO.getEnv "LEAN_REVIEW_GRAPH" with
+  match ← IO.getEnv "LEAN_VOUCH_GRAPH" with
   | some path => IO.FS.writeFile path (graph ++ "\n")
   | none => IO.println graph
   return 0

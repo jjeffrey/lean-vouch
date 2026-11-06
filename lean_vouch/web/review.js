@@ -33,7 +33,7 @@
     ["internals", "internals", "formatting and string-slice internals"],
     ["theorems", "library theorems", "library theorems used inside definitions"],
   ];
-  const storageKey = "lean-review.shownGroups";
+  const storageKey = "lean-vouch.shownGroups";
   let shownGroups = new Set();
   try { shownGroups = new Set(JSON.parse(localStorage.getItem(storageKey) ?? "[]")); } catch {}
   const visible = name => {
@@ -43,7 +43,7 @@
   // doc-gen4 folds each definition's equations; for review they are what's being checked, so
   // project declarations show them open unless switched off (remembered in this browser, shared
   // with the diagram's sidebar). Library pages keep doc-gen4's folding.
-  const equationsKey = "lean-review.openEquations";
+  const equationsKey = "lean-vouch.openEquations";
   let openEquations = true;
   try { openEquations = localStorage.getItem(equationsKey) !== "0"; } catch {}
   const equations = decl => [...decl.querySelectorAll("details")]
@@ -84,7 +84,7 @@
   // people's and the tool's are styled differently, like a conversation.
   const noteItem = n => {
     const li = document.createElement("li");
-    li.className = n.by === "lean-review" ? "by-tool" : n.mine ? "by-reviewer" : "by-other";
+    li.className = n.by === "lean-vouch" ? "by-tool" : n.mine ? "by-reviewer" : "by-other";
     li.style.setProperty("--person-hue", reviewHue(n.by));
     const head = document.createElement("div");
     head.className = "note-head";
@@ -195,7 +195,7 @@
     box.append(notes, input, add);
     const prompt = el("div", "review-prompt", "What's your question? Others see it once you write one.");
     notes.after(prompt);
-    const unexplained = e => e.status === "question" && !(e.notes ?? []).some(n => n.mine && n.by !== "lean-review");
+    const unexplained = e => e.status === "question" && !(e.notes ?? []).some(n => n.mine && n.by !== "lean-vouch");
 
     const render = e => {
       if (e !== marks[name] && (e.status || marks[name]?.status)) changedNow = null;
@@ -351,7 +351,7 @@
     bar.id = "review-summary";
     bar.append(el("span", "review-me"), el("span", "counts", "loading…"));
     // So the graph and quiz pages can link back here.
-    try { sessionStorage.setItem("lean-review-docs", location.href); } catch {}
+    try { sessionStorage.setItem("lean-vouch-docs", location.href); } catch {}
     const graphLink = el("a", null, "dependency graph");
     graphLink.href = "/review/diagram";
     bar.append(graphLink);

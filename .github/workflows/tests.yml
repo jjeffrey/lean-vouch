@@ -1,5 +1,9 @@
 name: Tests
-on: [push, pull_request]
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:  # publish.yml runs these first
 
 jobs:
   test:
@@ -21,7 +25,7 @@ jobs:
         run: |
           lake build -q
           (cd docbuild && DOCGEN_SRC=file lake build -q ReviewExample:docs)
-          lake env lean --run ../lean_review/graph/DeclGraph.lean ReviewExample > review/graph.json
+          lake env lean --run ../lean_vouch/graph/DeclGraph.lean ReviewExample > review/graph.json
       - run: python3 -m unittest discover -s tests
 
   # What pip installs has everything it needs: the pages and DeclGraph.lean aren't Python.
@@ -34,10 +38,10 @@ jobs:
           python3 -m build
           pip install dist/*.whl
           cd "$RUNNER_TEMP"
-          lean-review --version
-          python3 -c "from pathlib import Path; import lean_review; root = Path(lean_review.__file__).parent; assert (root / 'web/graph.html').exists() and (root / 'graph/DeclGraph.lean').exists()"
+          lean-vouch --version
+          python3 -c "from pathlib import Path; import lean_vouch; root = Path(lean_vouch.__file__).parent; assert (root / 'web/graph.html').exists() and (root / 'graph/DeclGraph.lean').exists()"
 
-  # The oldest Lean that lean-review accepts (MINIMUM in cli.py), on a small project with no dependencies.
+  # The oldest Lean that lean-vouch accepts (MINIMUM in cli.py), on a small project with no dependencies.
   minimum-lean:
     runs-on: ubuntu-latest
     steps:
@@ -51,7 +55,7 @@ jobs:
         with:
           path: |
             project/.lake
-            project/.lean-review/docbuild/.lake
+            project/.lean-vouch/docbuild/.lake
           key: minimum-lean-${{ runner.os }}-v4.30.0
       - name: Set up the project, build its docs and graph
         working-directory: project

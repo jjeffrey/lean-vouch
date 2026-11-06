@@ -5,6 +5,7 @@
       "date": "2026-11-02T10:00:00",
       "fingerprint": {
         "deps": {},
+        "lean": "4.35.0",
         "own": "2208cd68abe57490"
       },
       "notes": [
@@ -24,6 +25,7 @@
           "Nat": "1f5f38990310680d",
           "Nat.mul": "8fa4cf5efdc70bb7"
         },
+        "lean": "4.35.0",
         "own": "0dfe923a99c9aa54"
       },
       "notes": [
@@ -49,6 +51,7 @@
           "Nat.mul": "8fa4cf5efdc70bb7",
           "ReviewExample.Divides": "0dfe923a99c9aa54"
         },
+        "lean": "4.35.0",
         "own": "71492c4ca5df6679"
       },
       "notes": [],
@@ -65,6 +68,7 @@
           "Nat.mul": "8fa4cf5efdc70bb7",
           "ReviewExample.Divides": "0dfe923a99c9aa54"
         },
+        "lean": "4.35.0",
         "own": "e50f985bfa39afb8"
       },
       "notes": [],
@@ -80,6 +84,7 @@
           "Nat.mul": "8fa4cf5efdc70bb7",
           "ReviewExample.Divides": "0dfe923a99c9aa54"
         },
+        "lean": "4.35.0",
         "own": "376db7f92d83c15d"
       },
       "notes": [],
@@ -95,6 +100,7 @@
           "Nat.mul": "8fa4cf5efdc70bb7",
           "ReviewExample.Divides": "0dfe923a99c9aa54"
         },
+        "lean": "4.35.0",
         "own": "28c5f3ef7322fb11"
       },
       "notes": [],
@@ -117,6 +123,7 @@
           "ReviewExample.gcd": "f2a0d372c12a8ae4",
           "WellFounded.Nat.fix": "23ef973057d6fd17"
         },
+        "lean": "4.35.0",
         "own": "9aefa9c1dbe03520"
       },
       "notes": [],
@@ -134,6 +141,7 @@
           "PSigma": "4b720956974ffe3c",
           "WellFounded.Nat.fix": "23ef973057d6fd17"
         },
+        "lean": "4.35.0",
         "own": "f2a0d372c12a8ae4"
       },
       "notes": [
@@ -161,6 +169,7 @@
           "ReviewExample.gcd": "f2a0d372c12a8ae4",
           "WellFounded.Nat.fix": "23ef973057d6fd17"
         },
+        "lean": "4.35.0",
         "own": "523ff39db45889a1"
       },
       "notes": [
@@ -189,6 +198,7 @@
           "ReviewExample.gcd": "f2a0d372c12a8ae4",
           "WellFounded.Nat.fix": "23ef973057d6fd17"
         },
+        "lean": "4.35.0",
         "own": "b9aac3338366be19"
       },
       "notes": [],
@@ -219,6 +229,7 @@
           "ReviewExample.gcd": "f2a0d372c12a8ae4",
           "WellFounded.Nat.fix": "23ef973057d6fd17"
         },
+        "lean": "4.35.0",
         "own": "3ad3e0d064f54865"
       },
       "notes": [],
@@ -228,6 +239,7 @@
       "date": "2026-11-02T10:00:00",
       "fingerprint": {
         "deps": {},
+        "lean": "4.35.0",
         "own": "9c4a7f17b9438811"
       },
       "notes": [],

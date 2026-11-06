@@ -47,6 +47,7 @@
           "ReviewExample.gcd": "f2a0d372c12a8ae4",
           "WellFounded.Nat.fix": "23ef973057d6fd17"
         },
+        "lean": "4.35.0",
         "own": "3ad3e0d064f54865"
       },
       "notes": [

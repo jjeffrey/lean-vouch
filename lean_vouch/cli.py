@@ -1,7 +1,7 @@
-"""Set up lean-review for a Lake project, build what it needs, and serve it. From the project's root:
+"""Set up lean-vouch for a Lake project, build what it needs, and serve it. From the project's root:
 
-    lean-review
-    lean-review MyLibrary My.Module
+    lean-vouch
+    lean-vouch MyLibrary My.Module
 
 It reviews every library in the project, or just the libraries and modules you name. Safe to rerun: it refreshes the
 docs and graph after you change the code.
@@ -20,15 +20,15 @@ from datetime import datetime
 from pathlib import Path
 from urllib.request import urlopen
 
-from lean_review.server import ID, VERSION
+from lean_vouch.server import ID, VERSION
 
 HERE = Path(__file__).resolve().parent
 MINIMUM = (4, 30)  # the oldest Lean this has been run on, end to end; see docs/internals.md
 TESTED = (4, 35)   # the newest
-HOME = Path(".lean-review")
+HOME = Path(".lean-vouch")
 
 DOCBUILD = """\
-# Builds this project's API documentation with doc-gen4, for lean-review.
+# Builds this project's API documentation with doc-gen4, for lean-vouch.
 name = "docbuild"
 reservoir = false
 version = "0.1.0"
@@ -54,7 +54,7 @@ GITIGNORE = """\
 
 
 def fail(message):
-    sys.exit(f"lean-review: {message}")
+    sys.exit(f"lean-vouch: {message}")
 
 
 def toolchain():
@@ -69,12 +69,12 @@ def toolchain():
 def check_version(tag, version):
     """Say so now, before a long doc-gen4 build that can't succeed."""
     if version is None:
-        print(f"lean-review: {tag} isn't a Lean release, so this may not work. "
+        print(f"lean-vouch: {tag} isn't a Lean release, so this may not work. "
               f"Tested on v{MINIMUM[0]}.{MINIMUM[1]} to v{TESTED[0]}.{TESTED[1]}.", flush=True)
     elif version < MINIMUM:
-        fail(f"this project is on Lean {tag}; lean-review needs v{MINIMUM[0]}.{MINIMUM[1]} or newer.")
+        fail(f"this project is on Lean {tag}; lean-vouch needs v{MINIMUM[0]}.{MINIMUM[1]} or newer.")
     elif version > TESTED:
-        print(f"lean-review: Lean {tag} is newer than it's been tested on (v{TESTED[0]}.{TESTED[1]}). "
+        print(f"lean-vouch: Lean {tag} is newer than it's been tested on (v{TESTED[0]}.{TESTED[1]}). "
               "If the graph step fails, please open an issue.", flush=True)
 
 
@@ -122,7 +122,7 @@ def modules_of(names):
         else:
             modules.append(name)
     if not modules:
-        fail("found no modules to review. Name them, as in `lean-review MyProject`.")
+        fail("found no modules to review. Name them, as in `lean-vouch MyProject`.")
     return sorted(set(modules), key=lambda m: (m != chosen[0], m.count("."), m))
 
 
@@ -162,9 +162,9 @@ def set_up_folders(tag, package):
     if not (HOME / ".gitignore").exists():   # it's yours to edit, to keep marks out of git
         (HOME / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
     if new:
-        print(f"lean-review: created {HOME}/ (doc-gen4 {tag}).", flush=True)
+        print(f"lean-vouch: created {HOME}/ (doc-gen4 {tag}).", flush=True)
     elif changed:
-        print(f"lean-review: moved to doc-gen4 {tag}, for the project's Lean.", flush=True)
+        print(f"lean-vouch: moved to doc-gen4 {tag}, for the project's Lean.", flush=True)
 
 
 def source_folders():
@@ -202,7 +202,7 @@ def build_docs(modules):
         run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"})
     if not (docbuild / ".lake/build/doc").exists():
         uses_mathlib = '"mathlib"' in Path("lake-manifest.json").read_text(encoding="utf-8") if Path("lake-manifest.json").exists() else False
-        print("lean-review: first docs build. doc-gen4 documents everything the project imports" +
+        print("lean-vouch: first docs build. doc-gen4 documents everything the project imports" +
               (", including Mathlib: expect about half an hour and 2 GB. It doesn't recompile Mathlib."
                if uses_mathlib else ": expect several minutes."), flush=True)
     run(["lake", "build", *[f"+{module}:docs" for module in modules]], docbuild,
@@ -215,12 +215,12 @@ def build_graph(modules):
     new = HOME / "graph.json.new"
     done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules],
                           stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-                          env={**os.environ, "LEAN_REVIEW_GRAPH": str(new.resolve())})
+                          env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())})
     if done.returncode:
         new.unlink(missing_ok=True)
         fail(f"building the declaration graph failed:\n{done.stdout[-4000:]}\n"
              "If two libraries define the same name, they can't be imported together: review one at a "
-             "time, as in `lean-review MyLibrary`.\n"
+             "time, as in `lean-vouch MyLibrary`.\n"
              "If this is about Lean itself, not your project, please open an issue.")
     try:
         return json.loads(new.read_text(encoding="utf-8"))
@@ -270,7 +270,7 @@ def clean_docs(docs, root, modules):
         if not any(empty.iterdir()):
             empty.rmdir()
     if stale:
-        print(f"lean-review: removed {len(stale)} old pages: " + ", ".join(sorted(p.stem for p in stale)[:8]) +
+        print(f"lean-vouch: removed {len(stale)} old pages: " + ", ".join(sorted(p.stem for p in stale)[:8]) +
               (", ..." if len(stale) > 8 else ""), flush=True)
 
 
@@ -294,7 +294,7 @@ def reason(error):
 
 
 def running_server(port):
-    """The marks folder of the lean-review server on this port, if there is one."""
+    """The marks folder of the lean-vouch server on this port, if there is one."""
     try:
         with urlopen(f"http://127.0.0.1:{port}/review/status", timeout=1) as response:
             found = json.load(response)
@@ -304,8 +304,8 @@ def running_server(port):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="lean-review", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--version", action="version", version=f"lean-review {VERSION}")
+    parser = argparse.ArgumentParser(prog="lean-vouch", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--version", action="version", version=f"lean-vouch {VERSION}")
     parser.add_argument("names", nargs="*", metavar="NAME", help="libraries or modules to review (default: every library)")
     parser.add_argument("--port", type=int, default=8797)
     parser.add_argument("--name", help="the name to show on your marks and notes (default: your git name)")
@@ -321,18 +321,18 @@ def main():
     who, name = identity(args.id, args.name)
     others = sorted(path.stem for path in (HOME / "marks").glob("*.json") if path.stem != who)
     if others and not (HOME / "marks" / f"{who}.json").exists():
-        print(f"lean-review: there's no marks file for {who} yet, only for {', '.join(others)}. "
+        print(f"lean-vouch: there's no marks file for {who} yet, only for {', '.join(others)}. "
               "If one of those is you, use --id.", flush=True)
     serving = None if args.rebuild else running_server(args.port)
     if serving and Path(serving) != (HOME / "marks").resolve():
         fail(f"port {args.port} is serving another project. Choose another with --port.")
     if serving:
-        print(f"lean-review: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
+        print(f"lean-vouch: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
     set_up_folders(tag, package)
     report("building")
     try:
         modules = modules_of(args.names)
-        print(f"lean-review: reviewing {len(modules)} modules.", flush=True)
+        print(f"lean-vouch: reviewing {len(modules)} modules.", flush=True)
         run(["lake", "build", *[f"+{module}" for module in modules]])
         built = build_graph(modules)
         build_docs(tops(built["modules"]))
@@ -343,7 +343,7 @@ def main():
         (HOME / "graph.json.new").replace(HOME / "graph.json")
     except KeyboardInterrupt as error:
         report("failed", message=reason(error))
-        print("\nlean-review: stopped.", file=sys.stderr)
+        print("\nlean-vouch: stopped.", file=sys.stderr)
         sys.exit(130)
     except (SystemExit, Exception) as error:
         report("failed", message=reason(error))

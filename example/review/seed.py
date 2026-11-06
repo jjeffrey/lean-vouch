@@ -1,4 +1,4 @@
-"""Write review/seed/: example marks for each person, that show each lean-review feature.
+"""Write review/seed/: example marks for each person, that show each lean-vouch feature.
 
 Run after generating review/graph.json. Fingerprints come from the current graph, so the marks
 are up to date, except where a change is simulated on purpose.
@@ -25,7 +25,7 @@ def below(n, seen=None):
 # Example marks use fixed dates, so the screenshots don't change from day to day.
 def mark(name, status, *notes, changed=()):
     """A mark made now; `changed` lists dependencies to show as changed since it was made."""
-    fp = {"own": info(name)["own"] if info(name) else "0", "deps": {}}
+    fp = {"own": info(name)["own"] if info(name) else "0", "deps": {}, "lean": graph["lean"]}
     if info(name):
         fp["deps"] = {d: (info(d) or {}).get("own") for d in below(name)}
     for d in changed:

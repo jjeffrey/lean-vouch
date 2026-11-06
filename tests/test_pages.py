@@ -26,7 +26,7 @@ GCD = "ReviewExample.gcd"
 
 
 def free_port():
-    """A port nothing is using, so these pages can't come from another lean-review server."""
+    """A port nothing is using, so these pages can't come from another lean-vouch server."""
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
@@ -88,7 +88,7 @@ class PagesTest(unittest.TestCase):
         for who, (name, entries) in people.items():
             text = entries if isinstance(entries, str) else json.dumps({"format": 3, "name": name, "marks": entries})
             (marks_folder / f"{who}.json").write_text(text)
-        server = subprocess.Popen([sys.executable, str(ROOT / "lean_review" / "server.py"), "--docs", str(docs),
+        server = subprocess.Popen([sys.executable, str(ROOT / "lean_vouch" / "server.py"), "--docs", str(docs),
                                    "--marks", str(marks_folder), "--graph", str(graph_file), "--source", str(EXAMPLE),
                                    "--prefix", "ReviewExample", "--id", "ada", "--name", "Ada", "--port", str(self.port)], stdout=subprocess.DEVNULL)
         self.addCleanup(server.wait)

@@ -1,0 +1,48 @@
+# Pushing a tag such as v0.1.0 publishes that version to PyPI, through PyPI's Trusted Publishing.
+name: Publish
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: |
+          pip install build twine
+          python3 -m build
+          python3 -m twine check --strict dist/*
+          pip install dist/*.whl
+      - name: The tag names the package's version
+        working-directory: ${{ runner.temp }}
+        run: test "$(lean-vouch --version)" = "lean-vouch ${GITHUB_REF_NAME#v}"
+      - name: The wheel has the files that aren't Python
+        working-directory: ${{ runner.temp }}
+        run: python3 -c "from pathlib import Path; import lean_vouch; root = Path(lean_vouch.__file__).parent; assert (root / 'web/graph.html').exists() and (root / 'graph/DeclGraph.lean').exists()"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

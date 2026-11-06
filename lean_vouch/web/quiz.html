@@ -96,7 +96,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   // The docs link goes back to the last docs page read (review.js records it), or else to the root
   // module's page.
   let lastDocs = null;
-  try { lastDocs = sessionStorage.getItem("lean-review-docs"); } catch {}
+  try { lastDocs = sessionStorage.getItem("lean-vouch-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
   const post = reviewPost;
@@ -124,7 +124,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   // Marks whose declaration changed since, or anything below it: the most useful thing to re-quiz.
   // Library uses in hidden groups don't count, as on the other pages.
   let shownGroups = new Set();
-  try { shownGroups = new Set(JSON.parse(localStorage.getItem("lean-review.shownGroups") ?? "[]")); } catch {}
+  try { shownGroups = new Set(JSON.parse(localStorage.getItem("lean-vouch.shownGroups") ?? "[]")); } catch {}
   const changedSince = n => {
     const fp = marks[n]?.fingerprint;
     if (!marks[n]?.status || !fp || !info(n)) return false;
@@ -137,8 +137,8 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   // can set the scope, as the diagram's "Quiz this" does.
   const scopeInput = document.getElementById("scope"), orderInput = document.getElementById("order");
   try {
-    scopeInput.value = localStorage.getItem("lean-review.quizScope") ?? "";
-    orderInput.value = localStorage.getItem("lean-review.quizOrder") ?? "edge";
+    scopeInput.value = localStorage.getItem("lean-vouch.quizScope") ?? "";
+    orderInput.value = localStorage.getItem("lean-vouch.quizOrder") ?? "edge";
   } catch {}
   const linkedScope = new URLSearchParams(location.search).get("scope");
   if (linkedScope !== null) scopeInput.value = linkedScope;
@@ -445,7 +445,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     if (!anyway && !inBook(name) && !(name === current && revealed)) {
       book.append(el("p", "muted", info(name)
         ? "Not in the open book: you haven't marked it ✓ or ?."
-        : "Not a declaration lean-review knows about."));
+        : "Not a declaration lean-vouch knows about."));
       if (info(name)) {
         const show = el("button", null, "Show anyway");
         show.onclick = () => lookup(name, true);
@@ -664,16 +664,16 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
 
   // The current question is kept in session storage, not the address bar, where its name would give
   // the answer away; a reload asks it again.
-  const remember = n => { try { n ? sessionStorage.setItem("lean-review-quiz", n) : sessionStorage.removeItem("lean-review-quiz"); } catch {} };
+  const remember = n => { try { n ? sessionStorage.setItem("lean-vouch-quiz", n) : sessionStorage.removeItem("lean-vouch-quiz"); } catch {} };
   let kept = null;
-  try { kept = sessionStorage.getItem("lean-review-quiz"); } catch {}
+  try { kept = sessionStorage.getItem("lean-vouch-quiz"); } catch {}
   // ?name=X quizzes that declaration; the name is then cleared from the address bar.
   const asked = new URLSearchParams(location.search).get("name") ?? kept;
   if (location.search) history.replaceState(null, "", location.pathname);
   scopeInput.onchange = orderInput.onchange = () => {
     try {
-      localStorage.setItem("lean-review.quizScope", scopeInput.value.trim());
-      localStorage.setItem("lean-review.quizOrder", orderInput.value);
+      localStorage.setItem("lean-vouch.quizScope", scopeInput.value.trim());
+      localStorage.setItem("lean-vouch.quizOrder", orderInput.value);
     } catch {}
     next();
   };

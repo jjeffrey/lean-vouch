@@ -4,7 +4,7 @@ import ReviewExample.Gcd
 # Least common multiple
 
 The least common multiple from the greatest common divisor. The key fact, `gcd_mul_lcm`, is left
-as a `sorry`, so this module shows how lean-review traces one: to what contains it, and to
+as a `sorry`, so this module shows how lean-vouch traces one: to what contains it, and to
 everything that relies on it, even through proofs.
 -/
 

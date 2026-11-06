@@ -1,11 +1,11 @@
-# Developing lean-review
+# Developing lean-vouch
 
-To run it from a clone, use `python3 path/to/lean-review/review.py`, which takes the same options as
-`lean-review`.
+To run it from a clone, use `python3 path/to/lean-vouch/review.py`, which takes the same options as
+`lean-vouch`.
 
 ## Example
 
-`example/` is a small Lean project to try lean-review on and to develop it against: Euclid's
+`example/` is a small Lean project to try lean-vouch on and to develop it against: Euclid's
 algorithm in `Divides` (a definition of divisibility and its lemmas), `Zero` (zero divides only
 zero) and `Gcd` (`gcd`, proofs that it divides both numbers and that every common divisor divides it,
 and a deprecated old theorem name), then a `Multiples` folder: `Lcm`, whose key theorem is a `sorry`,
@@ -25,15 +25,10 @@ The first docs build compiles doc-gen4 and takes several minutes. Marks made whi
 
 ## Releasing
 
-Check that CI passes, set `VERSION` in `lean_review/server.py`, date the [changelog](../CHANGELOG.md),
-and tag the commit, as `v0.1.0`. Then, with [`build`](https://pypi.org/project/build/) and
-[`twine`](https://pypi.org/project/twine/):
-
-```bash
-python3 -m build
-twine check dist/*
-twine upload dist/*
-```
+Check that CI passes, set `VERSION` in `lean_vouch/server.py`, date the [changelog](../CHANGELOG.md),
+and push a tag on that commit, such as `v0.1.0`. `.github/workflows/publish.yml` then runs the tests,
+checks that the tag matches `VERSION`, and publishes to PyPI through Trusted Publishing, so there's no
+token and nothing to upload by hand. A version can't be replaced once it's on PyPI.
 
 ## Tests
 

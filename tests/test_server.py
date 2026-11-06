@@ -19,7 +19,7 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from lean_review import server  # noqa: E402
+from lean_vouch import server  # noqa: E402
 
 
 class ServerTest(unittest.TestCase):
@@ -492,6 +492,13 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(self.stored_mark("t")["fingerprint"], {"own": "t1", "deps": {"d": "d1", "e": "e1", "l": "l1"}})
 
+    def test_a_mark_records_the_lean_it_was_made_on(self):
+        self.graph.write_text(json.dumps({**self.FINGERPRINTED, "lean": "4.35.0"}))
+        self.post("/review/data", {"name": "t", "status": "agree"})
+        self.post("/review/data", {"name": "module M", "status": "agree"})
+        self.assertEqual(self.stored_mark("t")["fingerprint"]["lean"], "4.35.0")
+        self.assertEqual(self.stored_mark("module M")["fingerprint"]["lean"], "4.35.0")
+
     def test_what_a_request_says_about_a_fingerprint_is_ignored(self):
         self.graph.write_text(json.dumps(self.FINGERPRINTED))
         for sent in ("abc", {"own": "wrong", "deps": {}}):
@@ -665,7 +672,7 @@ class SliceTest(unittest.TestCase):
 
 class StartupTest(unittest.TestCase):
     def run_server(self, *extra):
-        return subprocess.run([sys.executable, str(ROOT / "lean_review" / "server.py"), *extra],
+        return subprocess.run([sys.executable, str(ROOT / "lean_vouch" / "server.py"), *extra],
                               capture_output=True, text=True, timeout=20)
 
     def test_ctrl_c_stops_it_quietly(self):
@@ -673,7 +680,7 @@ class StartupTest(unittest.TestCase):
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
             probe.close()
-            process = subprocess.Popen([sys.executable, str(ROOT / "lean_review" / "server.py"), "--docs", folder, "--marks", str(Path(folder) / "marks"),
+            process = subprocess.Popen([sys.executable, str(ROOT / "lean_vouch" / "server.py"), "--docs", folder, "--marks", str(Path(folder) / "marks"),
                                         "--prefix", "P", "--id", "ada", "--port", str(port)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             self.addCleanup(process.kill)
             process.stdout.readline()
@@ -694,7 +701,7 @@ class StartupTest(unittest.TestCase):
             self.assertIn("can't be an id", result.stderr)
 
     def test_version(self):
-        self.assertEqual(self.run_server("--version").stdout.strip(), f"lean-review {server.VERSION}")
+        self.assertEqual(self.run_server("--version").stdout.strip(), f"lean-vouch {server.VERSION}")
 
     def test_refuses_to_start_on_a_broken_marks_file(self):
         with tempfile.TemporaryDirectory() as folder:

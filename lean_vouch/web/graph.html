@@ -187,7 +187,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   // The docs link goes back to the last docs page read (review.js records it), or else to the root
   // module's page.
   let lastDocs = null;
-  try { lastDocs = sessionStorage.getItem("lean-review-docs"); } catch {}
+  try { lastDocs = sessionStorage.getItem("lean-vouch-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
   const post = reviewPost;
@@ -195,7 +195,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   // Plumbing groups, shared with the review pages through this browser's storage.
   const GROUPS = [["compiler", "compiler"], ["notation", "if / do / try"], ["internals", "internals"],
     ["theorems", "library theorems"]];
-  const storageKey = "lean-review.shownGroups";
+  const storageKey = "lean-vouch.shownGroups";
   let shownGroups = new Set();
   try { shownGroups = new Set(JSON.parse(localStorage.getItem(storageKey) ?? "[]")); } catch {}
   const visible = n => !library[n] || decls[n] || !library[n].group || shownGroups.has(library[n].group);
@@ -266,7 +266,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const asked = n => marks[n]?.attention?.length > 0;
   const waitingIn = node => Object.keys(marks).filter(n => asked(n) && node.modules.includes(decls[n]?.module)).length;
   const ORANGE = "#e07000";
-  const unexplained = n => marks[n]?.status === "question" && !marks[n].notes.some(x => x.mine && x.by !== "lean-review");
+  const unexplained = n => marks[n]?.status === "question" && !marks[n].notes.some(x => x.mine && x.by !== "lean-vouch");
   const SYMBOL = { agree: "✓", question: "?", reject: "✗" };
   const nodeClass = n => { const s = statusOf(n); return library[n] && !decls[n] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked"); };
   // Whether a declaration's proof has a gap. The marks say whether a statement is right; this says
@@ -959,7 +959,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const notes = el("ul", "review-notes");
     for (const n of marks[name]?.notes ?? []) {
       // The author and date on a line of their own, then the text, styled by who wrote it.
-      const li = el("li", n.by === "lean-review" ? "by-tool" : n.mine ? "by-reviewer" : "by-other");
+      const li = el("li", n.by === "lean-vouch" ? "by-tool" : n.mine ? "by-reviewer" : "by-other");
       li.style.setProperty("--person-hue", reviewHue(n.by));
       const head = el("div", "note-head", n.by + (n.quiz ? " · quiz answer " : " "));
       head.append(el("span", "note-date", n.date.slice(0, 10)));
@@ -1041,7 +1041,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     copy.removeAttribute("id");
     // Project declarations show their equations open, as on the review pages (same setting).
     let openEquations = true;
-    try { openEquations = localStorage.getItem("lean-review.openEquations") !== "0"; } catch {}
+    try { openEquations = localStorage.getItem("lean-vouch.openEquations") !== "0"; } catch {}
     if (decls[name] && openEquations)
       for (const d of copy.querySelectorAll("details"))
         if (d.querySelector(":scope > summary")?.textContent.trim() === "Equations") d.open = true;
