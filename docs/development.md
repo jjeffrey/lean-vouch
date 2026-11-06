@@ -1,5 +1,8 @@
 # Developing lean-review
 
+To run it from a clone, use `python3 path/to/lean-review/review.py`, which takes the same options as
+`lean-review`.
+
 ## Example
 
 `example/` is a small Lean project to try lean-review on and to develop it against: Euclid's
@@ -20,13 +23,11 @@ cd example
 The first docs build compiles doc-gen4 and takes several minutes. Marks made while trying it go to
 `example/review/marks/`, which is not committed.
 
-To run it from a clone, use `python3 path/to/lean-review/review.py`, which takes the same options as
-`lean-review`.
-
 ## Releasing
 
-Set `VERSION` in `lean_review/server.py` and date the [changelog](../CHANGELOG.md), then, with
-[`build`](https://pypi.org/project/build/) and [`twine`](https://pypi.org/project/twine/):
+Check that CI passes, set `VERSION` in `lean_review/server.py`, date the [changelog](../CHANGELOG.md),
+and tag the commit, as `v0.1.0`. Then, with [`build`](https://pypi.org/project/build/) and
+[`twine`](https://pypi.org/project/twine/):
 
 ```bash
 python3 -m build
@@ -43,7 +44,8 @@ python3 -m unittest discover -s tests
 
 | File | Needs | Checks |
 | --- | --- | --- |
-| `tests/test_server.py` | Python | Marks and notes are saved and read back; renames and moves never overwrite a mark; a broken or newer `marks.json` is refused and left alone. |
+| `tests/test_server.py` | Python | Marks and notes are saved and read back, each in its owner's file; renames and moves never overwrite a mark; a broken or newer marks file is refused and left alone; only the tool's own pages are answered. |
+| `tests/test_review.py` | Python | What the command checks and how it fails, with a stand-in for `lake`; who you are, which modules are reviewed, and what git ignores. |
 | `tests/test_graph.py` | Lean | On edited copies of the example: changing a proof or a docstring changes no fingerprint, and changing a statement or definition changes the right ones. The graph is compared with `tests/golden/`. |
 | `tests/test_pages.py` | Example docs, Chrome, network | The controls attach to doc-gen4's pages, marks are flagged exactly when something changed, the diagram draws, and clicking the buttons does what it should, from inside the page. |
 

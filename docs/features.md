@@ -5,15 +5,12 @@ Under every declaration:
 - **A mark:** ✓ agree, ? question, ✗ reject how it's defined. Click it again to clear it.
 - **A note thread,** for questions and answers, from everyone reviewing.
 - **Change tracking:** the mark is flagged when the declaration has changed since it was made, or
-  when anything it depends on has ("depends on `Divides`, which changed since you marked it"), however
-  far below. In the diagram a solid orange border is what changed and a dashed one what relies on it, and
-  selecting one lights the way down to the change. "What changed" lists every change, lowest first, with
-  how many marks rely on it. Each mark stays flagged until you've looked at it, and **Accept change**
-  keeps it for the current version. That covers one mark: accepting a change below doesn't accept
-  what's built on it.
+  when anything below it has, however far ("depends on `Divides`, which changed since you marked it").
   For a theorem only its statement counts, since Lean checks the proof; for a definition, its
   statement and body. A change only to how an argument is passed, such as `(n : Nat)` to
   `{n : Nat}`, isn't flagged: it changes how the declaration is called, not what it says.
+- **Accept change** keeps a flagged mark for the current version. It covers that one mark: accepting a
+  change below doesn't accept what's built on it.
 - **The library definitions it uses** ("Uses from libraries: `Nat`, `Nat.mod`").
 - **Its equations, open.** doc-gen4 folds a definition's equations; for review they are what you
   check, so project declarations show them open, on the pages and in the diagram's sidebar.
@@ -22,6 +19,9 @@ Under every declaration:
 
 Across the project:
 
+- **What changed,** on the pages and in the diagram: every change, lowest first, with how many marks
+  rely on it. In the diagram a solid orange border is what changed and a dashed one what relies on it,
+  and selecting a flagged declaration lights the way down to the change.
 - **Library definitions can be marked too,** on their own doc pages, meaning "I understand this",
   so you record what `%` on `Nat` means to you once, for every use.
 - **Refactors:** renames recorded as deprecated aliases (`@[deprecated] alias Old := New`) move
@@ -47,6 +47,15 @@ Across the project:
   distant: the diagram then shows only what's picked and the arrows between them.
 - **Shift-click** a declaration, a box or a row in the list to color everything it depends on and
   everything that uses it, all the way down and up, and list how much of each is in each folder.
+
+With others, and with assistants ([how to share marks](usage.md#working-with-others)):
+
+- **Their marks beside yours,** and their notes in the same thread, each person in their own color.
+  The diagram shows your marks, or anyone's, or everyone's, with disagreements in purple.
+- **Needs your attention:** a `!` where someone is waiting on you, because they asked a question or
+  answered yours. Listed at the bottom of the page, and counted in the diagram's folders.
+- **Live updates:** marks and notes appear on open pages by themselves, and pages say when a
+  [rebuild](usage.md#rebuilding) is running and offer to reload when it's done.
 
 ## Screenshots
 

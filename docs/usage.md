@@ -9,6 +9,7 @@ The first run adds doc-gen4's packages to `.lake/packages`, and a `.lean-review`
 │   └── ada-lovelace-3f9a.json
 ├── quiz/             ignored: each person's quiz answers
 ├── graph.json        ignored
+├── build.json        ignored: how the latest build went, for open pages
 ├── links.local.json  ignored, optional
 └── docbuild/         ignored
     └── .lake/build/doc/   the HTML
@@ -44,7 +45,7 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 Source links open in VS Code, at the declaration's line. Set `DOCGEN_SRC=github` before the first
 run for GitHub links instead.
 
-To open links in docstrings from your own copies, add `review/links.local.json`, as
+To open links in docstrings from your own copies, add `.lean-review/links.local.json`, as
 `{"https://example.org/paper.pdf": "your copy's URL"}`. The page rewrites them when you view the
 docs, adding `?page=N` if the link text ends in `(p. N)` or `(page N)`.
 

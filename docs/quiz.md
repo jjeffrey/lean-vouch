@@ -13,9 +13,9 @@ bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaratio
   theorem's statement without the proof), with the name hidden, even in recursive calls, and comments,
   including the docstring, removed. You write what it says and the name you would give it; the
   namespace is filled in, and an instance's name isn't asked for.
-- **Then its real name and docstring are shown next to yours.** Your answer is saved first, in your own quiz file, which git ignores by default, and shows under the
-  declaration for you alone. You say whether your reading matched, which is
-  recorded apart from your mark: reading a statement right isn't agreeing with it. A mismatch is
+- **Then its real name and docstring are shown next to yours.** Your answer is saved first, in your
+  own quiz file, which git ignores by default, and shows under the declaration for you alone. You say
+  whether your reading matched, which is recorded apart from your mark: reading a statement right isn't agreeing with it. A mismatch is
   something to discuss: either you misread it, or the name or docstring is wrong. Buttons mark it ✓ or
   ?, or ? with a note proposing your name as a rename. With no docstring, your answer can be saved as a
   suggested one.
@@ -28,5 +28,5 @@ bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaratio
 - **Hints explain notation, never meaning:** which parts are arguments and which the conclusion,
   what `{n : Nat}` (implicit), `[…]` and `⦃…⦄` arguments are, that `.zero` is shorthand for
   `Nat.zero` because a `Nat` is expected there, that `l.length` is `List.length` with `l`
-  filled in, and symbols such as `→`, `∀` and `⟨…⟩`. They never paraphrase the claim: in a trial, an
-  explanation of the meaning made the comparison worthless.
+  filled in, and symbols such as `→`, `∀` and `⟨…⟩`. They never paraphrase the claim: an explanation of the
+  meaning would make the comparison worthless.

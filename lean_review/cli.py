@@ -25,7 +25,6 @@ HERE = Path(__file__).resolve().parent
 MINIMUM = (4, 30)  # the oldest Lean this has been run on, end to end; see docs/internals.md
 TESTED = (4, 35)   # the newest
 HOME = Path(".lean-review")
-FORMAT = 3  # MARKS_FORMAT in server.py
 
 DOCBUILD = """\
 # Builds this project's API documentation with doc-gen4, for lean-review.
@@ -224,38 +223,6 @@ def identity(chosen_id, chosen_name):
     return f"{base}-{hashlib.sha256(git_config('user.email').encode()).hexdigest()[:4]}", name
 
 
-def import_old_marks(who, name):
-    """Split a review/marks.json from before each person had their own file: marks and your notes
-    to you, others' notes to them, and quiz answers to your quiz file. The old file is left alone."""
-    old, folder = Path("review/marks.json"), HOME / "marks"
-    if not old.exists() or folder.exists():
-        return
-    data = json.loads(old.read_text())
-    marks = data["marks"] if data.get("__format__") == 2 else {k: v for k, v in data.items() if k != "__format__"}
-    people, answers = {who: {"name": name, "marks": {}}}, {}
-    for declaration, entry in marks.items():
-        kept = {key: entry[key] for key in ("status", "date", "fingerprint", "signature") if key in entry}
-        people[who]["marks"][declaration] = {**kept, "notes": []}
-        for note in entry.get("notes", []):
-            text = {"date": note["date"], "text": note["text"]}
-            if "quiz" in note:
-                answers.setdefault(declaration, []).append({**text, "quiz": note["quiz"]})
-            elif note["by"] == "lean-review":
-                people[who]["marks"][declaration]["notes"].append(note)
-            else:
-                author = who if note["by"] == name else slug(note["by"]) or who
-                person = people.setdefault(author, {"name": note["by"], "marks": {}})
-                person["marks"].setdefault(declaration, {"status": None, "notes": []})["notes"].append(text)
-    folder.mkdir(parents=True)
-    for author, person in people.items():
-        (folder / f"{author}.json").write_text(json.dumps({"format": FORMAT, **person}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
-    if answers:
-        (HOME / "quiz").mkdir(exist_ok=True)
-        (HOME / "quiz" / f"{who}.json").write_text(json.dumps({"format": FORMAT, "answers": answers}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
-    print(f"lean-review: copied {len(marks)} marks from {old} to {folder}/. review/ and docbuild/ are no longer "
-          "used; delete them when you're happy.", flush=True)
-
-
 def clean_docs(docs, root, modules):
     """Delete the project's pages for modules that no longer exist, and say which. doc-gen4 only
     writes pages, so a renamed module's old page stays, and can still be reached from an old link."""
@@ -309,7 +276,6 @@ def main():
     if serving:
         print(f"lean-review: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
     set_up_folders(tag, package)
-    import_old_marks(who, name)
     report("building")
     try:
         modules = modules_of(args.names)

@@ -122,49 +122,6 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(self.identity("Ada", "a@example.com", "claude", "Claude"), ("claude", "Claude"))
 
 
-class ImportTest(unittest.TestCase):
-    def setUp(self):
-        folder = tempfile.TemporaryDirectory()
-        self.addCleanup(folder.cleanup)
-        self.addCleanup(os.chdir, os.getcwd())
-        os.chdir(folder.name)
-        Path("review").mkdir()
-        Path(".lean-review").mkdir()
-
-    def person(self, who):
-        return json.loads(Path(f".lean-review/marks/{who}.json").read_text())
-
-    def test_old_marks_are_split_by_person_and_left_in_place(self):
-        old = json.dumps({"__format__": 2, "marks": {"A.b": {"status": "agree", "date": "2026-01-01", "notes": [
-            {"by": "Ada", "date": "2026-01-01", "text": "mine"},
-            {"by": "assistant", "date": "2026-01-02", "text": "theirs"},
-            {"by": "lean-review", "date": "2026-01-03", "text": "moved"},
-            {"by": "Ada", "date": "2026-01-04", "text": "answer", "quiz": {"name": "x", "description": "y"}}]}}})
-        Path("review/marks.json").write_text(old)
-        review.import_old_marks("ada-1234", "Ada")
-        ada, assistant = self.person("ada-1234"), self.person("assistant")
-        self.assertEqual((ada["format"], ada["name"]), (review.FORMAT, "Ada"))
-        self.assertEqual(ada["marks"]["A.b"]["status"], "agree")
-        self.assertEqual([n["text"] for n in ada["marks"]["A.b"]["notes"]], ["mine", "moved"])
-        self.assertEqual([n["text"] for n in assistant["marks"]["A.b"]["notes"]], ["theirs"])
-        self.assertIsNone(assistant["marks"]["A.b"]["status"])
-        answers = json.loads(Path(".lean-review/quiz/ada-1234.json").read_text())["answers"]
-        self.assertEqual(answers["A.b"][0]["text"], "answer")
-        self.assertEqual(Path("review/marks.json").read_text(), old)
-
-    def test_a_file_from_before_formats_is_read(self):
-        Path("review/marks.json").write_text(json.dumps({"A.b": {"status": "agree", "notes": []}}))
-        review.import_old_marks("ada", "Ada")
-        self.assertEqual(self.person("ada")["marks"]["A.b"]["status"], "agree")
-
-    def test_it_never_runs_twice(self):
-        Path("review/marks.json").write_text(json.dumps({"A.b": {"status": "agree", "notes": []}}))
-        review.import_old_marks("ada", "Ada")
-        Path("review/marks.json").write_text(json.dumps({"C.d": {"status": "agree", "notes": []}}))
-        review.import_old_marks("ada", "Ada")
-        self.assertNotIn("C.d", self.person("ada")["marks"])
-
-
 class ReportTest(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory()

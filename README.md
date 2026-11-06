@@ -14,7 +14,9 @@ pipx install lean-review
 lean-review
 ```
 
-With uv, install it with `uv tool install lean-review`. Then open <http://127.0.0.1:8797/review/diagram>. The first run takes about 7 minutes, or about 35
+With uv, install it with `uv tool install lean-review`.
+
+Then open <http://127.0.0.1:8797/review/diagram>. The first run takes about 7 minutes, or about 35
 with Mathlib. Later runs take seconds. Your marks and notes are in `.lean-review/marks/`, which git
 tracks unless you opt out; quiz answers stay local.
 
@@ -25,14 +27,17 @@ tracks unless you opt out; quiz answers stay local.
 ## What you get
 
 - **Marks and notes** on every declaration, each person's in their own file.
-- **Flags** when something you marked, or anything it depends on, changes.
-- **A dependency diagram** colored by your marks, which handles projects as large as Mathlib.
+- **Change tracking:** flags when something you marked, or anything below it, changes, and shows the
+  way down to what changed.
+- **A dependency diagram** colored by your marks.
 - **`sorry` tracing:** everything that relies on one, even through proofs.
 - **Quiz mode:** read a statement with its name hidden, say what it means, then compare.
+- **Working together:** others' marks and questions beside yours, from people or assistants, live on
+  open pages.
 
 lean-review is a review aid, not a checker: for soundness, use `lake check` or `lake comparator`, in
-Lean v4.35 or newer. lean-review is still early: it handles
-projects as large as Mathlib, but has mostly been used to review small ones.
+Lean v4.35 or newer. lean-review is still early: it handles projects as large as Mathlib, but has
+mostly been used to review small ones.
 
 ## More
 

@@ -4,19 +4,12 @@
 
 First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4.
 
-- Marks, note threads, change tracking, library marks, orphaned notes, the dependency diagram and quiz mode.
-- The diagram opens large projects as folders, click to expand; tested on all of Mathlib.
-- Quiz mode can be limited to a folder or module, or asked in random order, and records whether your reading matched.
-- `sorry` and non-standard axioms are shown wherever they reach, even through proofs.
-- `lean-review` sets a project up and serves it in one command. It installs with pip or pipx.
-- The graph lists exactly what the docs list, using doc-gen4's rule for what a person wrote.
-- A list of folders and modules to open, search and pick from; shift-click for everything something depends on and that uses it.
-- `lean-review` keeps its docs build on the project's Lean version when that changes.
-- The server answers only its own pages, so other sites open in the browser can't read or change a review.
-- `lean-review` reviews every library in the project by default, or the libraries and modules you name.
-- Projects whose libraries set `srcDir` show their declarations' code.
-- Each person has their own marks file, shown together: your marks by default, anyone else's or everyone's in the diagram, with disagreements marked. Someone's `?` needs your attention until you mark or reply. An older `review/marks.json` is imported.
-- Changes are traced: what changed is shown apart from what relies on it, the diagram lights the way down, and "what changed" lists changes lowest first.
-- Marks and notes appear on open pages by themselves. The server can stay up through a rebuild, and pages offer to reload when it's done, or say so if it failed.
-- Everything lives in `.lean-review/`, which git ignores but for the marks. Quiz answers stay local.
-- Marks files and the graph record a format; the server refuses a format it doesn't read, and a marks file it can't parse, instead of overwriting it.
+- Marks and note threads on every declaration, in the project's doc-gen4 pages, and marks on library definitions.
+- Change tracking: marks are flagged when anything below them changes, with what changed traced and listed, and Accept change to keep a mark. Renames move marks, and marks left behind are listed as orphaned notes.
+- A dependency diagram colored by your marks, which opens large projects as folders; tested on all of Mathlib.
+- `sorry` and non-standard axioms shown wherever they reach, even through proofs.
+- Quiz mode: read a statement with its name hidden, say what it means, then compare.
+- Each person has their own marks file. The diagram shows yours, anyone's or everyone's, with disagreements marked, and someone's question needs your attention until you mark or reply.
+- Marks and notes appear on open pages by themselves, and the server can stay up through a rebuild.
+- `lean-review` sets a project up and serves it in one command, reviewing every library or those you name. It installs with pipx, pip or uv.
+- Everything lives in `.lean-review/`, which git ignores but for the marks.
