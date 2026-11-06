@@ -30,8 +30,8 @@ tracks unless you opt out; quiz answers stay local.
 - **`sorry` tracing:** everything that relies on one, even through proofs.
 - **Quiz mode:** read a statement with its name hidden, say what it means, then compare.
 
-lean-review is a review aid, not a checker: for soundness, use
-[lean4checker](https://github.com/leanprover/lean4checker) or Comparator. lean-review is still early: it handles
+lean-review is a review aid, not a checker: for soundness, use `lake check` or `lake comparator`, in
+Lean v4.35 or newer. lean-review is still early: it handles
 projects as large as Mathlib, but has mostly been used to review small ones.
 
 ## More
