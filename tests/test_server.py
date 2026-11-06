@@ -478,6 +478,98 @@ class ServerTest(unittest.TestCase):
         self.assertIn(b"/review/review.js", self.get("/Page.html"))
 
 
+    FINGERPRINTED = {"declarations": {"t": {"module": "M", "own": "t1", "deps": ["d"], "uses": ["l"]},
+                                      "d": {"module": "M", "own": "d1", "deps": ["e"], "uses": []},
+                                      "e": {"module": "N", "own": "e1", "deps": [], "uses": []}},
+                     "library": {"l": {"module": "L", "own": "l1"}}, "moduleDocs": {"M": "m1"}, "modules": {"M": [], "N": [], "E": []}}
+
+    def stored_mark(self, name):
+        return json.loads(self.marks.read_text())["marks"][name]
+
+    def test_a_mark_records_everything_below_it_without_being_told(self):
+        self.graph.write_text(json.dumps(self.FINGERPRINTED))
+        status, _ = self.post("/review/data", {"name": "t", "status": "question"})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.stored_mark("t")["fingerprint"], {"own": "t1", "deps": {"d": "d1", "e": "e1", "l": "l1"}})
+
+    def test_what_a_request_says_about_a_fingerprint_is_ignored(self):
+        self.graph.write_text(json.dumps(self.FINGERPRINTED))
+        for sent in ("abc", {"own": "wrong", "deps": {}}):
+            self.assertEqual(self.post("/review/data", {"name": "t", "status": "agree", "fingerprint": sent})[0], 200)
+            self.assertEqual(self.stored_mark("t")["fingerprint"]["own"], "t1")
+        self.assertEqual(self.post("/review/data", {"name": "t", "note": "still working"})[0], 200)
+
+    def test_module_and_library_marks(self):
+        self.graph.write_text(json.dumps(self.FINGERPRINTED))
+        self.post("/review/data", {"name": "module M", "status": "agree"})
+        self.post("/review/data", {"name": "module E", "status": "agree"})
+        self.post("/review/data", {"name": "l", "status": "agree"})
+        self.assertEqual(self.stored_mark("module M")["fingerprint"], {"own": "m1", "deps": {}})
+        self.assertEqual(self.stored_mark("module E")["fingerprint"], {"deps": {}})   # no own, as on a page
+        self.assertEqual(self.stored_mark("l")["fingerprint"], {"own": "l1", "deps": {}})
+
+    def test_a_mark_from_a_page_older_than_the_build_is_refused(self):
+        self.graph.write_text(json.dumps(self.FINGERPRINTED))
+        (self.root / "build.json").write_text(json.dumps({"built": "new"}))
+        status, reply = self.post("/review/data", {"name": "t", "status": "agree", "built": "old"})
+        self.assertEqual(status, 409)
+        self.assertIn("Reload", reply["error"])
+        self.assertFalse(self.marks.exists())
+        self.assertEqual(self.post("/review/data", {"name": "t", "note": "a note can wait", "built": "old"})[0], 200)
+        self.assertEqual(self.post("/review/data", {"name": "t", "status": "agree", "built": "new"})[0], 200)
+        self.assertEqual(self.post("/review/data", {"name": "t", "status": "agree"})[0], 200)
+
+
+    def test_deleting_an_orphan_leaves_the_mark_it_was_renamed_to(self):
+        self.graph.write_text(json.dumps({"renames": {"P.dup": "P.keep"}}))
+        self.marks.parent.mkdir(exist_ok=True)
+        self.marks.write_text(json.dumps({"format": server.MARKS_FORMAT, "name": "Ada", "marks": {
+            "P.dup": {"status": "reject", "notes": []}, "P.keep": {"status": "agree", "notes": []}}}))
+        self.assertEqual(self.post("/review/delete", {"name": "P.dup"})[0], 200)
+        self.assertEqual(json.loads(self.get("/review/data"))["P.keep"]["status"], "agree")
+        self.assertNotIn("P.dup", json.loads(self.marks.read_text())["marks"])
+
+    def test_a_page_says_which_build_it_is_from(self):
+        (self.root / "build.json").write_text(json.dumps({"built": "the <build>"}))
+        (self.root / "docs" / "Linked.html").write_text('<html><body><script src="/review/links.js"></script></body></html>')
+        self.assertIn(b'window.reviewBuilt = "the \\u003cbuild>"', self.get("/Linked.html"))
+        self.assertIn(b"window.reviewBuilt", self.get("/Page.html"))
+        self.assertIn(b"window.reviewBuilt", self.get("/review/diagram"))
+        self.assertIn(b"window.reviewBuilt", self.get("/review/quiz"))
+
+    def write_quiz(self, answers):
+        self.quiz.parent.mkdir(exist_ok=True)
+        answer = lambda text: [{"date": "2026-01-01", "text": text, "quiz": {}}]
+        self.quiz.write_text(json.dumps({"format": server.MARKS_FORMAT, "answers": {k: answer(k) for k in answers}}))
+
+    def test_two_old_names_keep_both_quiz_answers(self):
+        self.graph.write_text(json.dumps({"renames": {"Old.a": "New.c", "Old.b": "New.c"}}))
+        self.write_quiz(["Old.a", "Old.b"])
+        self.get("/review/data")
+        kept = json.loads(self.quiz.read_text())["answers"]
+        self.assertEqual(sorted(a["text"] for answers in kept.values() for a in answers), ["Old.a", "Old.b"])
+        self.assertIn("New.c", kept)
+
+    def test_a_chain_of_renames_is_followed(self):
+        self.graph.write_text(json.dumps({"renames": {"A": "B", "B": "C"}}))
+        status, reply = self.post("/review/data", {"name": "A", "note": "hello"})
+        self.assertEqual(status, 200)
+        self.assertEqual(reply["notes"][0]["text"], "hello")
+        (self.folder_marks / "bob.json").write_text(json.dumps({
+            "format": server.MARKS_FORMAT, "name": "Bob", "marks": {"A": {"status": "agree", "notes": []}}}))
+        self.assertEqual(json.loads(self.get("/review/data"))["C"]["others"][0]["id"], "bob")
+
+    def test_a_loop_of_renames_ends(self):
+        self.assertEqual(server.followed({"A": "B", "B": "A"}, "A"), "B")
+
+
+    def test_only_newlines_end_a_line(self):
+        (self.root / "M.lean").write_text("-- a\x0c comment\ntheorem t : True := trivial\n", encoding="utf-8")
+        self.graph.write_text(json.dumps({"declarations": {"t": {"module": "M", "lines": [2, 2], "own": "1", "deps": [], "uses": []}}}))
+        server.args.source = [self.root]
+        self.assertTrue(json.loads(self.get("/review/source?name=t"))["text"].startswith("theorem t"))
+
+
 class SliceTest(unittest.TestCase):
     """Large projects: pages get what they need, with everything below it for change tracking."""
 
@@ -533,10 +625,11 @@ class SliceTest(unittest.TestCase):
         self.assertEqual(reach["above"]["modules"], {"P.D": 1})
 
     def test_counts_leave_out_what_deriving_generates(self):
-        decls = {"Q.a": {"module": "Q", "deps": []}, "Q.instReprFoo": {"module": "Q", "deps": []},
-                 "R.instBEqBar": {"module": "R", "deps": []}}
+        decls = {"Q.a": {"module": "Q", "deps": []}, "Q.instReprFoo": {"module": "Q", "deps": [], "derived": True},
+                 "R.instBEqBar": {"module": "R", "deps": [], "derived": True},
+                 "S.instBEqBaz": {"module": "S", "deps": []}}   # written by hand, whatever its name
         self.graph.path.write_text(json.dumps({"root": "Q", "declarations": decls}))
-        self.assertEqual(self.graph.tree()["modules"], {"Q": 1})
+        self.assertEqual(self.graph.tree()["modules"], {"Q": 1, "S": 1})
 
     def test_a_sorry_is_counted_and_reaches_through_proofs(self):
         entry = lambda module, **fields: {"module": module, "deps": [], "uses": [], **fields}

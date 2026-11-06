@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -77,24 +78,30 @@ def check_version(tag, version):
               "If the graph step fails, please open an issue.", flush=True)
 
 
+def lakefile_toml():
+    try:
+        return tomllib.loads(Path("lakefile.toml").read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        fail(f"couldn't read lakefile.toml: {error}")
+
+
 def package_name():
     if Path("lakefile.toml").exists():
-        found = re.search(r'^name\s*=\s*"(.*?)"', Path("lakefile.toml").read_text(encoding="utf-8"), re.M)
+        found = lakefile_toml().get("name")
     elif Path("lakefile.lean").exists():
         found = re.search(r'^package\s+[«"]?([^\s»"]+)', Path("lakefile.lean").read_text(encoding="utf-8"), re.M)
+        found = found and found[1]
     else:
         fail("run this from the root of a Lake project: there's no lakefile here.")
-    if not found:
+    if not found or not isinstance(found, str):
         fail("couldn't read the package name from the lakefile.")
-    return found[1].strip("«»")
+    return found.strip("«»")
 
 
 def library_names():
     """The project's libraries, as its lakefile declares them."""
     if Path("lakefile.toml").exists():
-        blocks = Path("lakefile.toml").read_text(encoding="utf-8").split("[[")
-        return [found[1] for block in blocks if block.startswith("lean_lib]]")
-                if (found := re.search(r'^name\s*=\s*"(.*?)"', block, re.M))]
+        return [library["name"].strip("«»") for library in lakefile_toml().get("lean_lib", [])]
     found = re.findall(r"^(?:@\[.*?\]\s*)?lean_lib\s+(\S+)", Path("lakefile.lean").read_text(encoding="utf-8"), re.M)
     return [name.strip('«»"') for name in found]
 
@@ -175,8 +182,21 @@ def run(command, cwd=".", env=None):
         fail(f"`{' '.join(command)}` failed; see above.")
 
 
+def follow_project_pins(docbuild):
+    """docbuild's manifest pins the project's dependencies, and they share a folder, so an old one
+    would check them out again at their old revisions. After the project's build, which may be what
+    writes the project's manifest."""
+    project = Path("lake-manifest.json")
+    pins = hashlib.sha256(project.read_bytes() if project.exists() else b"").hexdigest()
+    seen = docbuild / "project-manifest.sha256"
+    if not seen.exists() or seen.read_text(encoding="utf-8") != pins:
+        (docbuild / "lake-manifest.json").unlink(missing_ok=True)
+        seen.write_text(pins, encoding="utf-8")
+
+
 def build_docs(modules):
     docbuild = HOME / "docbuild"
+    follow_project_pins(docbuild)
     if not (docbuild / "lake-manifest.json").exists():
         # Keeps Mathlib's update hook from fetching its cache again.
         run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"})
@@ -199,6 +219,8 @@ def build_graph(modules):
     if done.returncode:
         new.unlink(missing_ok=True)
         fail(f"building the declaration graph failed:\n{done.stdout[-4000:]}\n"
+             "If two libraries define the same name, they can't be imported together: review one at a "
+             "time, as in `lean-review MyLibrary`.\n"
              "If this is about Lean itself, not your project, please open an issue.")
     try:
         return json.loads(new.read_text(encoding="utf-8"))
@@ -229,7 +251,7 @@ def identity(chosen_id, chosen_name):
         if not ID.fullmatch(chosen_id):
             fail(f"{chosen_id} can't be an id: use lowercase letters, digits and hyphens.")
         return chosen_id, name
-    # Not from --name, which can change without making you someone else.
+    # Not from --name if there's a git name: that can change without making you someone else.
     base = slug(git_name) or slug(name)
     if not base:
         fail(f"can't make a file name from {name!r}. Choose one with --id, such as --id my-name.")
@@ -297,6 +319,10 @@ def main():
     if not shutil.which("lake"):
         fail("Lake isn't on your PATH. Install Lean through elan: https://github.com/leanprover/elan")
     who, name = identity(args.id, args.name)
+    others = sorted(path.stem for path in (HOME / "marks").glob("*.json") if path.stem != who)
+    if others and not (HOME / "marks" / f"{who}.json").exists():
+        print(f"lean-review: there's no marks file for {who} yet, only for {', '.join(others)}. "
+              "If one of those is you, use --id.", flush=True)
     serving = None if args.rebuild else running_server(args.port)
     if serving and Path(serving) != (HOME / "marks").resolve():
         fail(f"port {args.port} is serving another project. Choose another with --port.")

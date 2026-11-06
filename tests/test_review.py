@@ -95,6 +95,46 @@ class ModulesTest(unittest.TestCase):
                          ["Lib", "Tests.B", "Tests.C"])
 
 
+class LakefileTest(unittest.TestCase):
+    def in_project(self, lakefile):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(folder.name)
+        Path("lakefile.toml").write_text(lakefile)
+
+    def test_any_valid_toml_is_read(self):
+        self.in_project("name = 'proj'\n\n[[lean_lib]]\n  name = 'Lib'\n\n[[lean_lib]]\n\"name\" = \"Other\"\n")
+        self.assertEqual(review.package_name(), "proj")
+        self.assertEqual(review.library_names(), ["Lib", "Other"])
+
+    def test_a_broken_lakefile_says_so(self):
+        self.in_project("name = \n")
+        with self.assertRaises(SystemExit) as caught:
+            review.package_name()
+        self.assertIn("lakefile.toml", str(caught.exception.code))
+
+
+class DocbuildManifestTest(unittest.TestCase):
+    def test_a_change_in_the_projects_pins_refreshes_docbuilds(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(folder.name)
+        Path("lean-toolchain").write_text("leanprover/lean4:v4.30.0\n")
+        Path("lake-manifest.json").write_text('{"packages": []}')
+        review.set_up_folders("v4.30.0", "p")
+        docbuild = review.HOME / "docbuild"
+        pinned = docbuild / "lake-manifest.json"
+        review.follow_project_pins(docbuild)
+        pinned.write_text('{"packages": []}')
+        review.follow_project_pins(docbuild)
+        self.assertTrue(pinned.exists())
+        Path("lake-manifest.json").write_text('{"packages": ["bumped"]}')
+        review.follow_project_pins(docbuild)
+        self.assertFalse(pinned.exists())
+
+
 class IdentityTest(unittest.TestCase):
     def identity(self, name, email, *chosen):
         config = {"user.name": name, "user.email": email}

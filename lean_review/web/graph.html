@@ -171,12 +171,12 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   // A large project sends the folder tree and what the marks need; the declarations of a module
   // arrive when it is opened. A small project sends everything at once.
   let [marks, tree, graph] = await Promise.all([
-    fetch("/review/data").then(r => r.json()),
+    fetch("/review/data").then(reviewChecked),
     fetch("/review/tree").then(r => r.json()),
     fetch("/review/graph?marked").then(r => r.json()),
   ]);
   const decls = graph.declarations ?? {}, library = graph.library ?? {};
-  const isGenerated = n => /\.inst(Repr|DecidableEq|BEq|Hashable|Inhabited|Nonempty)/.test(n);
+  const isGenerated = n => !!decls[n]?.derived;
   const root = graph.root ?? "";
   if (root) {
     document.getElementById("project").textContent = root;
@@ -190,7 +190,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   try { lastDocs = sessionStorage.getItem("lean-review-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
-  const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+  const post = reviewPost;
 
   // Plumbing groups, shared with the review pages through this browser's storage.
   const GROUPS = [["compiler", "compiler"], ["notation", "if / do / try"], ["internals", "internals"],
@@ -224,11 +224,6 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     closure.set(n, out);
     return out;
   };
-  const fingerprint = n => {
-    const deps = {};
-    for (const d of below(n)) deps[d] = info(d)?.own ?? null;
-    return info(n) ? { own: info(n).own, deps } : null;
-  };
   // What changed since `n` was marked: itself, and which things below it.
   const changes = (n, mark) => {
     const fp = mark?.fingerprint;
@@ -236,7 +231,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const now = below(n);
     return { self: fp.own !== info(n).own,
       deps: [...new Set([...Object.keys(fp.deps), ...now])].filter(d => visible(d) &&
-        (fp.deps[d] ?? null) !== (now.has(d) ? info(d)?.own ?? null : null)) };
+        (fp.deps[d] ?? null) !== (info(d)?.own ?? null)) };
   };
   const isOld = (n, mark) => { const c = changes(n, mark); return c.self || c.deps.length > 0; };
   // Whose marks color the diagram: yours, someone else's, or everyone's, where those that differ
@@ -293,13 +288,22 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   indexUsers();
   // Bring declarations into the page, by module or by name.
   const loaded = new Set();
-  async function load(query) {
-    const part = await fetch(`/review/graph?marked&${query}`).then(r => r.json());
+  const merge = part => {
     Object.assign(decls, part.declarations);
     Object.assign(library, part.library);
     closure.clear();
     indexUsers();
-  }
+  };
+  const load = query => fetch(`/review/graph?marked&${query}`).then(r => r.json()).then(merge);
+  // A mark is compared with everything below it, so that has to be here.
+  const loadBelow = async names => {
+    const missing = tree.complete ? [] : reviewMissing(names, marks, d => info(d));
+    if (missing.length) merge(await reviewBelow(missing));
+  };
+  const setMark = async (name, status) => {
+    marks[name] = await post("/review/data", { name, status });
+    await loadBelow([name]);
+  };
   async function loadModules(modules) {
     if (tree.complete) return;
     const missing = [...modules].filter(m => !loaded.has(m));
@@ -629,6 +633,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       .find(s => s && group.modules.every(m => m === s || m.startsWith(s + "."))) ?? "";
     const quiz = el("a", null, "Quiz this");
     quiz.href = `/review/quiz?scope=${encodeURIComponent(scope)}`;
+    keepDraft();
     sidebar.replaceChildren(el("h2", null, group.name),
       el("p", "muted", `${group.module ? "module" : "folder"}, ${group.count} declarations, ${marked} marked`),
       quiz, reachList(reach));
@@ -799,6 +804,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       item.append(ref(n), ` (${found.get(n)} ${found.get(n) === 1 ? "mark relies" : "marks rely"} on it)`);
       list.append(item);
     }
+    keepDraft();
     sidebar.replaceChildren(el("h2", null, "What changed"),
       el("p", "muted", "Lowest first, since what a change means depends on what's beneath it."), list);
   };
@@ -858,7 +864,17 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return names.length ? ul : el("p", "muted", "none");
   };
 
+  // A note being written survives the sidebar being redrawn, whatever did it, and comes back with
+  // its declaration.
+  const drafts = new Map();
+  let draftFor = null;
+  const keepDraft = () => {
+    const box = sidebar.querySelector("textarea");
+    if (box && draftFor) drafts.set(draftFor, box.value);
+  };
   async function renderSidebar(name) {
+    keepDraft();
+    draftFor = name;
     sidebar.replaceChildren();
     if (!name) { sidebar.append(el("p", "muted", "Click a node to see its code, notes and dependencies.")); return; }
     const i = info(name), isLibrary = !decls[name];
@@ -885,7 +901,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       b.title = title; b.dataset.status = status;
       b.onclick = async () => {
         const next = marks[name]?.status === status ? null : status;
-        marks[name] = await post("/review/data", { name, status: next, fingerprint: fingerprint(name) });
+        await setMark(name, next);
         recolor(name);   // only this node's color changes, so keep the current zoom and layout
         await renderSidebar(name);
         if (unexplained(name)) sidebar.querySelector("textarea")?.focus();
@@ -904,7 +920,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       const accept = el("button", "accept", "Accept change");
       accept.title = "Keep your mark for the current version. Only this declaration's mark is affected.";
       accept.onclick = async () => {
-        marks[name] = await post("/review/data", { name, status: marks[name].status, fingerprint: fingerprint(name) });
+        await setMark(name, marks[name].status);
         recolorAll();
         renderSidebar(name);
       };
@@ -951,12 +967,13 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       notes.append(li);
     }
     sidebar.append(notes.children.length ? notes : el("p", "muted", "No notes yet."));
-    input.rows = 2; input.placeholder = "Add a note…";
+    input.rows = 2; input.placeholder = "Add a note…"; input.value = drafts.get(name) ?? "";
     if (unexplained(name)) sidebar.append(el("p", "prompt", "What's your question? Others see it once you write one."));
     add.onclick = async () => {
       const note = input.value.trim();
       if (!note) return;
       marks[name] = await post("/review/data", { name, note });
+      input.value = "";
       recolor(name);
       renderSidebar(name);
     };
@@ -1159,10 +1176,11 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const showAskedKey = () => document.getElementById("attention-key").hidden = !Object.keys(marks).some(asked);
   showAskedKey();
   reviewWatch(async () => {
-    const fresh = await fetch("/review/data").then(r => r.json());
+    const fresh = await fetch("/review/data").then(reviewChecked);
     const changed = [...new Set([...Object.keys(marks), ...Object.keys(fresh)])]
       .filter(n => JSON.stringify(marks[n]) !== JSON.stringify(fresh[n]));
     for (const n of changed) { if (n in fresh) marks[n] = fresh[n]; else delete marks[n]; }
+    await loadBelow(changed);
     for (const { id, name } of Object.values(fresh).flatMap(m => m.others ?? [])) {
       if (!people.has(id)) { people.set(id, name); viewer.add(new Option(name, id), viewer.options[viewer.options.length - 1]); }
     }

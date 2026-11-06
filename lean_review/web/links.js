@@ -12,6 +12,37 @@ window.reviewDisagreement = (mine, others) => {
   return new Set(others.map(o => o.status)).size > 1 ? "others disagree" : null;
 };
 
+// Reads a reply. An error says so and throws, so that a page never takes it for what it asked for and
+// keeps what was being written.
+window.reviewChecked = async response => {
+  const value = await response.json();
+  if (response.status >= 500 || response.status === 409) { alert(value.error); throw new Error(value.error); }
+  return value;
+};
+
+// `built` says which build this page shows, for a mark to be refused if the docs have moved on.
+window.reviewPost = (path, body) => fetch(path, {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ ...body, built: window.reviewBuilt ?? undefined }),
+}).catch(error => { alert("Couldn't reach the lean-review server, so this wasn't saved."); throw error; })
+  .then(window.reviewChecked);
+
+// Reloads, unless that would lose a note being written.
+window.reviewReload = () => {
+  const writing = [...document.querySelectorAll("textarea")].some(box => box.value.trim());
+  if (!writing || confirm("Reloading will lose the note you're writing. Reload anyway?")) location.reload();
+};
+
+// On a large project a page holds part of the graph. Of `names`, those whose marks, or others', rest
+// on something it hasn't got, which they'd show as changed. `has` says what it has.
+window.reviewMissing = (names, marks, has) => names.filter(name =>
+  [marks[name], ...(marks[name]?.others ?? [])].some(mark =>
+    Object.entries(mark?.fingerprint?.deps ?? {}).some(([dep, own]) => own !== null && !has(dep))));
+
+// What lies below `names`. Past what a URL can hold, what lies below every mark.
+window.reviewBelow = names => fetch(`/review/graph?${names.length > 100 ? "marked"
+  : names.map(name => `name=${encodeURIComponent(name)}`).join("&")}`).then(r => r.json());
+
 // Where a theorem's proof starts in its source: the first `:=` outside any brackets, or a `|` case
 // starting a line. -1 if it has none.
 window.reviewProofStart = text => {
@@ -46,13 +77,13 @@ window.reviewWatch = onMarks => {
   const reload = document.createElement("button");
   reload.textContent = "Reload";
   reload.style.marginLeft = "0.6em";
-  reload.onclick = () => location.reload();
+  reload.onclick = () => reviewReload();
   const say = (text, title, ...extra) => {
     banner.hidden = !text;
     banner.title = title ?? "";
     banner.replaceChildren(text ?? "", ...extra);
   };
-  let marks, built, first = true;
+  let marks, first = true;
   const tick = async () => {
     const now = await fetch("/review/status").then(r => r.json()).catch(() => null);
     if (!now) return;
@@ -60,7 +91,6 @@ window.reviewWatch = onMarks => {
       me.textContent = `reviewing as ${now.me.name}`;
       me.title = `Your id is ${now.me.id}: the name of your marks file. --name and --id change them.`;
     }
-    if (first) built = now.built;
     // Also on the first look: marks can change while a large page loads. Noted first, so a failure
     // isn't repeated on every look.
     const changed = first || now.marks !== marks;
@@ -68,8 +98,8 @@ window.reviewWatch = onMarks => {
     marks = now.marks;
     if (changed) await onMarks();
     if (now.state === "building") say("Rebuilding…");
-    else if (now.state === "failed") say("Build failed; showing the last good version.", now.message);
-    else if (now.built !== built) say("Docs updated.", null, reload);
+    else if (now.state === "failed") say("Build failed; changes are tracked from the last good build.", now.message);
+    else if (now.built !== (window.reviewBuilt ?? null)) say("Docs updated.", null, reload);
     else if (now.unreadable.length) say(`Left out marks that can't be read: ${now.unreadable.join(", ")}.`);
     else say(null);
   };

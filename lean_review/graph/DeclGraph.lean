@@ -8,16 +8,14 @@ Run from inside a Lake project, after `lake build`:
     lake env lean --run path/to/DeclGraph.lean MyProject [MyProjectTests ...] > graph.json
 
 It imports the modules named, and for every declaration a reviewer reads in the modules under
-them, records which other such declarations it depends on, and two fingerprints:
-
-* `own`: a hash of the declaration itself. A theorem's statement only, since its proof is checked
-  by Lean and never reviewed; a definition's statement and body; a structure's or inductive type's
-  fields and constructors.
-* `deep`: `own` combined with the `deep` fingerprints of everything it depends on. It changes when
-  the declaration or anything below it changes.
+them, records which other such declarations it depends on, and a fingerprint, `own`: a hash of the
+declaration itself. A theorem's statement only, since its proof is checked by Lean and never
+reviewed; a definition's statement and body; a structure's or inductive type's fields and
+constructors.
 
 Compiler-generated helpers (`match_1`, `rec`, …) are not listed; a declaration that uses one
-depends on whatever the helper uses. Library constants that are Core Lean plumbing are listed with
+depends on whatever the helper uses, and the helper counts as part of it. So does a deprecated
+declaration, which isn't reviewed either. Library constants that are Core Lean plumbing are listed with
 a `group` (see `plumbingGroup?`), so a viewer can hide them. Constructors and structure fields count as their type.
 Deprecated aliases (`@[deprecated] alias Old := New`) are listed under `renames`.
 
@@ -48,6 +46,20 @@ def isUnder (names : NameSet) : Name → Bool
 doc-gen4 documents only what has one. -/
 def sourceRange? (env : Environment) (n : Name) :=
   declRangeExt.find? (level := .exported) env n <|> declRangeExt.find? (level := .server) env n
+
+/-- Classes whose `deriving` output there's nothing to review in. -/
+def derivedClasses : List String := ["Repr", "DecidableEq", "BEq", "Hashable", "Inhabited", "Nonempty"]
+
+/-- Whether `deriving` wrote this, rather than a person. Names can't say: `instance : BEq Foo` gets
+the same one. But a written declaration's range covers all of it and its selection only part, while
+what `deriving` makes has both at the class's name in the clause. So does what a macro makes. -/
+def isDerived (env : Environment) (n : Name) : Bool :=
+  let generated := match sourceRange? env n with
+    | some r => r.range.pos == r.selectionRange.pos && r.range.endPos == r.selectionRange.endPos
+    | none => false
+  generated && n.components.any fun part => match part with
+    | .str _ s => derivedClasses.any fun c => ("inst" ++ c).isPrefixOf s
+    | _ => false
 
 /-- A structure's projection to a parent it extends. A person wrote `extends`, so it has a source
 range, but doc-gen4 shows it with the structure, not as a declaration of its own. -/
@@ -177,6 +189,14 @@ def fieldDefaults (g : Graph) (n : Name) : Array Expr :=
       | some (.defnInfo d) => some d.value
       | _ => none
 
+/-- A type's constructors and fields by name, in order. Lean's expression hash ignores binder names,
+so swapping two fields of one type would otherwise change nothing, though it changes what every
+`⟨a, b⟩` means. As string literals, since a name here isn't a dependency. -/
+def memberNames (g : Graph) (i : InductiveVal) : Array Expr :=
+  let fields := if isStructure g.env i.name
+    then getStructureFieldsFlattened g.env i.name (includeSubobjectFields := false) else #[]
+  (i.ctors.toArray ++ fields).map (mkStrLit ·.toString)
+
 /-- The expressions that are reviewed for a declaration. -/
 def reviewedExprs (g : Graph) (n : Name) : Array Expr :=
   match g.env.find? n with
@@ -184,9 +204,21 @@ def reviewedExprs (g : Graph) (n : Name) : Array Expr :=
   | some (.defnInfo d) => #[d.type, d.value]
   | some (.opaqueInfo o) => #[o.type, o.value] ++ g.implementation n
   | some (.inductInfo i) =>
-    #[i.type] ++ (i.ctors.toArray.filterMap fun c => (g.env.find? c).map (·.type)) ++ g.fieldDefaults n
+    #[i.type] ++ (i.ctors.toArray.filterMap fun c => (g.env.find? c).map (·.type)) ++ g.fieldDefaults n ++ g.memberNames i
   | some info => #[info.type]
   | none => #[]
+
+/-- An expression's hash, without the names of the project's helpers. Lean shares a `match` helper
+between declarations and names it after the first, so that name can change while nothing here does.
+What a helper contains counts anyway, through `collect`. Each is numbered by first use, so which
+helper is used where still counts. -/
+def contentHash (g : Graph) (e : Expr) : UInt64 :=
+  let helpers := e.getUsedConstants.filter fun c => g.inProject c && isDetail g.env c
+  if helpers.isEmpty then e.hash else
+    let number : Std.HashMap Name Nat := helpers.foldl (fun found c => found.insert c found.size) {}
+    (e.replace fun
+      | .const c levels => (number.get? c).map fun i => .const (.num `_helper i) levels
+      | _ => none).hash
 
 /-- What a library constant's meaning rests on: the constants its reviewed expressions mention, so
 a theorem's statement and a definition's body, but nothing of a `partial def`'s compiled code, whose
@@ -299,8 +331,8 @@ def libraryMeaning (g : Graph) (c : Name) : Array Name :=
     let o := g.owner c
     if isClass g.env o then #[] else #[o]
 
-/-- Reviewed declarations and library constants used by `n`, looking through helpers; also the
-hashes of the helpers looked through, which are part of `n`'s own content. -/
+/-- Reviewed declarations and library constants used by `n`, looking through helpers and deprecated
+declarations; also the hashes of those looked through, which are part of `n`'s own content. -/
 partial def collect (g : Graph) (self : Name) (exprs : Array Expr)
     (seen : NameSet := {}) : NameSet × NameSet × Array UInt64 × NameSet := Id.run do
   let mut deps : NameSet := {}
@@ -315,11 +347,14 @@ partial def collect (g : Graph) (self : Name) (exprs : Array Expr)
         for m in g.libraryMeaning c do library := library.insert m
         continue
       let o := g.owner c
-      if o != c || !isDetail g.env c then
+      -- A deprecated declaration isn't reviewed, so nothing would notice it change: it's looked
+      -- through like a helper.
+      let retired := (Linter.getDeprecatedNewName g.env o).isSome
+      if !retired && (o != c || !isDetail g.env c) then
         if o != self then deps := deps.insert o
       else
-        let inner := g.reviewedExprs c
-        hashes := hashes ++ inner.map (·.hash)
+        let inner := g.reviewedExprs (if retired then o else c)
+        hashes := hashes ++ inner.map g.contentHash
         let (d, l, h, s) := g.collect self inner seen
         deps := deps.union d
         library := library.union l
@@ -360,7 +395,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   for n in names do
     let exprs := g.reviewedExprs n
     let (d, l, inner, _) := g.collect n exprs
-    own := own.insert n (mixHash (hash n) ((exprs.map (·.hash) ++ inner).foldl mixHash 7))
+    own := own.insert n (mixHash (hash n) ((exprs.map g.contentHash ++ inner).foldl mixHash 7))
     deps := deps.insert n d
     uses := uses.insert n l
     library := library.union l
@@ -370,22 +405,6 @@ unsafe def main (args : List String) : IO UInt32 := do
   -- And with everything it rests on, down through the library.
   let depths := g.libraryDepths library.toArray libraryFlat
   let libraryOwn (n : Name) : UInt64 := (depths.get? n).getD 0
-  -- `deep` fingerprints, depth first over the dependency graph (it has no cycles).
-  let mut deep : Std.HashMap Name UInt64 := {}
-  let rec visit (n : Name) (deep : Std.HashMap Name UInt64) (fuel : Nat) :
-      Std.HashMap Name UInt64 :=
-    match fuel with
-    | 0 => deep
-    | fuel + 1 =>
-      if deep.contains n then deep else
-      let ds := ((deps.get? n).getD {}).toArray.qsort Name.lt
-      let deep := ds.foldl (fun acc d => visit d acc fuel) deep
-      let ls := ((uses.get? n).getD {}).toArray.qsort Name.lt
-      let h := ds.foldl (fun acc d => mixHash acc ((deep.get? d).getD 0)) ((own.get? n).getD 0)
-      let h := ls.foldl (fun acc l => mixHash acc (libraryOwn l)) h
-      deep.insert n h
-  for n in names do
-    deep := visit n deep (names.size + 1)
   let kind (n : Name) : String :=
     match env.find? n with
     | some (.thmInfo _) => "theorem"
@@ -409,6 +428,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     let isAxiom (a : Name) := env.find? a matches some (.axiomInfo _)
     let sources := found.filter fun a => !isAxiom a && a != n
     let axioms := found.filter isAxiom
+    (if isDerived env n then [("derived", toJson true)] else []) ++
     (if found.contains n then [("sorry", toJson true)] else []) ++
     (if sources.isEmpty then [] else [("sorryFrom", toJson (sources.map (·.toString)))]) ++
     (if sources.isEmpty then [] else
@@ -423,7 +443,6 @@ unsafe def main (args : List String) : IO UInt32 := do
       ("module", module n),
       ("lines", lines n),
       ("own", hex ((own.get? n).getD 0)),
-      ("deep", hex ((deep.get? n).getD 0)),
       ("deps", toJson (((deps.get? n).getD {}).toArray.qsort Name.lt |>.map (·.toString))),
       ("uses", toJson (((uses.get? n).getD {}).toArray.qsort Name.lt |>.map (·.toString)))])
   let libraryDecls := (library.toArray.qsort Name.lt).map fun n =>

@@ -18,9 +18,11 @@
   is kept, and no other proof dependency, so a project with none has nothing extra in its graph. This
   is the one thing that looks inside proofs, so it never affects fingerprints.
 - **Fingerprints** are hashes of Lean's expressions. A mark stores the fingerprint of the
-  declaration and of everything below it when it was made; the page compares them with the
-  current graph. A `partial def` counts its body, a structure its default field values, and a
-  module doc its text. A library definition's fingerprint takes in everything it's built on, down
+  declaration and of everything below it when it was made, worked out by the server however the
+  mark was made; the page compares them with the current graph. A `partial def` counts its body, a
+  structure its default field values and field names, an inductive type its constructors' names, and
+  a module doc its text. Names of helpers Lean generates don't count, only what's in them. What a declaration uses through a
+  deprecated name counts as part of it. A library definition's fingerprint takes in everything it's built on, down
   through the library, leaving out proofs, so upgrading Lean or a dependency flags marks when something
   beneath what they use really changed, even if the change is harmless.
 
@@ -28,6 +30,13 @@
 
 - Fingerprints use Lean's expression hash, which is 32 bits and not cryptographic. An accidental
   collision is very unlikely, but someone could craft one, so don't rely on them against an adversary.
+- A fingerprint depends on what was reviewed. A declaration outside the modules named counts as a
+  library one, which is fingerprinted with everything below it, so a run over less of a project than
+  before flags marks that rest on what it left out, though nothing changed. A run over the same part
+  clears them.
+- Binder names outside a type's fields don't count, so renaming an argument flags nothing.
+- On a large project, a page loads everything below every mark, to compare it. With many marks
+  high up in a project this can approach the size of the whole graph.
 - Library tracking covers the library definitions listed under a declaration. Type classes and instances
   stand for the operations they provide, so a change to a class itself isn't followed.
 - Lean v4.30 to v4.35 (see [Versions](#versions)). `DeclGraph.lean` uses Lean's internals, which change between versions. It works with and without the module system (`module`); it reads private data, so unexposed bodies are covered.
@@ -68,7 +77,7 @@ Three things are versioned separately:
 | Path | What it does |
 | --- | --- |
 | `lean_review/cli.py` | The `lean-review` command: sets up `.lean-review/`, builds the docs and graph, and starts the server. `review.py` runs it from a clone. |
-| `lean_review/graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and fingerprints (`own`, and `deep`, which includes everything below it). |
+| `lean_review/graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and each one's fingerprint, `own`. |
 | `lean_review/server.py` | Serves the doc-gen4 output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames. Python standard library only. |
 | `lean_review/web/review.js`, `review.css` | The controls in the pages. |
 | `lean_review/web/links.js`, `math.js` | What the pages share: rewriting links, noticing changes while a page is open, and typesetting math. |

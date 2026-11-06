@@ -26,7 +26,7 @@ Across the project:
 - **Library definitions can be marked too,** on their own doc pages, meaning "I understand this",
   so you record what `%` on `Nat` means to you once, for every use.
 - **Refactors:** renames recorded as deprecated aliases (`@[deprecated] alias Old := New`) move
-  marks automatically. Marks whose declaration no longer exists are listed as orphaned notes, to
+  marks automatically. Marks whose declaration isn't in the last build are listed as orphaned notes, to
   move or delete; none disappear silently.
 - **A dependency diagram,** on its own page: a Hasse diagram of the project's declarations (and
   optionally the library definitions they use), colored by your marks. Clicking a node highlights
@@ -90,7 +90,7 @@ how. Shift-click one to color all it reaches.
 
 ![the diagram with a sorry](images/sorry-diagram.png)
 
-**Orphaned notes,** left behind when a declaration is removed.
+**Orphaned notes,** left behind when a declaration is removed, or when a run leaves out its library.
 
 ![the orphaned notes list](images/orphans.png)
 

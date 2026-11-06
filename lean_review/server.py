@@ -33,7 +33,6 @@ WEB = Path(__file__).resolve().parent / "web"
 STATUSES = {"agree", "question", "reject", None}
 ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")   # plain, so that a file can't differ between machines
 VERDICTS = {"match", "partly", "miss"}   # how a quiz answer compared with the real name and docstring
-GENERATED = re.compile(r"\.inst(Repr|DecidableEq|BEq|Hashable|Inhabited|Nonempty)")  # as in web/review.js
 LARGE = 5000  # declarations; above this, pages get the parts of the graph they need, not all of it
 INJECT = (b'<link rel="stylesheet" href="/review/review.css"><script src="/review/links.js"></script>'
           b'<script src="/review/review.js"></script>')
@@ -92,6 +91,26 @@ class Graph:
             self.indexes = by_module, users, edges, reached, hops
         return self.indexes
 
+    def fingerprint(self, name):
+        """What a mark records: `name` and everything below it, as they are now. Worked out here, so
+        a mark is right however it was made, and whatever part of the graph a page has."""
+        graph = self.current()
+        decls, library = graph.get("declarations", {}), graph.get("library", {})
+        if name.startswith("module "):
+            own = graph.get("moduleDocs", {}).get(name[len("module "):])
+            return {"deps": {}, **({"own": own} if own else {})}
+        if name not in decls and name not in library:
+            return None
+        own = lambda n: (decls.get(n) or library.get(n) or {}).get("own")
+        below, stack = set(), [name]
+        while stack:
+            decl = decls.get(stack.pop())
+            for dep in [*decl["deps"], *decl["uses"]] if decl else []:
+                if dep not in below:
+                    below.add(dep)
+                    stack.append(dep)
+        return {"own": own(name), "deps": {dep: own(dep) for dep in below}}
+
     def tree(self):
         """What the diagram draws folders from, however large the project is."""
         graph = self.current()
@@ -107,7 +126,7 @@ class Graph:
                 "complete": len(graph.get("declarations", {})) <= LARGE,
                 # Only what a reviewer can mark: `deriving` output isn't shown.
                 "modules": {m: count for m, names in sorted(by_module.items())
-                            if (count := sum(not GENERATED.search(n) for n in names))},
+                            if (count := sum(not decls[n].get("derived") for n in names))},
                 "edges": [[a, b, n] for (a, b), n in sorted(edges.items())], "gaps": gaps,
                 "sorryHops": hops}   # [from, its module, to, its module]: few, whatever the project's size
 
@@ -159,7 +178,7 @@ class Graph:
         chosen.update(u for n in own for u in users.get(n, []))
         wanted = {u for n in chosen for u in decls[n]["uses"]} | set(marks) | set(names)
         return {**{k: v for k, v in graph.items() if k not in ("declarations", "library", "modules")},
-                "moduleNames": sorted(by_module),   # so a page can tell a removed module from an unloaded one
+                "moduleNames": sorted(graph.get("modules") or by_module),   # so a page can tell a removed module from an unloaded one
                 "declarations": {n: decls[n] for n in chosen},
                 "library": {n: e for n, e in library.items() if n in wanted or e.get("module") in modules}}
 
@@ -237,10 +256,21 @@ def save_quiz(answers):
     save_file(args.quiz / f"{args.id}.json", {"answers": answers})
 
 
+def followed(renames, name):
+    """Where a name ended up, through any chain of renames."""
+    seen = {name}
+    while name in renames and renames[name] not in seen:
+        name = renames[name]
+        seen.add(name)
+    return name
+
+
 def apply_renames(marks, graph):
     """Move marks from an old name to its new one, for renames recorded as deprecated aliases."""
     moved = False
-    for old, new in graph.get("renames", {}).items():
+    renames = graph.get("renames", {})
+    for old in renames:
+        new = followed(renames, old)
         if old in marks and new not in marks:
             entry = marks.pop(old)
             entry.setdefault("notes", []).append(
@@ -257,10 +287,14 @@ def current(who=None, name=None):
     if apply_renames(data["marks"], graph.current()):
         save_person(who, data)
     if who == args.id:
-        answers = quiz_answers()
-        moves = {old: new for old, new in graph.current().get("renames", {}).items() if old in answers and new not in answers}
-        if moves:
-            save_quiz({moves.get(name, name): kept for name, kept in answers.items()})
+        answers, renames, moved = quiz_answers(), graph.current().get("renames", {}), False
+        for old in renames:   # one at a time, so that a second old name can't overwrite the first
+            new = followed(renames, old)
+            if old in answers and new not in answers:
+                answers[new] = answers.pop(old)
+                moved = True
+        if moved:
+            save_quiz(answers)
     return data
 
 
@@ -289,7 +323,7 @@ def view():
     for who, data in people.items():
         mine = who == args.id
         for name, entry in data["marks"].items():
-            item = at(name if mine else renames.get(name, name))
+            item = at(name if mine else followed(renames, name))
             item["notes"] += [{"by": data["name"], **note, "who": who, "mine": mine} for note in entry.get("notes", [])]
             if mine:
                 item.update({key: value for key, value in entry.items() if key != "notes"})
@@ -321,7 +355,8 @@ def source_of(name):
     folder = next((folder for folder in args.source if (folder / module).exists()), None)
     if folder is None:
         return {"error": f"{module} not found"}
-    lines = (folder / module).read_text(encoding="utf-8").splitlines()
+    # Not splitlines(): Lean counts only \n, and that also splits on form feeds and the like.
+    lines = (folder / module).read_text(encoding="utf-8").split("\n")
     start, end = decl["lines"][0] - 1, decl["lines"][1]
     if end > len(lines):
         return {"error": f"{module} has changed since the last build. Rebuild to see this declaration's code."}
@@ -354,10 +389,23 @@ def status():
             "me": {"id": args.id, "name": args.name or args.id}, "unreadable": unreadable}
 
 
+def last_built():
+    build = load_json(args.build, {})
+    return build.get("built") if isinstance(build, dict) else None
+
+
+def stamped(page):
+    """A page, saying which build it's from. The page's first look at the status can't say: a build
+    may finish while a large page loads."""
+    links = b'<script src="/review/links.js">'
+    stamp = json.dumps(last_built()).replace("<", "\\u003c")
+    return page.replace(links, f"<script>window.reviewBuilt = {stamp};</script>".encode() + links, 1)
+
+
 def well_formed(body):
     """Whether a POST has the types the handlers rely on; they decide whether its values make sense."""
     return (isinstance(body, dict)
-            and all(isinstance(body.get(key, ""), str) for key in ("name", "from", "to", "verdict", "note", "id", "author"))
+            and all(isinstance(body.get(key, ""), str) for key in ("name", "from", "to", "verdict", "note", "id", "author", "built"))
             and isinstance(body.get("status"), (str, type(None)))
             and all(isinstance(body.get(key, []), list) and all(isinstance(item, str) for item in body.get(key, []))
                     for key in ("modules", "names", "shown")))
@@ -427,14 +475,14 @@ class Handler(SimpleHTTPRequestHandler):
         if path in PAGES:
             name = PAGES[path]
             kind = {"js": "text/javascript", "css": "text/css", "html": "text/html; charset=utf-8"}[name.rsplit(".", 1)[1]]
-            return self.send_body((WEB / name).read_bytes(), kind)
+            return self.send_body(stamped((WEB / name).read_bytes()), kind)
         # Every page gets the script: project pages for review, library pages so the library
         # definitions the project uses can be marked as understood.
         # translate_path decodes the URL, since a module's name needn't be ASCII, and stays in the docs.
         file = Path(self.translate_path(self.path))
         file = file / "index.html" if path == "/" else file
         if file.suffix == ".html" and file.is_file():
-            return self.send_body(file.read_bytes().replace(b"</body>", INJECT + b"</body>", 1),
+            return self.send_body(stamped(file.read_bytes().replace(b"</body>", INJECT + b"</body>", 1)),
                                   "text/html; charset=utf-8")
         return super().do_GET()
 
@@ -468,7 +516,7 @@ class Handler(SimpleHTTPRequestHandler):
         marks = data["marks"]
         answers = quiz_answers() if who == args.id else {}
         renames = graph.current().get("renames", {})
-        name = renames.get(body.get("name"), body.get("name"))
+        name = followed(renames, body.get("name"))
         if self.path == "/review/verdict":
             if not answers.get(name) or body.get("verdict") not in VERDICTS:
                 return self.send_json({"error": "bad request"}, 400)
@@ -484,18 +532,21 @@ class Handler(SimpleHTTPRequestHandler):
                     "name": str(quiz.get("name", "")), "description": str(quiz.get("description", ""))}})
                 save_quiz(answers)
                 return self.send_json(view()[name])
+            # A page from before a rebuild would mark what's there now without having shown it.
+            if "status" in body and body.get("built", last_built()) != last_built():
+                return self.send_json({"error": "The docs have been rebuilt. Reload this page, then mark again."}, 409)
             entry = marks.setdefault(name, {"status": None, "notes": []})
             if "status" in body:
                 entry["status"] = body["status"]
-                if body.get("fingerprint"):
-                    entry["fingerprint"] = body["fingerprint"]
+                if fingerprint := graph.fingerprint(name):
+                    entry["fingerprint"] = fingerprint
                 entry["date"] = now()
             if body.get("note"):
                 entry["notes"].append({"date": now(), "text": body["note"]})
             save_person(who, data)
             return self.send_json(view()[name])
         if self.path == "/review/move":
-            old, new = body.get("from"), renames.get(body.get("to"), body.get("to"))
+            old, new = body.get("from"), followed(renames, body.get("to"))
             if (old not in marks and old not in answers) or not new or new in marks or new in answers:
                 return self.send_json({"error": "cannot move"}, 400)
             if old in marks:
@@ -508,7 +559,9 @@ class Handler(SimpleHTTPRequestHandler):
                 save_quiz(answers)
             return self.send_json(view()[new])
         if self.path == "/review/delete":
-            if name not in marks and name not in answers:
+            # An orphan by its own name, even if that was renamed to something marked already.
+            name = next((n for n in (body.get("name"), name) if n in marks or n in answers), None)
+            if name is None:
                 return self.send_json({"error": "no such mark"}, 400)
             if marks.pop(name, None) is not None:
                 save_person(who, data)

@@ -80,7 +80,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
 <script>
 (async () => {
   let [marks, graph] = await Promise.all([
-    fetch("/review/data").then(r => r.json()),
+    fetch("/review/data").then(reviewChecked),
     fetch("/review/graph").then(r => r.json()),
   ]);
   reviewWatch(() => {});   // for the rebuild notice: this page keeps the marks it opened with
@@ -90,7 +90,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     document.getElementById("project").textContent = `${root}: quiz`;
     document.title = `${root}: quiz`;
   }
-  const isGenerated = n => /\.inst(Repr|DecidableEq|BEq|Hashable|Inhabited|Nonempty)/.test(n);
+  const isGenerated = n => !!decls[n]?.derived;
   const short = n => n.startsWith(root + ".") ? n.slice(root.length + 1) : n;
   const info = n => decls[n] ?? library[n];
   // The docs link goes back to the last docs page read (review.js records it), or else to the root
@@ -99,7 +99,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   try { lastDocs = sessionStorage.getItem("lean-review-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
-  const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+  const post = reviewPost;
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -108,7 +108,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   };
   const code = text => el("code", null, text);
 
-  // Everything below a declaration, for the fingerprint stored with a mark (as on the other pages).
+  // Everything below a declaration, to compare with what a mark recorded (as on the other pages).
   const closure = new Map();
   const below = n => {
     if (closure.has(n)) return closure.get(n);
@@ -120,19 +120,17 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     closure.set(n, out);
     return out;
   };
-  const fingerprint = n => {
-    const deps = {};
-    for (const d of below(n)) deps[d] = info(d)?.own ?? null;
-    return info(n) ? { own: info(n).own, deps } : null;
-  };
 
   // Marks whose declaration changed since, or anything below it: the most useful thing to re-quiz.
+  // Library uses in hidden groups don't count, as on the other pages.
+  let shownGroups = new Set();
+  try { shownGroups = new Set(JSON.parse(localStorage.getItem("lean-review.shownGroups") ?? "[]")); } catch {}
   const changedSince = n => {
     const fp = marks[n]?.fingerprint;
     if (!marks[n]?.status || !fp || !info(n)) return false;
     const now = below(n);
     return fp.own !== info(n).own || [...new Set([...Object.keys(fp.deps), ...now])].some(d =>
-      !library[d]?.group && (fp.deps[d] ?? null) !== (now.has(d) ? info(d)?.own ?? null : null));
+      (decls[d] || !library[d]?.group || shownGroups.has(library[d].group)) && (fp.deps[d] ?? null) !== (info(d)?.own ?? null));
   };
 
   // What to ask about: a folder or module, and in what order. Remembered in this browser; a link
@@ -267,11 +265,14 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
 
   // The source as written, with the declaration's own name hidden and other names linked; also
   // the syntax hints that the shorthand in it calls for.
+  // Lean's identifiers: Greek, letter-like symbols (ℓ, ℕ) and script letters (𝒜), and subscripts.
+  const idLetters = "A-Za-z_\\u0370-\\u03FF\\u1F00-\\u1FFF\\u2100-\\u214F\\u{1D49C}-\\u{1D59F}";
+  const idStart = `[${idLetters}]`, idRest = `[${idLetters}0-9'!?\\u2080-\\u2089\\u2090-\\u209C\\u1D62-\\u1D6A]`;
   function writtenSource(text, quizzed, hints) {
     const { resolve, byField } = resolver(quizzed);
     const ownName = quizzed.split(".").at(-1);
     const pre = el("pre");
-    const ident = /\.?[A-Za-z_Ͱ-Ͽἀ-῿][\w'!?Ͱ-Ͽ₀-₉]*(?:\.[A-Za-z_Ͱ-Ͽ][\w'!?Ͱ-Ͽ₀-₉]*)*/y;
+    const ident = new RegExp(`\\.?${idStart}${idRest}*(?:\\.${idStart}${idRest}*)*`, "uy");
     let i = 0, plain = "";
     const flush = () => { if (plain) pre.append(plain); plain = ""; };
     while (i < text.length) {
@@ -548,7 +549,14 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
       reveal.disabled = true;
       const note = "Quiz answer, written from the statement alone, before seeing the name and docstring.\n" +
         `Name: ${answer.name || "(none)"}\nDescription: ${answer.description}`;
-      marks[name] = await post("/review/data", { name, note, quiz: answer });
+      // Only a saved answer is revealed. Otherwise it stays in its box, to try again.
+      try {
+        marks[name] = await post("/review/data", { name, note, quiz: answer });
+      } catch {
+        revealed = false;
+        reveal.disabled = false;
+        return;
+      }
       // Once seen, a reload must not ask it blind again.
       remember(null);
       session.answered++;
@@ -613,7 +621,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     const act = async (s, button, text) => {
       await saveNote(text);
       if (marks[name]?.status !== s || changedSince(name))
-        marks[name] = await post("/review/data", { name, status: s, fingerprint: fingerprint(name) });
+        marks[name] = await post("/review/data", { name, status: s });
       for (const b of markButtons) b.classList.toggle("chosen", b === button);
       status.textContent = `Marked ${s === "agree" ? "✓" : "?"}.`;
     };

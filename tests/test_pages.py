@@ -307,9 +307,9 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(results, [["gcd", "gcd_divides"], True])
 
     def test_a_change_in_a_closed_folder_is_traced_to_its_box(self):
-        names = {f"P.Big.M{i}.x{k}": {"kind": "def", "module": f"P.Big.M{i}", "lines": [1, 1], "own": "1", "deep": "1", "deps": [], "uses": []}
+        names = {f"P.Big.M{i}.x{k}": {"kind": "def", "module": f"P.Big.M{i}", "lines": [1, 1], "own": "1", "deps": [], "uses": []}
                  for i in range(3) for k in range(30)}
-        names["P.Other.y"] = {"kind": "def", "module": "P.Other", "lines": [1, 1], "own": "1", "deep": "1", "deps": ["P.Big.M0.x0"], "uses": []}
+        names["P.Other.y"] = {"kind": "def", "module": "P.Other", "lines": [1, 1], "own": "1", "deps": ["P.Big.M0.x0"], "uses": []}
         graph = {"format": 1, "root": "P", "declarations": names, "library": {}, "renames": {},
                  "modules": {m: [] for m in {d["module"] for d in names.values()}}}
         marks = {"P.Other.y": {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00",
@@ -320,6 +320,121 @@ class PagesTest(unittest.TestCase):
             results.push(doc.getElementById("what-changed").textContent);
         """, frame="review/diagram", graph=graph)
         self.assertEqual(results, ["what changed (1)"])
+
+    def test_marking_a_dependent_from_another_module_shows_no_false_change(self):
+        # On a large project, a page has a module's direct dependents but not what's below them.
+        entry = lambda module, deps=(): {"kind": "def", "module": module, "lines": None, "own": "1", "deps": list(deps), "uses": []}
+        decls = {f"P.A.x{i}": entry("P.A") for i in range(5001)}
+        decls["P.C.deep"] = entry("P.C")
+        decls["P.B.user"] = entry("P.B", ["P.A.x0", "P.C.deep"])
+        graph = {"format": 1, "root": "P", "declarations": decls, "library": {}, "renames": {},
+                 "modules": {m: [] for m in ("P.A", "P.B", "P.C")}}
+        results = self.click_through({}, """
+            const box = await ready("#sidebar [data-status=agree]");
+            box.click();
+            await until(() => doc.querySelector("#sidebar [data-status=agree].active"));
+            await wait(300);
+            results.push(!!doc.querySelector("#sidebar .stale"), !!doc.querySelector("#sidebar .accept"));
+            const saved = await doc.defaultView.fetch("/review/data").then(r => r.json());
+            results.push(saved["P.B.user"].fingerprint.deps);
+        """, frame="review/diagram#P.B.user", graph=graph)
+        self.assertEqual(results, [False, False, {"P.A.x0": "1", "P.C.deep": "1"}])
+
+    def test_a_docs_page_shows_no_false_change_from_a_mark_on_a_dependent_elsewhere(self):
+        entry = lambda module, deps=(): {"kind": "def", "module": module, "lines": None, "own": "1", "deps": list(deps), "uses": []}
+        decls = {f"ReviewExample.pad{i}": entry("ReviewExample.Pad") for i in range(5001)}
+        decls["ReviewExample.gcd"] = entry("ReviewExample.Gcd")
+        decls["Other.far"] = entry("Other.Far")
+        decls["Other.user"] = entry("Other.User", ["ReviewExample.gcd", "Other.far"])
+        graph = {"format": 1, "root": "ReviewExample", "declarations": decls, "library": {}, "renames": {},
+                 "modules": {m: [] for m in ("ReviewExample.Pad", "ReviewExample.Gcd", "Other.Far", "Other.User")}}
+        results = self.click_through({}, """
+            await ready("#review-summary");
+            await wait(2500);  // past the page's first look
+            const w = doc.defaultView;
+            const real = await w.fetch("/review/data", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: "Other.user", status: "agree" }) });
+            await wait(3000);
+            results.push(real.status, [...doc.querySelectorAll("#review-summary button")].some(b => /what changed \\([1-9]/.test(b.textContent)));
+        """, graph=graph)
+        self.assertEqual(results, [200, False])
+
+    def test_a_note_being_written_survives_marking_and_moving_on(self):
+        results = self.click_through({}, """
+            const box = await ready("#sidebar textarea");
+            box.value = "my question";
+            doc.querySelector("#sidebar [data-status=question]").click();
+            await until(() => doc.querySelector("#sidebar [data-status=question].active"));
+            await ready("#sidebar textarea");
+            results.push(doc.querySelector("#sidebar textarea").value);
+        """, frame="review/diagram#ReviewExample.gcd")
+        self.assertEqual(results, ["my question"])
+
+    def test_a_dependency_no_longer_used_isnt_called_changed(self):
+        graph = json.loads(json.dumps(self.graph))
+        name, decl = next((n, d) for n, d in graph["declarations"].items() if d["deps"])
+        kept = fingerprint(graph, name)
+        kept["deps"]["ReviewExample.Divides"] = graph["declarations"]["ReviewExample.Divides"]["own"]
+        kept["own"] = decl["own"]
+        kept["deps"]["ReviewExample.gcd"] = graph["declarations"]["ReviewExample.gcd"]["own"]
+        marks = {name: {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00", "fingerprint": kept}}
+        results = self.click_through(marks, """
+            await ready("#review-summary");
+            await wait(500);
+            results.push([...doc.querySelectorAll("#review-summary button")].some(b => /what changed \\([1-9]/.test(b.textContent)));
+        """, graph=graph)
+        self.assertEqual(results, [False])
+
+    def test_a_failed_save_keeps_a_quiz_answer_and_doesnt_reveal(self):
+        results = self.click_through({}, """
+            await ready("textarea");
+            const w = doc.defaultView;
+            let alerts = 0;
+            w.alert = () => alerts++;
+            const real = w.fetch;
+            w.fetch = (url, options) => options?.method === "POST"
+              ? Promise.resolve(new Response('{"error": "broken"}', { status: 500 })) : real(url, options);
+            const box = doc.querySelector("textarea");
+            box.value = "my reading";
+            box.dispatchEvent(new w.Event("input", { bubbles: true }));
+            [...doc.querySelectorAll("button")].find(b => /reveal|show|compare/i.test(b.textContent)).click();
+            await until(() => alerts > 0);
+            await wait(100);
+            results.push(alerts, doc.querySelector("textarea")?.value);
+        """, frame="review/quiz?name=ReviewExample.gcd", allow_errors=True)
+        self.assertEqual(results, [1, "my reading"])
+
+    def test_a_failed_save_keeps_a_note_in_the_diagram(self):
+        results = self.click_through({}, """
+            await ready("#diagram g.node");
+            const w = doc.defaultView;
+            let alerts = 0;
+            w.alert = () => alerts++;
+            await until(() => doc.querySelector("#sidebar textarea"));
+            const real = w.fetch;
+            w.fetch = (url, options) => options?.method === "POST"
+              ? Promise.resolve(new Response('{"error": "broken"}', { status: 500 })) : real(url, options);
+            const box = doc.querySelector("#sidebar textarea");
+            box.value = "my note";
+            [...doc.querySelectorAll("#sidebar button")].find(b => b.textContent === "Add note").click();
+            await until(() => alerts > 0);
+            await wait(100);
+            results.push(doc.querySelector("#sidebar textarea").value);
+        """, frame="review/diagram#ReviewExample.gcd", allow_errors=True)
+        self.assertEqual(results, ["my note"])
+
+    def test_a_mark_on_a_module_with_no_declarations_isnt_an_orphan(self):
+        graph = dict(self.graph)
+        graph["modules"] = {**graph["modules"], "ReviewExample.OnlyImports": []}
+        marks = {"module ReviewExample.OnlyImports": {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00"},
+                 "ReviewExample.gone": {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00"}}
+        results = self.click_through(marks, """
+            await ready("#review-summary");
+            const button = await until(() => [...doc.querySelectorAll("#review-summary button")].find(b => /orphan/.test(b.textContent)));
+            button.click();
+            results.push([...doc.querySelectorAll(".review-orphan strong")].map(s => s.textContent));
+        """, graph=graph)
+        self.assertEqual(results, [["ReviewExample.gone"]])
 
     def test_accepting_a_change_on_a_docs_page_keeps_the_mark_and_only_that_one(self):
         marks, graph = self.changed_below()
@@ -492,7 +607,7 @@ class PagesTest(unittest.TestCase):
             results.push(doc.getElementById("review-build").textContent, doc.getElementById("review-build").title);
             results.push(doc.querySelectorAll(".decl .review-row").length > 0);
         """, build={"state": "failed", "message": "It broke.", "pid": 1})
-        self.assertEqual(results, ["Build failed; showing the last good version.", "It broke.", True])
+        self.assertEqual(results, ["Build failed; changes are tracked from the last good build.", "It broke.", True])
 
     def test_an_unreadable_file_is_announced(self):
         results = self.click_through({}, """
@@ -543,7 +658,7 @@ class PagesTest(unittest.TestCase):
             doc.defaultView.fetch = (url, ...rest) => String(url).endsWith("/review/data")
               ? Promise.resolve(new Response('{"error": "broken"}', { status: 500 })) : real(url, ...rest);
             real("/review/data", { method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: "ReviewExample.gcd", status: "agree", fingerprint: { own: "1", deps: {} } }) });
+              body: JSON.stringify({ name: "ReviewExample.gcd", status: "agree" }) });
             await wait(7000);
             results.push(alerts);
         """, allow_errors=True)
@@ -574,7 +689,7 @@ class PagesTest(unittest.TestCase):
 
     def large_graph(self):
         """A project too large to send whole: three folders, one module of which we open."""
-        entry = lambda module, deps=(): {"kind": "def", "module": module, "lines": None, "own": "0", "deep": "0",
+        entry = lambda module, deps=(): {"kind": "def", "module": module, "lines": None, "own": "0",
                                          "deps": list(deps), "uses": []}
         decls = {f"P.Big.M{i % 40}.x{i}": entry(f"P.Big.M{i % 40}") for i in range(5200)}
         decls["P.Small.Inner.a"] = entry("P.Small.Inner")

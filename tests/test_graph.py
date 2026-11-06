@@ -48,6 +48,20 @@ class GraphTest(unittest.TestCase):
         before = self.before["declarations"]
         return {n for n, d in after["declarations"].items() if n in before and d[field] != before[n][field]}
 
+    def flagged(self, after):
+        """What a mark would show as out of date: anything that changed, or that has it below."""
+        before, now = self.before["declarations"], after["declarations"]
+        changed = {n for n in now if n in before and now[n]["own"] != before[n]["own"]}
+        changed |= {n for n, e in after["library"].items() if e["own"] != self.before["library"].get(n, e)["own"]}
+
+        def below(name, seen):
+            for dep in [*now[name]["deps"], *now[name]["uses"]] if name in now else []:
+                if dep not in seen:
+                    seen.add(dep)
+                    below(dep, seen)
+            return seen
+        return {n for n in now if n in before and changed & below(n, {n})}
+
     def test_records_its_format_and_lean_version(self):
         self.assertEqual(self.before["format"], 1)
         self.assertRegex(self.before["lean"], r"^\d+\.\d+\.\d+")
@@ -125,6 +139,57 @@ class GraphTest(unittest.TestCase):
         one, two = (self.extra(f"structure S where\n  x : Nat := {k}\n") for k in (1, 2))
         self.assertNotEqual(one["declarations"]["S"]["own"], two["declarations"]["S"]["own"])
 
+    def test_a_deprecated_declaration_counts_as_part_of_what_uses_it(self):
+        source = ("def new (n : Nat) : Nat := n + 1\n"
+                  '@[deprecated new (since := "2026-01-01")] def old (n : Nat) : Nat := n + {k}\n'
+                  "set_option linter.deprecated false in\ndef user : Nat := old 1\n")
+        one, two = (self.extra(source.replace("{k}", str(k))) for k in (2, 3))
+        self.assertNotEqual(one["declarations"]["user"]["own"], two["declarations"]["user"]["own"])
+        self.assertNotIn("old", one["declarations"]["user"]["deps"])
+
+    def test_what_a_deprecated_alias_stands_for_is_a_dependency(self):
+        graph = self.extra('def new : Nat := 1\n@[deprecated new (since := "2026-01-01")] abbrev old := new\n'
+                           "set_option linter.deprecated false in\ndef user : Nat := old\n")
+        self.assertEqual(graph["declarations"]["user"]["deps"], ["new"])
+
+    def test_only_what_deriving_wrote_is_marked_derived(self):
+        declarations = self.extra("structure A where\n  x : Nat\n  deriving BEq, Repr\n\n"
+                                  "structure B where\n  x : Nat\n\n"
+                                  "instance : BEq B := ⟨fun a b => a.x != b.x⟩\n\n"
+                                  "structure C where\n  x : Nat\n\n"
+                                  "deriving instance BEq for C\n")["declarations"]
+        self.assertEqual({n for n, d in declarations.items() if d.get("derived")},
+                         {"instBEqA", "instBEqA.beq", "instReprA", "instReprA.repr", "instBEqC", "instBEqC.beq"})
+        self.assertIn("instBEqB", declarations)
+
+    def test_swapping_fields_or_constructors_counts(self):
+        one = self.extra("structure I where\n  lo : Nat\n  hi : Nat\ninductive C where\n  | a | b\n")
+        two = self.extra("structure I where\n  hi : Nat\n  lo : Nat\ninductive C where\n  | b | a\n")
+        self.assertNotEqual(one["declarations"]["I"]["own"], two["declarations"]["I"]["own"])
+        self.assertNotEqual(one["declarations"]["C"]["own"], two["declarations"]["C"]["own"])
+
+    def test_renaming_a_field_counts(self):
+        one, two = (self.extra(f"structure I where\n  {name} : Nat\n") for name in ("size", "width"))
+        self.assertNotEqual(one["declarations"]["I"]["own"], two["declarations"]["I"]["own"])
+
+    def test_a_shared_helper_changing_name_flags_nothing_else(self):
+        source = ("def {} (l : List Nat) : Nat := match l with\n  | [] => 0\n  | x :: _ => x\n\n"
+                  "def second (l : List Nat) : Nat := match l with\n  | [] => 0\n  | x :: _ => x\n")
+        one, two = (self.extra(source.format(name)) for name in ("first", "renamed"))
+        self.assertEqual(one["declarations"]["second"]["own"], two["declarations"]["second"]["own"])
+
+    def test_what_a_shared_helper_does_still_counts(self):
+        one, two = (self.extra(f"def f (l : List Nat) : Nat := match l with\n  | [] => {k}\n  | x :: _ => x\n") for k in (0, 1))
+        self.assertNotEqual(one["declarations"]["f"]["own"], two["declarations"]["f"]["own"])
+
+    def test_which_helper_is_used_where_still_counts(self):
+        source = ("def h (n : Nat) : Bool := match n with\n  | 0 => true\n  | _ => false\n"
+                  "def i (n : Nat) : Nat := match n with\n  | 0 => 1\n  | _ => 2\n")
+        one, two = (self.extra(source + f"def f (n : Nat) : Bool × Nat × Bool := {body}\n")
+                    for body in ("((match n with | 0 => true | _ => false), (match n with | 0 => 1 | _ => 2), (match n with | 0 => true | _ => false))",
+                                 "((match n with | 0 => true | _ => false), (match n with | 0 => 1 | _ => 2), (match n with | 0 => false | _ => true))"))
+        self.assertNotEqual(one["declarations"]["f"]["own"], two["declarations"]["f"]["own"])
+
     def test_a_module_doc_has_a_fingerprint(self):
         one, two = (self.extra(f"/-! {text} -/\n\ndef x : Nat := 1\n") for text in ("One.", "Two."))
         self.assertNotEqual(one["moduleDocs"]["Extra"], two["moduleDocs"]["Extra"])
@@ -141,7 +206,7 @@ class GraphTest(unittest.TestCase):
     def test_changing_a_proof_changes_no_fingerprint(self):
         after = self.edited(DIVIDES, "⟨1, (Nat.mul_one n).symm⟩", "⟨1, by simp⟩")
         self.assertEqual(self.changed(after, "own"), set())
-        self.assertEqual(self.changed(after, "deep"), set())
+        self.assertEqual(self.flagged(after), set())
 
     def test_changing_a_theorem_statement_flags_only_that_theorem(self):
         # Proofs that use it aren't flagged: Lean rechecks them, and their statements are unchanged.
@@ -149,14 +214,14 @@ class GraphTest(unittest.TestCase):
             DIVIDES, "theorem Divides.refl (n : Nat) : Divides n n :=",
             "theorem Divides.refl (n : Nat) : Divides n (n + 0) :=")
         self.assertEqual(self.changed(after, "own"), {"ReviewExample.Divides.refl"})
-        self.assertEqual(self.changed(after, "deep"), {"ReviewExample.Divides.refl"})
+        self.assertEqual(self.flagged(after), {"ReviewExample.Divides.refl"})
 
     def test_changing_a_definition_reaches_everything_above_it(self):
         after = self.edited(GCD, "| 0, b => b", "| 0, b => b + 0")
         self.assertEqual(self.changed(after, "own"), {"ReviewExample.gcd"})
-        deep = self.changed(after, "deep")
-        self.assertLessEqual({"ReviewExample.gcd", "ReviewExample.gcd_divides", "ReviewExample.divides_gcd"}, deep)
-        self.assertNotIn("ReviewExample.Divides", deep)
+        flagged = self.flagged(after)
+        self.assertLessEqual({"ReviewExample.gcd", "ReviewExample.gcd_divides", "ReviewExample.divides_gcd"}, flagged)
+        self.assertNotIn("ReviewExample.Divides", flagged)
 
     def test_a_docstring_changes_no_fingerprint(self):
         after = self.edited(DIVIDES, "/-- Every number divides itself. -/", "/-- Reworded. -/")
