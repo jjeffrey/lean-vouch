@@ -532,6 +532,20 @@ class PagesTest(unittest.TestCase):
         decls["P.Other.c"] = entry("P.Other", ["P.Small.Inner.b"])
         return {"format": 1, "root": "P", "declarations": decls, "library": {}, "renames": {}, "modules": {}}
 
+    def test_cmd_click_on_a_box_picks_and_opens_it(self):
+        results = self.click_through({}, """
+            await ready("#diagram g.node");
+            const box = name => [...doc.querySelectorAll("#diagram g.node")].find(g => g.querySelector("text").textContent.startsWith(name));
+            const click = (target, options) => target.querySelector("text").dispatchEvent(new doc.defaultView.MouseEvent("click", { bubbles: true, ...options }));
+            results.push(!!box("Small"), !!box("Other"), doc.getElementById("clear-pins").hidden);
+            click(box("Small"), { metaKey: true });
+            await until(() => !doc.getElementById("clear-pins").hidden && !box("Other"));
+            await ready("#tree-rows .row.pinned");
+            results.push(doc.getElementById("clear-pins").hidden, !!box("Other"), doc.querySelector("#tree-rows .row.pinned .label").textContent);
+            results.push([...doc.querySelectorAll("#diagram g.node text")].map(t => t.textContent).sort());
+        """, frame="review/diagram", graph=self.large_graph())
+        self.assertEqual(results, [True, True, True, False, False, "Small/Inner", ["Small.Inner.a", "Small.Inner.b"]])
+
     def test_a_sorry_shows_on_its_page_and_on_what_relies_on_it(self):
         self.serve({}, self.graph)
         html = self.page("ReviewExample/Multiples/Lcm.html")

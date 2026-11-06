@@ -43,8 +43,8 @@ Across the project:
   default arrows are drawn only between neighbors in one folder. All of Mathlib opens this way: 32
   boxes, with a module's declarations fetched when you open it.
 - **The list of folders and modules,** beside the diagram. Click one to open or close it, search by
-  name, and Cmd- or Ctrl-click to pick several, however distant: the diagram then shows only those
-  and the arrows between them.
+  name, and Cmd- or Ctrl-click one here or its box in the diagram to pick it, opening it, however
+  distant: the diagram then shows only what's picked and the arrows between them.
 - **Shift-click** a declaration, a box or a row in the list to color everything it depends on and
   everything that uses it, all the way down and up, and list how much of each is in each folder.
 

@@ -122,7 +122,7 @@ declarations you have marked: click one to open it, and click an open box's labe
 A thicker arrow between boxes stands for more dependencies. Arrows are drawn between neighbors in
 the same folder; "arrows across folders" draws the rest. <b>Shift-click</b> anything, a declaration
 or a box, to color everything it depends on and everything that uses it, however far away. Cmd- or
-Ctrl-click in the list to show only the folders and modules you pick, however distant, and the
+Ctrl-click a box, or a row in the list, to open it and show only what you pick, however distant, and the
 arrows between them. A red border means a declaration contains <code>sorry</code>, and a dashed one
 that it relies on one, even if only through a proof; dashed red arrows lead to the <code>sorry</code>
 step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></details>
@@ -155,7 +155,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 <div class="layout">
   <nav id="tree">
     <input type="search" id="tree-search" placeholder="Find a folder or module">
-    <p id="tree-hint">Click to open or close. Cmd- or Ctrl-click to pick several.</p>
+    <p id="tree-hint">Click to open or close. Cmd- or Ctrl-click here or on a box to pick it, and show only what's picked.</p>
     <div id="tree-rows"></div>
   </nav>
   <div id="diagram"></div>
@@ -514,6 +514,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       const id = nodeIdOf(e.target);
       const cluster = !id && e.target.closest("g.cluster");
       const group = model.box.get(id) ?? (cluster && model.cluster.get(cluster.dataset.key));
+      if ((e.metaKey || e.ctrlKey) && group) return pick(group);
       if (e.shiftKey) {
         if (group) focusOn({ group });
         else if (id) focusOn({ name: model.name.get(id) });
@@ -527,6 +528,13 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     if (selected && model.id.has(selected)) highlight(model.id.get(selected)); else if (selected) highlight(null);
     renderTree();
     if (focus) await showFocus();
+  }
+  // Cmd- or Ctrl-click: show only what's picked, and arrows between, opening what's added.
+  function pick(node) {
+    pinned = new Set(pinned);
+    if (pinned.has(node)) pinned.delete(node);
+    else { pinned.add(node); expanded = new Set(expanded).add(node.path); }
+    draw();
   }
   function toggle(node) {
     expanded = new Set(expanded);
@@ -640,9 +648,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     row.onclick = e => {
       if (e.shiftKey) return focusOn({ group: node });
       if (e.metaKey || e.ctrlKey) {
-        pinned = new Set(pinned);
-        if (pinned.has(node)) pinned.delete(node); else pinned.add(node);
-        return draw();
+        return pick(node);
       }
       toggle(node);
     };
