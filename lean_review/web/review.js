@@ -131,6 +131,8 @@
     return a;
   };
 
+  const renderers = new Map();   // how to redraw each declaration on this page
+
   function controls(name, element, library) {
     const textSignature = textFingerprint(element.textContent);
     const box = el("div", "review");
@@ -234,6 +236,7 @@
       input.value = "";
     };
     element.append(box);
+    renderers.set(name, render);
     render(marks[name] ?? {});
   }
 
@@ -341,13 +344,16 @@
       // A link to page.html#review-orphans opens the list directly.
       if (location.hash === "#review-orphans") orphanPanel();
     }
-    const asked = needingAttention();
-    if (asked.length) {
-      const b = el("button", "review-orphan-button", `needs attention (${asked.length})`);
-      b.onclick = attentionPanel;
-      bar.append(b);
-      if (location.hash === "#review-attention") attentionPanel();
-    }
+    const askedButton = el("button", "review-orphan-button");
+    askedButton.onclick = attentionPanel;
+    const showAsked = () => {
+      const asked = needingAttention().length;
+      askedButton.textContent = `needs attention (${asked})`;
+      askedButton.style.display = asked ? "" : "none";
+    };
+    showAsked();
+    bar.append(askedButton);
+    if (location.hash === "#review-attention" && needingAttention().length) attentionPanel();
     const filters = el("details", "review-filters");
     filters.append(el("summary", null, "show plumbing"));
     for (const [group, label, title] of GROUPS) {
@@ -400,6 +406,14 @@
       else if (graph.library[decl.id]) controls(decl.id, decl, true);
     }
     summarize();
+    reviewWatch(async () => {
+      const fresh = await fetch("/review/data").then(checked);
+      for (const [name, render] of renderers)
+        if (JSON.stringify(marks[name]) !== JSON.stringify(fresh[name])) render(fresh[name] ?? {});
+      marks = fresh;
+      showAsked();
+      summarize();
+    });
     // ?focus=A,B scrolls to those declarations once the review controls are in place; adding
     // &only hides the page's other declarations instead (used for screenshots).
     const params = new URLSearchParams(location.search);

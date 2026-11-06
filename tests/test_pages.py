@@ -75,7 +75,7 @@ SCRIPT
 
 @unittest.skipUnless(DOCS.exists() and GRAPH.exists() and Path(CHROME).exists(), "needs example docs and Chrome")
 class PagesTest(unittest.TestCase):
-    def serve(self, marks, graph, docs=DOCS, people={}):
+    def serve(self, marks, graph, docs=DOCS, people={}, build=None):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         marks_folder, graph_file = Path(folder.name, "marks"), Path(folder.name, "graph.json")
@@ -83,6 +83,8 @@ class PagesTest(unittest.TestCase):
         self.port = free_port()
         (marks_folder / "ada.json").write_text(json.dumps({"format": 3, "name": "Ada", "marks": marks}))
         graph_file.write_text(json.dumps(graph))
+        if build:
+            Path(folder.name, "build.json").write_text(json.dumps(build))
         for who, (name, entries) in people.items():
             (marks_folder / f"{who}.json").write_text(json.dumps({"format": 3, "name": name, "marks": entries}))
         server = subprocess.Popen([sys.executable, str(ROOT / "lean_review" / "server.py"), "--docs", str(docs),
@@ -120,7 +122,7 @@ class PagesTest(unittest.TestCase):
         docs.joinpath(*parts).write_text(text)
         return docs
 
-    def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}):
+    def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None):
         """Run `script` in a real page, which can't be clicked from outside headless Chrome, and return
         what it adds to `results`. It sees `doc`, the page's document, and any uncaught error fails."""
         driver = DRIVER.replace("SCRIPT", script)
@@ -131,7 +133,7 @@ class PagesTest(unittest.TestCase):
         else:
             docs = self.docs_with(page, (DOCS / page).read_text().replace("</body>", driver + "</body>", 1))
             path = page
-        self.serve(marks, self.graph, docs, people)
+        self.serve(marks, self.graph, docs, people, build)
         found = re.search(r'<pre id="driven">(.*?)</pre>', self.page(path, 30000), re.S)
         self.assertIsNotNone(found, "the page's script didn't finish")
         done = json.loads(html.unescape(found[1]))
@@ -267,6 +269,58 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(results[0], "yes")
         self.assertIn("Claude: ?", results[1])
         self.assertEqual(results[2:], [True, ""])
+
+    LIVE_NOTE = """fetch("/review/data", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "claude", author: "Claude", name: "ReviewExample.gcd", status: "question", note: "Live." }) });"""
+
+    def test_a_docs_page_shows_someone_elses_note_while_open(self):
+        results = self.click_through({}, """
+            await ready(".decl .review-row button");
+            const decl = doc.getElementById("ReviewExample.gcd");
+            const box = decl.querySelector("textarea");
+            box.value = "half written";
+            """ + self.LIVE_NOTE + """
+            await until(() => decl.querySelector(".review-notes li"));
+            results.push(decl.querySelector(".review-notes li").textContent.includes("Live."), box.value, decl.dataset.reviewAttention);
+            await until(() => [...doc.querySelectorAll("#review-summary button")].some(b => b.textContent.includes("needs attention (1)") && b.style.display !== "none"));
+            results.push([...doc.querySelectorAll("#review-summary button")].find(b => b.textContent.includes("attention")).style.display);
+        """)
+        self.assertEqual(results, [True, "half written", "yes", ""])
+
+    def test_the_diagram_shows_someone_elses_note_while_open(self):
+        results = self.click_through(self.marked(), """
+            await ready("#sidebar .marks button");
+            results.push(doc.getElementById("viewer-label").hidden, doc.querySelectorAll(".attention-badge").length);
+            """ + self.LIVE_NOTE + """
+            await ready(".attention-badge");
+            await ready("#sidebar .others .attention");
+            results.push(doc.getElementById("viewer-label").hidden, doc.querySelectorAll(".attention-badge").length);
+            results.push([...doc.getElementById("viewer").options].map(o => o.text));
+        """, frame=f"review/diagram#{GCD}")
+        self.assertEqual(results, [True, 0, False, 1, ["mine", "Claude", "everyone"]])
+
+    def test_a_running_build_is_announced(self):
+        results = self.click_through({}, """
+            await ready("#review-build:not([hidden])");
+            results.push(doc.getElementById("review-build").textContent);
+        """, build={"state": "building", "pid": os.getpid()})
+        self.assertEqual(results, ["Rebuilding…"])
+
+    def test_a_failed_build_is_announced_and_the_page_still_works(self):
+        results = self.click_through({}, """
+            await ready("#review-build:not([hidden])");
+            results.push(doc.getElementById("review-build").textContent, doc.getElementById("review-build").title);
+            results.push(doc.querySelectorAll(".decl .review-row").length > 0);
+        """, build={"state": "failed", "message": "It broke.", "pid": 1})
+        self.assertEqual(results, ["Build failed; showing the last good version.", "It broke.", True])
+
+    def test_nothing_is_announced_after_a_good_build(self):
+        results = self.click_through({}, """
+            await ready(".decl .review-row button");
+            await wait(2500);
+            results.push(doc.getElementById("review-build").hidden);
+        """, build={"state": "done", "built": "then", "pid": 1})
+        self.assertEqual(results, [True])
 
     def test_the_quiz_hides_a_name_even_in_a_recursive_call(self):
         self.serve({}, self.graph)

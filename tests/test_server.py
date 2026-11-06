@@ -2,6 +2,7 @@
 
 import http.client
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -33,7 +34,7 @@ class ServerTest(unittest.TestCase):
         self.quiz = root / "quiz" / "ada.json"
         self.graph = root / "graph.json"
         server.args = Namespace(docs=root / "docs", marks=self.folder_marks, quiz=root / "quiz", graph=self.graph,
-                                links=root / "links.json", source=None, id="ada", name="Ada")
+                                links=root / "links.json", source=None, id="ada", name="Ada", build=root / "build.json")
         server.graph = server.Graph(self.graph)
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -92,6 +93,45 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(self.raw("POST", path, body, json_type)[0], 400, body)
         self.assertFalse(self.marks.exists())
         self.assertEqual(self.post("/review/data", {"name": "A.b", "status": "agree"})[0], 200)
+
+    def status(self):
+        return json.loads(self.get("/review/status"))
+
+    def test_status_changes_when_anyones_marks_do(self):
+        before = self.status()["marks"]
+        self.post("/review/data", {"name": "A.b", "status": "agree"})
+        after = self.status()["marks"]
+        self.assertNotEqual(before, after)
+        self.post("/review/data", {"name": "A.b", "id": "claude", "note": "Hm."})
+        self.assertNotEqual(after, self.status()["marks"])
+
+    def test_status_says_how_the_build_went(self):
+        self.assertIsNone(self.status()["state"])
+        server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid(), "built": "then"}))
+        self.assertEqual((self.status()["state"], self.status()["built"]), ("building", "then"))
+        server.args.build.write_text(json.dumps({"state": "failed", "message": "It broke.", "pid": 1}))
+        self.assertEqual((self.status()["state"], self.status()["message"]), ("failed", "It broke."))
+
+    def test_a_build_that_died_shows_as_failed(self):
+        dead = subprocess.Popen([sys.executable, "-c", ""])
+        dead.wait()
+        server.args.build.write_text(json.dumps({"state": "building", "pid": dead.pid}))
+        self.assertEqual(self.status()["state"], "failed")
+
+    def test_status_names_the_marks_folder(self):
+        self.assertEqual(self.status()["marks_folder"], str(self.folder_marks.resolve()))
+
+    def test_source_edited_since_the_build_says_so(self):
+        (self.root / "src").mkdir()
+        file = self.root / "src" / "M.lean"
+        file.write_text("theorem t : True := trivial\n")
+        self.graph.write_text(json.dumps({"declarations": {"t": {"module": "M", "lines": [1, 1], "kind": "theorem"}}}))
+        os.utime(self.graph, (2_000_000_000, 2_000_000_000))
+        os.utime(file, (1_000_000_000, 1_000_000_000))
+        server.args.source = [self.root / "src"]
+        self.assertFalse(json.loads(self.get("/review/source?name=t"))["edited"])
+        os.utime(file, (2_100_000_000, 2_100_000_000))
+        self.assertTrue(json.loads(self.get("/review/source?name=t"))["edited"])
 
     def test_a_declarations_source_is_found_in_any_source_folder(self):
         (self.root / "src" / "P").mkdir(parents=True)

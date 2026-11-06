@@ -295,8 +295,31 @@ def source_of(name):
         start = i
     while start > 0 and lines[start - 1].lstrip().startswith("@["):
         start -= 1
-    return {"file": str(module), "start": start + 1, "end": end,
+    # Lines come from the last build, so an edit since then can put them in the wrong place.
+    edited = args.graph and args.graph.exists() and (folder / module).stat().st_mtime > args.graph.stat().st_mtime
+    return {"file": str(module), "start": start + 1, "end": end, "edited": bool(edited),
             "text": "\n".join(lines[start:end]), "kind": decl.get("kind")}
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, TypeError):
+        return False
+
+
+def status():
+    """What open pages poll: when anyone's marks last changed, and how the latest build went, which
+    a build reports in a file. A build that died can't say so itself. `marks_folder` tells
+    lean-review which project this server is for."""
+    files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
+    build = load_json(args.build, {})
+    state, message = build.get("state"), build.get("message")
+    if state == "building" and not alive(build.get("pid")):
+        state, message = "failed", "The build stopped before it finished."
+    return {"marks": ",".join(f"{path.stem}:{path.stat().st_mtime_ns}" for path in files), "state": state,
+            "message": message, "built": build.get("built"), "marks_folder": str(args.marks.resolve())}
 
 
 def well_formed(body):
@@ -335,6 +358,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.from_this_server():
             return self.send_json({"error": "request from another site"}, 403)
         path = self.path.split("?")[0]
+        if path == "/review/status":
+            return self.send_json(status())
         if path == "/review/data":
             with lock:
                 try:
@@ -466,6 +491,7 @@ def main():
     p.add_argument("--prefix", required=True, help="root module, e.g. MyProject")
     p.add_argument("--source", type=Path, action="append",
                    help="a folder holding the project's modules, for showing declarations' code; can be repeated")
+    p.add_argument("--build", type=Path, help="file where builds report their state (default: build.json beside the marks)")
     p.add_argument("--links", type=Path,
                    help="JSON file linking references to your own copies (default: links.local.json beside the marks)")
     p.add_argument("--port", type=int, default=8797)
@@ -473,6 +499,7 @@ def main():
     args = p.parse_args()
     args.links = args.links or args.marks.parent / "links.local.json"
     args.quiz = args.quiz or args.marks.parent / "quiz"
+    args.build = args.build or args.marks.parent / "build.json"
     if not ID.fullmatch(args.id):
         sys.exit(f"lean-review: {args.id} can't be an id: use lowercase letters, digits and hyphens.")
     graph = Graph(args.graph)

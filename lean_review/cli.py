@@ -15,7 +15,9 @@ import shutil
 import subprocess
 import sys
 import unicodedata
+from datetime import datetime
 from pathlib import Path
+from urllib.request import urlopen
 
 from lean_review.server import VERSION
 
@@ -270,6 +272,23 @@ def clean_docs(docs, root, modules):
               (", ..." if len(stale) > 8 else ""), flush=True)
 
 
+def report(state, **details):
+    """Say how a build is going, for a server and the pages open on it. The time of the last good
+    build carries over a failure, since those pages still show it."""
+    status = HOME / "build.json"
+    built = json.loads(status.read_text()).get("built") if status.exists() else None
+    status.write_text(json.dumps({"built": built, **details, "state": state, "pid": os.getpid()}))
+
+
+def running_server(port):
+    """The marks folder of the lean-review server on this port, if there is one."""
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/review/status", timeout=1) as response:
+            return json.load(response).get("marks_folder")
+    except (OSError, ValueError):
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(prog="lean-review", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version=f"lean-review {VERSION}")
@@ -277,25 +296,36 @@ def main():
     parser.add_argument("--port", type=int, default=8797)
     parser.add_argument("--name", help="the name to show on your marks and notes (default: your git name)")
     parser.add_argument("--id", help="who you are, as the name of your marks file (default: from your git name and email)")
-    parser.add_argument("--no-serve", action="store_true", help="only rebuild the docs and graph")
+    parser.add_argument("--rebuild", action="store_true", help="rebuild the docs and graph, without starting a server")
     parser.add_argument("--clean", action="store_true", help="delete docs pages left by renamed or removed modules")
     args = parser.parse_args()
     package = package_name()
     tag, version = toolchain()
     check_version(tag, version)
     who, name = identity(args.id, args.name)
+    serving = None if args.rebuild else running_server(args.port)
+    if serving and Path(serving) != (HOME / "marks").resolve():
+        fail(f"port {args.port} is serving another project. Choose another with --port.")
+    if serving:
+        print(f"lean-review: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
     set_up_folders(tag, package)
     import_old_marks(who, name)
-    modules = modules_of(args.names)
-    print(f"lean-review: reviewing {len(modules)} modules.", flush=True)
-    run(["lake", "build", *[f"+{module}" for module in modules]])
-    build_graph(modules)
-    built = json.loads((HOME / "graph.json").read_text())
-    build_docs(tops(built["modules"]))
-    if args.clean:
-        for root in built["roots"]:
-            clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
-    if args.no_serve:
+    report("building")
+    try:
+        modules = modules_of(args.names)
+        print(f"lean-review: reviewing {len(modules)} modules.", flush=True)
+        run(["lake", "build", *[f"+{module}" for module in modules]])
+        build_graph(modules)
+        built = json.loads((HOME / "graph.json").read_text())
+        build_docs(tops(built["modules"]))
+        if args.clean:
+            for root in built["roots"]:
+                clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
+    except (SystemExit, Exception, KeyboardInterrupt) as error:
+        report("failed", message=str(getattr(error, "code", error) or "interrupted").splitlines()[0])
+        raise
+    report("done", built=datetime.now().isoformat(timespec="seconds"))
+    if args.rebuild or serving:
         return
     command = [sys.executable, str(HERE / "server.py"), "--docs", str(HOME / "docbuild/.lake/build/doc"),
                "--marks", str(HOME / "marks"), "--graph", str(HOME / "graph.json"),

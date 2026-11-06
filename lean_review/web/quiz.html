@@ -83,6 +83,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     fetch("/review/data").then(r => r.json()),
     fetch("/review/graph").then(r => r.json()),
   ]);
+  reviewWatch(() => {});   // for the rebuild notice: this page keeps the marks it opened with
   const decls = graph.declarations ?? {}, library = graph.library ?? {};
   const root = graph.root ?? "";
   if (root) {

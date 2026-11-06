@@ -871,6 +871,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json());
       if (src.error) sidebar.append(el("p", "muted", src.error));
       else {
+        if (src.edited) sidebar.append(el("p", "stale", "The source has changed since the last build, so this may not line up."));
         sidebar.append(el("p", "muted", `${src.file}, lines ${src.start}–${src.end}`));
         // A theorem's statement ends where its proof starts: at `:= by`, a trailing `:=`, or the
         // first `|` case of a proof by pattern matching.
@@ -1061,7 +1062,27 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     document.getElementById("disagree-key").hidden = viewer.value !== "all";
     draw();
   };
-  document.getElementById("attention-key").hidden = !Object.keys(marks).some(asked);
+  const showAskedKey = () => document.getElementById("attention-key").hidden = !Object.keys(marks).some(asked);
+  showAskedKey();
+  reviewWatch(async () => {
+    const fresh = await fetch("/review/data").then(r => r.json());
+    const changed = [...new Set([...Object.keys(marks), ...Object.keys(fresh)])]
+      .filter(n => JSON.stringify(marks[n]) !== JSON.stringify(fresh[n]));
+    for (const n of changed) { if (n in fresh) marks[n] = fresh[n]; else delete marks[n]; }
+    for (const { id, name } of Object.values(fresh).flatMap(m => m.others ?? [])) {
+      if (!people.has(id)) { people.set(id, name); viewer.add(new Option(name, id), viewer.options[viewer.options.length - 1]); }
+    }
+    document.getElementById("viewer-label").hidden = !people.size;
+    changed.forEach(recolor);
+    showAskedKey();
+    // Redraw the sidebar's thread, unless that would lose a note being written.
+    const input = sidebar.querySelector("textarea");
+    if (changed.includes(selected) && !input?.value.trim()) {
+      const typing = document.activeElement === input;
+      await renderSidebar(selected);
+      if (typing) sidebar.querySelector("textarea")?.focus();
+    }
+  });
   // The sorry controls appear only for a project that has one.
   const gapTotals = Object.values(tree.gaps).reduce(([a, b], [x, y]) => [a + x, b + y], [0, 0]);
   if (gapTotals[0] + gapTotals[1]) {

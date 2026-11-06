@@ -37,7 +37,7 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 | `--port N` | Serve on another port, for reviewing two projects at once (default 8797) |
 | `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
 | `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git email changes, pass your old id to stay the same person. |
-| `--no-serve` | Only rebuild the docs and graph |
+| `--rebuild` | Rebuild the docs and graph without starting a server |
 | `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
 
 Source links open in VS Code, at the declaration's line. Set `DOCGEN_SRC=github` before the first
@@ -46,6 +46,15 @@ run for GitHub links instead.
 To open links in docstrings from your own copies, add `review/links.local.json`, as
 `{"https://example.org/paper.pdf": "your copy's URL"}`. The page rewrites them when you view the
 docs, adding `?page=N` if the link text ends in `(p. N)` or `(page N)`.
+
+## Rebuilding
+
+Leave the server running. After changing the code, run `lean-review` again, or `lean-review --rebuild`,
+in another terminal. An agent can do the same when it has finished its changes. It builds once, when
+you ask, and never on every save. Open pages say when a rebuild is running, and offer to reload when
+it's done, so a note you're writing isn't lost. If a build fails, they keep showing the last good version.
+
+Marks and notes need no rebuild. They appear on open pages by themselves, from anyone, within a few seconds.
 
 ## Working with others
 
@@ -58,7 +67,7 @@ shown by a `!`, when someone is waiting on you: they asked, wrote more under the
 yours. It clears when you mark the declaration or reply.
 
 Marks are shared with plain git, and lean-review never commits or pushes for you. Commit your file
-with your work, and pull to get everyone else's, which appear on your next page load. Each person writes
+with your work, and pull to get everyone else's, which appear on open pages by themselves. Each person writes
 only their own file, so marks don't conflict.
 
 An assistant, human or not, is another person with its own file. By convention it leaves notes and `?`s,

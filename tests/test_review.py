@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 import stat
 import subprocess
 import sys
@@ -164,6 +165,31 @@ class ImportTest(unittest.TestCase):
         self.assertNotIn("C.d", self.person("ada")["marks"])
 
 
+class ReportTest(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(folder.name)
+        review.HOME.mkdir()
+
+    def status(self):
+        return json.loads((review.HOME / "build.json").read_text())
+
+    def test_a_failure_keeps_the_last_good_builds_time(self):
+        review.report("done", built="then")
+        review.report("building")
+        self.assertEqual((self.status()["state"], self.status()["built"]), ("building", "then"))
+        review.report("failed", message="It broke.")
+        self.assertEqual((self.status()["built"], self.status()["message"]), ("then", "It broke."))
+
+    def test_no_server_is_none(self):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        self.assertIsNone(review.running_server(port))
+
+
 class CleanSecondRootTest(unittest.TestCase):
     def test_a_dotted_root_finds_its_pages(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -188,7 +214,7 @@ class ReviewTest(unittest.TestCase):
     def run_review(self, toolchain):
         (self.root / "lean-toolchain").write_text(f"leanprover/lean4:{toolchain}\n")
         env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
-        return subprocess.run([sys.executable, str(REVIEW), "MyProject", "--no-serve"], cwd=self.root, env=env,
+        return subprocess.run([sys.executable, str(REVIEW), "MyProject", "--rebuild"], cwd=self.root, env=env,
                               capture_output=True, text=True)
 
     def test_an_old_lean_is_refused_before_anything_is_built(self):
@@ -254,6 +280,12 @@ class ReviewTest(unittest.TestCase):
         listed = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", ".lean-review"], cwd=self.root,
                                 capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(sorted(listed), [".lean-review/.gitignore", ".lean-review/marks/ada.json"])
+
+    def test_a_failed_build_says_so_for_open_pages(self):
+        self.run_review("v4.35.0")
+        status = json.loads((self.root / ".lean-review" / "build.json").read_text())
+        self.assertEqual(status["state"], "failed")
+        self.assertIn("declaration graph", status["message"])
 
     def test_outside_a_lake_project_it_says_so(self):
         (self.root / "lakefile.toml").unlink()

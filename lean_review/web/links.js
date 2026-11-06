@@ -8,6 +8,41 @@
 // A person's color in note threads, the same wherever their name appears.
 window.reviewHue = name => [...name].reduce((hue, c) => (hue * 31 + c.codePointAt(0)) % 360, 7);
 
+// Notices what changes while a page is open: anyone's marks, handed to `onMarks`, which updates the
+// page in place, and rebuilds, which only offer a reload, so as not to lose a note being written.
+window.reviewWatch = onMarks => {
+  const banner = document.createElement("div");
+  banner.id = "review-build";
+  banner.style.cssText = "position: fixed; top: 0.6em; right: 0.6em; z-index: 1000; padding: 0.3em 0.7em; " +
+    "border: 1px solid #e07000; border-radius: 6px; background: #fff8ef; color: #333; font-size: 0.9em;";
+  banner.hidden = true;
+  document.body.append(banner);
+  const reload = document.createElement("button");
+  reload.textContent = "Reload";
+  reload.style.marginLeft = "0.6em";
+  reload.onclick = () => location.reload();
+  const say = (text, title, ...extra) => {
+    banner.hidden = !text;
+    banner.title = title ?? "";
+    banner.replaceChildren(text ?? "", ...extra);
+  };
+  let marks, built, first = true;
+  const tick = async () => {
+    const now = await fetch("/review/status").then(r => r.json()).catch(() => null);
+    if (!now) return;
+    if (first) built = now.built;
+    else if (now.marks !== marks) await onMarks();
+    first = false;
+    marks = now.marks;
+    if (now.state === "building") say("Rebuilding…");
+    else if (now.state === "failed") say("Build failed; showing the last good version.", now.message);
+    else if (now.built !== built) say("Docs updated.", null, reload);
+    else say(null);
+  };
+  tick();
+  setInterval(tick, 2000);
+};
+
 window.reviewLinks = (() => {
   const yourCopies = fetch("/review/links").then(r => r.json());
   async function rewrite(root, lineOf = () => undefined) {
