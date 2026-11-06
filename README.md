@@ -1,7 +1,7 @@
 # lean-vouch
 
-Lean checks proofs. lean-vouch helps a person check the rest: that definitions and theorem
-statements mean what they should. It adds review tools to a project's doc-gen4 pages.
+lean-vouch helps you check that Lean definitions and theorem statements mean what they should.
+It adds review tools to your project's doc-gen4 pages.
 
 ![a dependency diagram colored by review marks, with a sorry and what relies on it](https://raw.githubusercontent.com/jjeffrey/lean-vouch/main/docs/images/sorry-diagram.png)
 

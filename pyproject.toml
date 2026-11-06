@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lean-vouch"
 dynamic = ["version"]
-description = "Review tools for Lean definitions and statements, in doc-gen4 pages"
+description = "Track and vouch for your understanding of Lean definitions and theorem statements"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
