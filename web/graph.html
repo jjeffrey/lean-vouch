@@ -548,7 +548,10 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   }
   function renderGroup(group, reach) {
     const marked = Object.keys(marks).filter(n => marks[n]?.status && group.modules.includes(decls[n]?.module)).length;
-    const scope = group.module ?? root + group.path.replaceAll("/", ".");
+    // A folder under the first root is named without it; one under another root is named in full.
+    const dotted = group.path.replaceAll("/", ".");
+    const scope = group.module ?? [root + dotted, dotted.slice(1)]
+      .find(s => s && group.modules.every(m => m === s || m.startsWith(s + "."))) ?? "";
     const quiz = el("a", null, "Quiz this");
     quiz.href = `/__review__/quiz?scope=${encodeURIComponent(scope)}`;
     sidebar.replaceChildren(el("h2", null, group.name),

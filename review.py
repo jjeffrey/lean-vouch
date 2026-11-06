@@ -4,7 +4,7 @@
     python3 path/to/lean-review/review.py MyProject
     python3 path/to/lean-review/review.py MyProject MyProject.Examples
 
-Name the project's root module, then any modules it doesn't import. Safe to rerun: it refreshes the
+Name the project's root module, then any others to review, such as a second library's root. Safe to rerun: it refreshes the
 docs and graph after you change the code.
 """
 import argparse
@@ -155,13 +155,14 @@ def build_graph(modules):
 def clean_docs(docs, root, modules):
     """Delete the project's pages for modules that no longer exist, and say which. doc-gen4 only
     writes pages, so a renamed module's old page stays, and can still be reached from an old link."""
-    stale = [page for page in (docs / root).glob("**/*.html")
+    folder = docs / root.replace(".", "/")
+    stale = [page for page in folder.glob("**/*.html")
              if ".".join(page.relative_to(docs).with_suffix("").parts) not in modules]
     for page in stale:
         page.unlink()
-    for folder in sorted((p for p in (docs / root).glob("**/*") if p.is_dir()), reverse=True):
-        if not any(folder.iterdir()):
-            folder.rmdir()
+    for empty in sorted((p for p in folder.glob("**/*") if p.is_dir()), reverse=True):
+        if not any(empty.iterdir()):
+            empty.rmdir()
     if stale:
         print(f"lean-review: removed {len(stale)} old pages: " + ", ".join(sorted(p.stem for p in stale)[:8]) +
               (", ..." if len(stale) > 8 else ""), flush=True)
@@ -169,7 +170,7 @@ def clean_docs(docs, root, modules):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("modules", nargs="+", metavar="MODULE", help="the root module, then any it doesn't import")
+    parser.add_argument("modules", nargs="+", metavar="MODULE", help="the root module, then any others to review")
     parser.add_argument("--port", type=int, default=8797)
     parser.add_argument("--reviewer", help="the name on your notes (default: your git name)")
     parser.add_argument("--no-serve", action="store_true", help="only rebuild the docs and graph")
@@ -183,7 +184,9 @@ def main():
     build_docs(args.modules)
     build_graph(args.modules)
     if args.clean:
-        clean_docs(Path("docbuild/.lake/build/doc"), args.modules[0], json.loads(Path("review/graph.json").read_text())["modules"])
+        modules = json.loads(Path("review/graph.json").read_text())["modules"]
+        for root in args.modules:
+            clean_docs(Path("docbuild/.lake/build/doc"), root, modules)
     if args.no_serve:
         return
     reviewer = args.reviewer or subprocess.run(["git", "config", "user.name"], capture_output=True, text=True).stdout.strip()

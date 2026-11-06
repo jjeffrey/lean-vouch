@@ -5,10 +5,10 @@ import Lean
 
 Run from inside a Lake project, after `lake build`:
 
-    lake env lean --run path/to/DeclGraph.lean MyProject > graph.json
+    lake env lean --run path/to/DeclGraph.lean MyProject [MyProjectTests ...] > graph.json
 
-It imports the module `MyProject`, and for every declaration a reviewer reads in the modules under
-it, records which other such declarations it depends on, and two fingerprints:
+It imports the modules named, and for every declaration a reviewer reads in the modules under
+them, records which other such declarations it depends on, and two fingerprints:
 
 * `own`: a hash of the declaration itself. A theorem's statement only, since its proof is checked
   by Lean and never reviewed; a definition's statement and body; a structure's or inductive type's
@@ -277,13 +277,13 @@ unsafe def main (args : List String) : IO UInt32 := do
   let root :: extra := args | do
     IO.eprintln "usage: lake env lean --run DeclGraph.lean <RootModule> [<Module>...]"
     return 1
-  let rootName := root.toName
+  let roots := (root :: extra).map String.toName
   initSearchPath (← findSysroot)
   enableInitializersExecution
-  -- Extra modules are imported too, for a project whose root module doesn't import everything
-  -- (a separate examples library); the root module's name still sets what is in the project.
+  -- More than one module, for a project whose root module doesn't import everything, or whose
+  -- libraries don't share a prefix. Each is reviewed, with the modules under it.
   let env ← importModules ((root :: extra).toArray.map fun m => { module := m.toName }) {} (loadExts := true) (level := .private)
-  let g : Graph := { env, inScope := fun m => rootName.isPrefixOf m || m == rootName }
+  let g : Graph := { env, inScope := fun m => roots.any (·.isPrefixOf m) }
   -- Reviewed declarations: in the project, not helpers, not constructors or fields.
   let names := env.constants.fold (init := #[]) fun acc n _ =>
     if g.inProject n && !isDetail env n && g.owner n == n &&
@@ -382,6 +382,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("format", (1 : Nat)),  -- GRAPH_FORMAT in server/server.py
     ("lean", Lean.versionString),
     ("root", root),
+    ("roots", toJson (root :: extra)),
     ("modules", Json.mkObj (modules.qsort (·.1 < ·.1)).toList),
     ("declarations", Json.mkObj decls.toList),
     ("library", Json.mkObj libraryDecls.toList),

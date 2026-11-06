@@ -13,9 +13,10 @@ GCD = "ReviewExample/Gcd.lean"
 DIVIDES = "ReviewExample/Divides.lean"
 
 
-def graph_of(project):
-    subprocess.run(["lake", "build", "-q"], cwd=project, check=True, capture_output=True, text=True)
-    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "graph" / "DeclGraph.lean"), "ReviewExample"],
+def graph_of(project, *roots):
+    roots = roots or ("ReviewExample",)
+    subprocess.run(["lake", "build", "-q", *roots], cwd=project, check=True, capture_output=True, text=True)
+    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "graph" / "DeclGraph.lean"), *roots],
                             cwd=project, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 
@@ -49,6 +50,22 @@ class GraphTest(unittest.TestCase):
     def test_records_its_format_and_lean_version(self):
         self.assertEqual(self.before["format"], 1)
         self.assertRegex(self.before["lean"], r"^\d+\.\d+\.\d+")
+
+    def test_every_module_named_is_reviewed(self):
+        copy = Path(tempfile.mkdtemp(dir=self.folder.name)) / "project"
+        shutil.copytree(self.original, copy)
+        with (copy / "lakefile.toml").open("a") as lakefile:
+            lakefile.write('\n[[lean_lib]]\nname = "Extra"\n')
+        (copy / "Extra.lean").write_text("import ReviewExample.Gcd\n\n"
+                                         "theorem Extra.gcd_self : ReviewExample.gcd 0 1 = 1 := by simp [ReviewExample.gcd]\n")
+        both = graph_of(copy, "ReviewExample", "Extra")
+        self.assertEqual(both["root"], "ReviewExample")
+        self.assertEqual(both["roots"], ["ReviewExample", "Extra"])
+        self.assertIn("Extra", both["modules"])
+        self.assertIn("ReviewExample.gcd", both["declarations"]["Extra.gcd_self"]["deps"])
+        self.assertEqual({n: d["own"] for n, d in both["declarations"].items() if n != "Extra.gcd_self"},
+                         {n: d["own"] for n, d in self.before["declarations"].items()},
+                         "another root changes no fingerprint in the first")
 
     def test_changing_a_proof_changes_no_fingerprint(self):
         after = self.edited(DIVIDES, "⟨1, (Nat.mul_one n).symm⟩", "⟨1, by simp⟩")

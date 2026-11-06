@@ -493,5 +493,8 @@
  "renames": {
   "ReviewExample.gcd_dvd": "ReviewExample.gcd_divides"
  },
- "root": "ReviewExample"
+ "root": "ReviewExample",
+ "roots": [
+  "ReviewExample"
+ ]
 }

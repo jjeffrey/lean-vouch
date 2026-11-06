@@ -53,6 +53,16 @@ class SourceFoldersTest(unittest.TestCase):
             self.assertEqual(self.folders(root, ""), [root])
 
 
+class CleanSecondRootTest(unittest.TestCase):
+    def test_a_dotted_root_finds_its_pages(self):
+        with tempfile.TemporaryDirectory() as folder:
+            docs = Path(folder)
+            (docs / "P" / "Sub").mkdir(parents=True)
+            (docs / "P" / "Sub" / "Gone.html").write_text("page")
+            review.clean_docs(docs, "P.Sub", {"P.Sub": []})
+            self.assertFalse((docs / "P" / "Sub" / "Gone.html").exists())
+
+
 class ReviewTest(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory()

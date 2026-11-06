@@ -21,7 +21,7 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 
 | Option | Meaning |
 | --- | --- |
-| `review.py MyProject MyProject.Examples` | Also cover modules the root module doesn't import |
+| `review.py MyProject MyProjectTests` | Also review another root and the modules under it, such as a second library or modules the first doesn't import. Without it they aren't covered. Each must be a module Lake can build. |
 | `--port N` | Serve on another port, for reviewing two projects at once (default 8797) |
 | `--reviewer NAME` | The name on your notes (default your git name) |
 | `--no-serve` | Only rebuild the docs and graph |

@@ -345,7 +345,7 @@
 
     const hasGraph = !!graph.root;
     const inProject = typeof MODULE_NAME !== "undefined" &&
-      (!hasGraph || MODULE_NAME === graph.root || MODULE_NAME.startsWith(graph.root + "."));
+      (!hasGraph || (graph.roots ?? [graph.root]).some(r => MODULE_NAME === r || MODULE_NAME.startsWith(r + ".")));
     const moduleDoc = document.querySelector(".mod_doc");
     if (moduleDoc && inProject) controls(`module ${MODULE_NAME}`, moduleDoc, false);
     for (const decl of document.querySelectorAll("main .decl")) {
