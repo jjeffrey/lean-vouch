@@ -18,6 +18,7 @@
 .review-row button[data-status="reject"].active { background: #d4444040; border-color: #d44; }
 .review-stale { color: #e08a10; font-style: italic; }
 .review-accept { font-style: normal; font-size: 0.9em; margin-left: 0.3em; white-space: nowrap; }
+.review-loading { opacity: 0.6; font-size: 0.9em; font-style: italic; padding: 0.2em 0.6em; }
 .review-prompt { color: #b08800; font-size: 0.9em; margin: 0.2em 0; }
 .review-others { font-size: 0.9em; margin: 0.3em 0; }
 .review-me { opacity: 0.7; font-size: 0.9em; margin-right: 0.8em; }

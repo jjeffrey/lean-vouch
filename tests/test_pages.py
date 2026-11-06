@@ -419,6 +419,41 @@ class PagesTest(unittest.TestCase):
         """, frame=f"review/diagram#{GCD}")
         self.assertEqual(results, [True, 0, False, 1, ["mine", "Claude", "everyone"]])
 
+    def test_each_declaration_says_its_review_is_loading(self):
+        results = self.click_through({}, """
+            const realFetch = window.fetch;
+            window.fetch = (url, ...rest) => String(url).includes("/review/graph") ? new Promise(() => {}) : realFetch(url, ...rest);
+            await ready(".review-loading");
+            results.push(doc.querySelectorAll(".review-loading").length === doc.querySelectorAll("main .decl").length);
+        """)
+        self.assertEqual(results, [True])
+
+    def test_the_loading_notes_go_when_the_controls_arrive(self):
+        results = self.click_through({}, """
+            await ready(".decl .review-row");
+            results.push(doc.querySelectorAll(".review-loading").length);
+        """)
+        self.assertEqual(results, [0])
+
+    def test_a_page_of_no_module_never_fetches_the_whole_graph(self):
+        results = self.click_through({}, """
+            await ready("#review-summary .counts:not(:empty)");
+            await wait(500);
+            results.push(performance.getEntriesByType("resource").filter(e => e.name.includes("/review/graph")).map(e => e.name.split("/").at(-1)));
+        """, page="index.html")
+        self.assertEqual(results, [["graph?marked"]])
+
+    def test_the_bar_links_appear_before_the_data_arrives(self):
+        results = self.click_through({}, """
+            const realFetch = window.fetch;
+            window.fetch = (url, ...rest) => String(url).includes("/review/graph") ? new Promise(() => {}) : realFetch(url, ...rest);
+            await ready('#review-summary a[href="/review/diagram"]');
+            results.push(doc.querySelector('#review-summary a[href="/review/diagram"]').textContent,
+                         doc.querySelector('#review-summary a[href="/review/quiz"]').textContent,
+                         doc.querySelector("#review-summary .counts").textContent);
+        """)
+        self.assertEqual(results, ["dependency graph", "quiz", "loading…"])
+
     def test_pages_say_who_is_reviewing(self):
         results = self.click_through({}, """
             await ready(".review-me:not(:empty)");

@@ -456,6 +456,10 @@ class SliceTest(unittest.TestCase):
         self.graph.path.write_text(json.dumps({"root": "Q", "declarations": {}}))
         self.assertEqual(self.graph.tree()["root"], "Q")
 
+    def test_a_page_of_no_module_gets_only_what_marks_need(self):
+        self.assertEqual(set(self.graph.slice([], [], {"a": {}})["declarations"]), {"a"})
+        self.assertEqual(self.graph.slice([], [], {})["declarations"], {})
+
     def test_a_small_project_gets_the_whole_graph(self):
         self.graph.path.write_text(json.dumps({"root": "Q", "declarations": {}, "library": {"Int": {}}}))
         part = self.graph.slice(["Q.A"], [], {})

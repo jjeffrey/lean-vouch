@@ -361,18 +361,10 @@
   }
 
   async function init() {
-    [marks, graph] = await Promise.all([
-      fetch("/review/data").then(checked),
-      // A large project sends what this page needs; a small one sends everything.
-      fetch(typeof MODULE_NAME === "undefined" ? "/review/graph"
-        : `/review/graph?marked&module=${encodeURIComponent(MODULE_NAME)}`).then(r => r.json()),
-    ]);
-    graph.declarations ??= {};
-    graph.library ??= {};
-    await reviewLinks.rewrite(document, a => graph.declarations[a.closest(".decl")?.id]?.lines?.[0]);
+    // First, and needing no data: on a large page, the browser can be busy for seconds.
     const bar = el("div");
     bar.id = "review-summary";
-    bar.append(el("span", "review-me"), el("span", "counts"));
+    bar.append(el("span", "review-me"), el("span", "counts", "loading…"));
     // So the graph and quiz pages can link back here.
     try { sessionStorage.setItem("lean-review-docs", location.href); } catch {}
     const graphLink = el("a", null, "dependency graph");
@@ -382,6 +374,19 @@
     quizLink.href = "/review/quiz";
     quizLink.title = "Describe unmarked declarations from their statement alone";
     bar.append(quizLink);
+    document.body.append(bar);
+    for (const decl of document.querySelectorAll("main .decl")) decl.append(el("div", "review-loading", "loading review…"));
+    [marks, graph] = await Promise.all([
+      fetch("/review/data").then(checked),
+      // A large project sends what this page needs, which for a page of no module is little;
+      // a small one sends everything.
+      fetch(typeof MODULE_NAME === "undefined" ? "/review/graph?marked"
+        : `/review/graph?marked&module=${encodeURIComponent(MODULE_NAME)}`).then(r => r.json()),
+    ]);
+    graph.declarations ??= {};
+    graph.library ??= {};
+    for (const waiting of document.querySelectorAll(".review-loading")) waiting.remove();
+    await reviewLinks.rewrite(document, a => graph.declarations[a.closest(".decl")?.id]?.lines?.[0]);
     const lost = orphans();
     if (lost.length) {
       const b = el("button", "review-orphan-button", `orphaned notes (${lost.length})`);
@@ -447,7 +452,6 @@
       for (const d of projectEquations) d.open = openEquations;
     };
     bar.append(equationsLabel);
-    document.body.append(bar);
 
     const hasGraph = !!graph.root;
     const inProject = typeof MODULE_NAME !== "undefined" &&
