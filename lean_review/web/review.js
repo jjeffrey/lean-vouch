@@ -19,7 +19,8 @@
   const short = name => name.replace(/^[^.]*\./, "");
 
   let marks = {}, graph = { declarations: {}, library: {}, renames: {} };
-  const info = name => graph.declarations[name] ?? graph.library[name];
+  const info = name => name.startsWith("module ")
+    ? { module: name.slice(7), own: graph.moduleDocs?.[name.slice(7)] } : graph.declarations[name] ?? graph.library[name];
 
   // Groups of Core Lean plumbing (tagged by DeclGraph.lean), hidden unless switched on. The
   // choice is remembered in this browser. Hidden library uses are neither listed nor counted as
@@ -55,13 +56,12 @@
   const closureCache = new Map();
   function closure(name) {
     if (closureCache.has(name)) return closureCache.get(name);
-    const out = new Set();
-    closureCache.set(name, out);
-    const d = graph.declarations[name];
-    if (d) for (const dep of [...d.deps, ...d.uses]) {
-      out.add(dep);
-      for (const x of closure(dep)) out.add(x);
+    const out = new Set(), stack = [name];
+    while (stack.length) {
+      const d = graph.declarations[stack.pop()];
+      if (d) for (const dep of [...d.deps, ...d.uses]) if (!out.has(dep)) { out.add(dep); stack.push(dep); }
     }
+    closureCache.set(name, out);
     return out;
   }
   const fingerprint = name => {
@@ -73,7 +73,7 @@
   };
   // What changed since a mark was made: the declaration itself, and/or things it depends on.
   // Library uses in hidden groups don't count.
-  function changes(name, mark, textSignature) {
+  function changes(name, mark) {
     const fp = mark.fingerprint;
     if (fp && info(name)) {
       const self = fp.own !== info(name).own;
@@ -82,15 +82,8 @@
         (fp.deps[d] ?? null) !== (now.has(d) ? info(d)?.own ?? null : null));
       return { self, deps };
     }
-    if (mark.signature) return { self: mark.signature !== textSignature, deps: [] };
     return { self: false, deps: [] };
   }
-  // A text fingerprint of the rendered declaration, for marks made before the graph existed.
-  const textFingerprint = text => {
-    let h = 0;
-    for (const c of text.replace(/\s+/g, " ").replace(/\bsource\b/, "")) h = (h * 31 + c.charCodeAt(0)) | 0;
-    return (h >>> 0).toString(16);
-  };
 
   // One note in a thread: the author and date on a line of their own, then the text. Yours, other
   // people's and the tool's are styled differently, like a conversation.
@@ -154,7 +147,6 @@
   };
 
   function controls(name, element, library) {
-    const textSignature = textFingerprint(element.textContent);
     const box = el("div", "review");
     if (isGenerated(name)) {
       element.classList.add("review-generated");
@@ -221,7 +213,7 @@
       prompt.hidden = !unexplained(e);
       for (const b of buttons) b.classList.toggle("active", e.status === b.dataset.status);
       element.dataset.reviewStatus = e.status ?? "";
-      const c = e.status ? changes(name, e, textSignature) : { self: false, deps: [] };
+      const c = e.status ? changes(name, e) : { self: false, deps: [] };
       stale.replaceChildren();
       const relying = changedNames().get(name);
       if (c.self) stale.append("changed since you marked it");
@@ -241,7 +233,7 @@
       element.dataset.reviewStale = c.self || c.deps.length ? "yes" : "";
       element.dataset.reviewChange = c.self || relying ? "changed" : c.deps.length ? "affected" : "";
       // Only marks of what's there now can disagree.
-      const isCurrent = m => { const d = changes(name, m, textSignature); return !d.self && !d.deps.length; };
+      const isCurrent = m => { const d = changes(name, m); return !d.self && !d.deps.length; };
       const current = [...(e.status && isCurrent(e) ? [e.status] : []),
         ...(e.others ?? []).filter(isCurrent).map(o => o.status)];
       const disagree = new Set(current).size > 1;

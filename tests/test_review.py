@@ -2,11 +2,14 @@
 
 import json
 import os
+import shutil
+import signal
 import socket
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -262,6 +265,63 @@ class ReviewTest(unittest.TestCase):
         status = json.loads((self.root / ".lean-review" / "build.json").read_text())
         self.assertEqual(status["state"], "failed")
         self.assertIn("declaration graph", status["message"])
+
+    def test_ctrl_c_during_a_build_stops_quietly_and_says_so_for_open_pages(self):
+        (self.root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+        (self.root / "bin" / "lake").write_text("#!/bin/sh\nexec sleep 20\n")
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
+        process = subprocess.Popen([sys.executable, str(REVIEW), "MyProject", "--rebuild"], cwd=self.root, env=env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.addCleanup(process.kill)
+        status = self.root / ".lean-review" / "build.json"
+        for _ in range(100):
+            if status.exists():
+                break
+            time.sleep(0.05)
+        time.sleep(0.3)
+        process.send_signal(signal.SIGINT)
+        _, errors = process.communicate(timeout=15)
+        self.assertEqual(process.returncode, 130)
+        self.assertNotIn("Traceback", errors)
+        self.assertIn("stopped", errors)
+        self.assertEqual(json.loads(status.read_text())["message"], "The build was interrupted.")
+
+    def stub_graph(self, script):
+        (self.root / "bin" / "lake").write_text("#!/bin/sh\n" + script)
+        (self.root / ".lean-review").mkdir(exist_ok=True)
+        (self.root / ".lean-review" / "graph.json").write_text('{"good": true}')
+
+    def test_an_unreadable_new_graph_leaves_the_old_one(self):
+        self.stub_graph('case "$*" in env*) echo garbage > "$LEAN_REVIEW_GRAPH" ;; esac\n')
+        result = self.run_review("v4.35.0")
+        self.assertIn("unreadable", result.stderr)
+        self.assertEqual((self.root / ".lean-review" / "graph.json").read_text(), '{"good": true}')
+
+    def test_what_a_project_prints_cant_reach_the_graph(self):
+        self.stub_graph('case "$*" in env*) echo noise; echo \'{"modules": {}, "roots": []}\' > "$LEAN_REVIEW_GRAPH" ;; esac\n')
+        self.assertEqual(self.run_review("v4.35.0").returncode, 0)
+        self.assertEqual(json.loads((self.root / ".lean-review" / "graph.json").read_text())["roots"], [])
+
+    def test_a_failed_docs_build_leaves_the_old_graph(self):
+        self.stub_graph('case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_REVIEW_GRAPH" ;;\n'
+                        '  *docs*) exit 1 ;; esac\n')
+        self.assertNotEqual(self.run_review("v4.35.0").returncode, 0)
+        self.assertEqual((self.root / ".lean-review" / "graph.json").read_text(), '{"good": true}')
+
+    def test_an_edited_gitignore_survives_losing_docbuild(self):
+        self.run_review("v4.35.0")
+        ignore = self.root / ".lean-review" / ".gitignore"
+        ignore.write_text("*\n")
+        shutil.rmtree(self.root / ".lean-review" / "docbuild")
+        self.run_review("v4.35.0")
+        self.assertEqual(ignore.read_text(), "*\n")
+
+    def test_no_lake_says_so(self):
+        (self.root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+        result = subprocess.run([sys.executable, str(REVIEW), "--rebuild"], cwd=self.root, env={"PATH": str(self.root)},
+                                capture_output=True, text=True)
+        self.assertIn("Lake isn't on your PATH", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_outside_a_lake_project_it_says_so(self):
         (self.root / "lakefile.toml").unlink()

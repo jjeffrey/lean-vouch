@@ -159,14 +159,32 @@ def inProject (g : Graph) (n : Name) : Bool :=
   | some i => g.inScope g.moduleNames[i.toNat]!
   | none => false
 
+/-- What runs in place of an opaque declaration's value, which is only a placeholder: a `partial
+def`'s body, or what `@[implemented_by]` gives. A recursive definition has its own value to review,
+and Lean's compiled copy of it mustn't count, or its fingerprint would move for no reason. -/
+def implementation (g : Graph) (n : Name) : Array Expr :=
+  (#[Compiler.mkUnsafeRecName n] ++ (Compiler.getImplementedBy? g.env n).toArray).filterMap fun c =>
+    match g.env.find? c with
+    | some (.defnInfo d) => some d.value
+    | some (.opaqueInfo o) => some o.value
+    | _ => none
+
+/-- A structure's default field values, which its constructor's type doesn't mention. -/
+def fieldDefaults (g : Graph) (n : Name) : Array Expr :=
+  if !isStructure g.env n then #[] else
+    (getStructureFieldsFlattened g.env n (includeSubobjectFields := false)).filterMap fun field => do
+      match g.env.find? (← getDefaultFnForField? g.env n field) with
+      | some (.defnInfo d) => some d.value
+      | _ => none
+
 /-- The expressions that are reviewed for a declaration. -/
 def reviewedExprs (g : Graph) (n : Name) : Array Expr :=
   match g.env.find? n with
   | some (.thmInfo t) => #[t.type]
   | some (.defnInfo d) => #[d.type, d.value]
-  | some (.opaqueInfo o) => #[o.type, o.value]
+  | some (.opaqueInfo o) => #[o.type, o.value] ++ g.implementation n
   | some (.inductInfo i) =>
-    #[i.type] ++ i.ctors.toArray.filterMap fun c => (g.env.find? c).map (·.type)
+    #[i.type] ++ (i.ctors.toArray.filterMap fun c => (g.env.find? c).map (·.type)) ++ g.fieldDefaults n
   | some info => #[info.type]
   | none => #[]
 
@@ -386,13 +404,22 @@ unsafe def main (args : List String) : IO UInt32 := do
       some (m.toString, toJson ((data.imports.filterMap fun i =>
         if g.inScope i.module then some i.module.toString else none).qsort (· < ·)))
     else none
-  IO.println (Json.mkObj [
+  -- Each module doc's own fingerprint, so a mark on one can go stale too.
+  let moduleDocs := (g.moduleNames.filter g.inScope).filterMap fun m =>
+    (getModuleDoc? env m).map fun docs =>
+      (m.toString, Json.str (hex (docs.foldl (fun h d => mixHash h (hash d.doc)) 7)))
+  let graph := (Json.mkObj [
     ("format", (1 : Nat)),  -- GRAPH_FORMAT in server.py
     ("lean", Lean.versionString),
     ("root", root),
     ("roots", toJson (outermost.map (·.toString))),
     ("modules", Json.mkObj (modules.qsort (·.1 < ·.1)).toList),
+    ("moduleDocs", Json.mkObj (moduleDocs.qsort (·.1 < ·.1)).toList),
     ("declarations", Json.mkObj decls.toList),
     ("library", Json.mkObj libraryDecls.toList),
     ("renames", Json.mkObj renames.toList)]).pretty
+  -- A file if asked for one: a project's initializers can print to stdout.
+  match ← IO.getEnv "LEAN_REVIEW_GRAPH" with
+  | some path => IO.FS.writeFile path (graph ++ "\n")
+  | none => IO.println graph
   return 0

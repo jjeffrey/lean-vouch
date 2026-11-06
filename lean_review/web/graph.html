@@ -216,8 +216,12 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const closure = new Map();
   const below = n => {
     if (closure.has(n)) return closure.get(n);
-    const out = new Set(); closure.set(n, out);
-    for (const d of [...(decls[n]?.deps ?? []), ...(decls[n]?.uses ?? [])]) { out.add(d); for (const x of below(d)) out.add(x); }
+    const out = new Set(), stack = [n];
+    while (stack.length) {
+      const d = decls[stack.pop()];
+      for (const dep of [...(d?.deps ?? []), ...(d?.uses ?? [])]) if (!out.has(dep)) { out.add(dep); stack.push(dep); }
+    }
+    closure.set(n, out);
     return out;
   };
   const fingerprint = n => {
@@ -226,7 +230,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return info(n) ? { own: info(n).own, deps } : null;
   };
   // What changed since `n` was marked: itself, and which things below it.
-  const changes = (n, mark = marks[n]) => {
+  const changes = (n, mark) => {
     const fp = mark?.fingerprint;
     if (!mark?.status || !fp || !info(n)) return { self: false, deps: [] };
     const now = below(n);
@@ -875,7 +879,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const markRow = el("div", "marks");
     const input = el("textarea");
     const add = el("button", null, "Add note");
-    const c = changes(name);
+    const c = changes(name, marks[name]);
     for (const [status, label, title] of STATUS) {
       const b = el("button", marks[name]?.status === status ? "active" : null, label);
       b.title = title; b.dataset.status = status;
@@ -966,10 +970,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       else {
         if (src.edited) sidebar.append(el("p", "stale", "The source has changed since the last build, so this may not line up."));
         sidebar.append(el("p", "muted", `${src.file}, lines ${src.start}–${src.end}`));
-        // A theorem's statement ends where its proof starts: at `:= by`, a trailing `:=`, or the
-        // first `|` case of a proof by pattern matching.
-        const starts = [/:=\s*by\b/, /:=\s*$/m, /^\s*\|/m].map(r => src.text.search(r)).filter(k => k > 0);
-        const split = src.kind === "theorem" && starts.length ? Math.min(...starts) : -1;
+        const split = src.kind === "theorem" ? reviewProofStart(src.text) : -1;
         if (split > 0) {
           sidebar.append(el("pre", null, src.text.slice(0, split).trimEnd()));
           const proof = el("details");

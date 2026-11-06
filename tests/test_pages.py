@@ -123,7 +123,8 @@ class PagesTest(unittest.TestCase):
         docs.joinpath(*parts).write_text(text)
         return docs
 
-    def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None, graph=None):
+    def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None, graph=None,
+                      allow_errors=False):
         """Run `script` in a real page, which can't be clicked from outside headless Chrome, and return
         what it adds to `results`. It sees `doc`, the page's document, and any uncaught error fails."""
         driver = DRIVER.replace("SCRIPT", script)
@@ -138,7 +139,8 @@ class PagesTest(unittest.TestCase):
         found = re.search(r'<pre id="driven">(.*?)</pre>', self.page(path, 30000), re.S)
         self.assertIsNotNone(found, "the page's script didn't finish")
         done = json.loads(html.unescape(found[1]))
-        self.assertEqual(done["errors"], [])
+        if not allow_errors:
+            self.assertEqual(done["errors"], [])
         return done["results"]
 
     @classmethod
@@ -506,6 +508,46 @@ class PagesTest(unittest.TestCase):
             results.push(doc.getElementById("review-build").hidden);
         """, build={"state": "done", "built": "then", "pid": 1})
         self.assertEqual(results, [True])
+
+    def test_a_proof_starts_where_it_does(self):
+        results = self.click_through({}, """
+            await ready(".decl .review-row");
+            const start = text => { const k = doc.defaultView.reviewProofStart(text); return k < 0 ? null : text.slice(0, k).trimEnd(); };
+            for (const text of ["theorem t : p := by\\n  simp", "theorem t : p := ⟨h, h⟩", "theorem t (n : Nat := 1) : p n := rfl",
+                                "theorem t : p\\n  | 0 => a\\n  | n + 1 => b", "theorem t : p", "theorem t -- x := y\\n  : p := h",
+                                "@[to_additive (attr := simp)] theorem t : p := h"]) results.push(start(text));
+        """)
+        self.assertEqual(results, ["theorem t : p", "theorem t : p", "theorem t (n : Nat := 1) : p n", "theorem t : p", None,
+                                   "theorem t -- x := y\n  : p", "@[to_additive (attr := simp)] theorem t : p"])
+
+    def test_a_changed_module_doc_flags_its_mark(self):
+        graph = json.loads(json.dumps(self.graph))
+        module = "ReviewExample.Gcd"
+        marks = {f"module {module}": {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00",
+                                      "fingerprint": {"own": graph["moduleDocs"][module], "deps": {}}}}
+        graph["moduleDocs"][module] = "changed"
+        results = self.click_through(marks, """
+            await ready(".mod_doc .review-row");
+            results.push(doc.querySelector(".mod_doc").dataset.reviewChange, !!doc.querySelector(".mod_doc .review-accept"));
+        """, graph=graph)
+        self.assertEqual(results, ["changed", True])
+
+    def test_a_broken_file_of_yours_alerts_once(self):
+        results = self.click_through({}, """
+            await ready(".decl .review-row");
+            await wait(2500);  // past the page's first look
+            let alerts = 0;
+            doc.defaultView.alert = () => alerts++;
+            doc.defaultView.addEventListener("unhandledrejection", e => e.preventDefault(), true);
+            const real = doc.defaultView.fetch;
+            doc.defaultView.fetch = (url, ...rest) => String(url).endsWith("/review/data")
+              ? Promise.resolve(new Response('{"error": "broken"}', { status: 500 })) : real(url, ...rest);
+            real("/review/data", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: "ReviewExample.gcd", status: "agree", fingerprint: { own: "1", deps: {} } }) });
+            await wait(7000);
+            results.push(alerts);
+        """, allow_errors=True)
+        self.assertEqual(results, [1])
 
     def test_the_quiz_hides_a_name_even_in_a_recursive_call(self):
         self.serve({}, self.graph)

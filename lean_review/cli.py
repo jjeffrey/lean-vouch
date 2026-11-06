@@ -60,7 +60,7 @@ def toolchain():
     """The project's Lean version, as its tag and (major, minor), which is None if it isn't a release."""
     if not Path("lean-toolchain").exists():
         fail("this project has no lean-toolchain file.")
-    tag = Path("lean-toolchain").read_text().strip().rsplit(":", 1)[-1]
+    tag = Path("lean-toolchain").read_text(encoding="utf-8").strip().rsplit(":", 1)[-1]
     found = re.fullmatch(r"v(\d+)\.(\d+)\.\d+.*", tag)
     return tag, (int(found[1]), int(found[2])) if found else None
 
@@ -79,9 +79,9 @@ def check_version(tag, version):
 
 def package_name():
     if Path("lakefile.toml").exists():
-        found = re.search(r'^name\s*=\s*"(.*?)"', Path("lakefile.toml").read_text(), re.M)
+        found = re.search(r'^name\s*=\s*"(.*?)"', Path("lakefile.toml").read_text(encoding="utf-8"), re.M)
     elif Path("lakefile.lean").exists():
-        found = re.search(r'^package\s+[«"]?([^\s»"]+)', Path("lakefile.lean").read_text(), re.M)
+        found = re.search(r'^package\s+[«"]?([^\s»"]+)', Path("lakefile.lean").read_text(encoding="utf-8"), re.M)
     else:
         fail("run this from the root of a Lake project: there's no lakefile here.")
     if not found:
@@ -92,10 +92,10 @@ def package_name():
 def library_names():
     """The project's libraries, as its lakefile declares them."""
     if Path("lakefile.toml").exists():
-        blocks = Path("lakefile.toml").read_text().split("[[")
+        blocks = Path("lakefile.toml").read_text(encoding="utf-8").split("[[")
         return [found[1] for block in blocks if block.startswith("lean_lib]]")
                 if (found := re.search(r'^name\s*=\s*"(.*?)"', block, re.M))]
-    found = re.findall(r"^(?:@\[.*?\]\s*)?lean_lib\s+(\S+)", Path("lakefile.lean").read_text(), re.M)
+    found = re.findall(r"^(?:@\[.*?\]\s*)?lean_lib\s+(\S+)", Path("lakefile.lean").read_text(encoding="utf-8"), re.M)
     return [name.strip('«»"') for name in found]
 
 
@@ -127,7 +127,7 @@ def tops(imports):
 
 
 def packages_in(manifest):
-    return {p["name"].strip("«»") for p in json.loads(manifest.read_text()).get("packages", [])} if manifest.exists() else set()
+    return {p["name"].strip("«»") for p in json.loads(manifest.read_text(encoding="utf-8")).get("packages", [])} if manifest.exists() else set()
 
 
 def clear_doc_packages(manifest):
@@ -143,17 +143,18 @@ def set_up_folders(tag, package):
     versions, and it must match the project's: its main branch needs the newest Lean."""
     docbuild = HOME / "docbuild"
     docbuild.mkdir(parents=True, exist_ok=True)
-    wanted, written = Path("lean-toolchain").read_text(), docbuild / "lean-toolchain"
+    wanted, written = Path("lean-toolchain").read_text(encoding="utf-8"), docbuild / "lean-toolchain"
     new = not (docbuild / "lakefile.toml").exists()
-    changed = new or not written.exists() or written.read_text() != wanted
+    changed = new or not written.exists() or written.read_text(encoding="utf-8") != wanted
     if changed:
-        (docbuild / "lakefile.toml").write_text(DOCBUILD.format(version=tag, package=package))
-        written.write_text(wanted)
+        (docbuild / "lakefile.toml").write_text(DOCBUILD.format(version=tag, package=package), encoding="utf-8")
+        written.write_text(wanted, encoding="utf-8")
         # docbuild shares the project's .lake, so on another Lean it would overwrite the project's build.
         clear_doc_packages(docbuild / "lake-manifest.json")
         (docbuild / "lake-manifest.json").unlink(missing_ok=True)
+    if not (HOME / ".gitignore").exists():   # it's yours to edit, to keep marks out of git
+        (HOME / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
     if new:
-        (HOME / ".gitignore").write_text(GITIGNORE)
         print(f"lean-review: created {HOME}/ (doc-gen4 {tag}).", flush=True)
     elif changed:
         print(f"lean-review: moved to doc-gen4 {tag}, for the project's Lean.", flush=True)
@@ -180,7 +181,7 @@ def build_docs(modules):
         # Keeps Mathlib's update hook from fetching its cache again.
         run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"})
     if not (docbuild / ".lake/build/doc").exists():
-        uses_mathlib = '"mathlib"' in Path("lake-manifest.json").read_text() if Path("lake-manifest.json").exists() else False
+        uses_mathlib = '"mathlib"' in Path("lake-manifest.json").read_text(encoding="utf-8") if Path("lake-manifest.json").exists() else False
         print("lean-review: first docs build. doc-gen4 documents everything the project imports" +
               (", including Mathlib: expect about half an hour and 2 GB. It doesn't recompile Mathlib."
                if uses_mathlib else ": expect several minutes."), flush=True)
@@ -189,16 +190,21 @@ def build_docs(modules):
 
 
 def build_graph(modules):
-    """Lean prints compile errors to stdout, so a failure leaves them in the output file: show them."""
+    """Build the graph beside the current one, and return it. It goes to a file, since a project's
+    initializers can print to stdout, where Lean also puts compile errors: show those on failure."""
     new = HOME / "graph.json.new"
-    with new.open("w") as output:
-        done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules], stdout=output)
+    done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules],
+                          stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                          env={**os.environ, "LEAN_REVIEW_GRAPH": str(new.resolve())})
     if done.returncode:
-        errors = new.read_text()[-4000:]
-        new.unlink()
-        fail(f"building the declaration graph failed:\n{errors}\n"
+        new.unlink(missing_ok=True)
+        fail(f"building the declaration graph failed:\n{done.stdout[-4000:]}\n"
              "If this is about Lean itself, not your project, please open an issue.")
-    new.replace(HOME / "graph.json")
+    try:
+        return json.loads(new.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        new.unlink(missing_ok=True)
+        fail("the declaration graph came out unreadable. Please open an issue.")
 
 
 def slug(name):
@@ -208,7 +214,10 @@ def slug(name):
 
 
 def git_config(key):
-    return subprocess.run(["git", "config", key], capture_output=True, text=True).stdout.strip()
+    try:
+        return subprocess.run(["git", "config", key], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        return ""
 
 
 def identity(chosen_id, chosen_name):
@@ -248,12 +257,12 @@ def report(state, **details):
     build carries over a failure, since those pages still show it."""
     status = HOME / "build.json"
     try:
-        built = json.loads(status.read_text()).get("built")
+        built = json.loads(status.read_text(encoding="utf-8")).get("built")
     except (OSError, ValueError, AttributeError):
         built = None
     # Swapped in whole, since the server reads it while this runs.
     temporary = status.with_name(status.name + ".tmp")
-    temporary.write_text(json.dumps({"built": built, **details, "state": state, "pid": os.getpid()}))
+    temporary.write_text(json.dumps({"built": built, **details, "state": state, "pid": os.getpid()}), encoding="utf-8")
     os.replace(temporary, status)
 
 
@@ -266,9 +275,10 @@ def running_server(port):
     """The marks folder of the lean-review server on this port, if there is one."""
     try:
         with urlopen(f"http://127.0.0.1:{port}/review/status", timeout=1) as response:
-            return json.load(response).get("marks_folder")
+            found = json.load(response)
     except (OSError, ValueError):
         return None
+    return found.get("marks_folder") if isinstance(found, dict) else None
 
 
 def main():
@@ -284,6 +294,8 @@ def main():
     package = package_name()
     tag, version = toolchain()
     check_version(tag, version)
+    if not shutil.which("lake"):
+        fail("Lake isn't on your PATH. Install Lean through elan: https://github.com/leanprover/elan")
     who, name = identity(args.id, args.name)
     serving = None if args.rebuild else running_server(args.port)
     if serving and Path(serving) != (HOME / "marks").resolve():
@@ -296,13 +308,18 @@ def main():
         modules = modules_of(args.names)
         print(f"lean-review: reviewing {len(modules)} modules.", flush=True)
         run(["lake", "build", *[f"+{module}" for module in modules]])
-        build_graph(modules)
-        built = json.loads((HOME / "graph.json").read_text())
+        built = build_graph(modules)
         build_docs(tops(built["modules"]))
         if args.clean:
             for root in built["roots"]:
                 clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
-    except (SystemExit, Exception, KeyboardInterrupt) as error:
+        # Last, so a failure leaves the graph that matches the docs.
+        (HOME / "graph.json.new").replace(HOME / "graph.json")
+    except KeyboardInterrupt as error:
+        report("failed", message=reason(error))
+        print("\nlean-review: stopped.", file=sys.stderr)
+        sys.exit(130)
+    except (SystemExit, Exception) as error:
         report("failed", message=reason(error))
         raise
     report("done", built=datetime.now().isoformat(timespec="seconds"))

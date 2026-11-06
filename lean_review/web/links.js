@@ -12,6 +12,25 @@ window.reviewDisagreement = (mine, others) => {
   return new Set(others.map(o => o.status)).size > 1 ? "others disagree" : null;
 };
 
+// Where a theorem's proof starts in its source: the first `:=` outside any brackets, or a `|` case
+// starting a line. -1 if it has none.
+window.reviewProofStart = text => {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const two = text.slice(i, i + 2);
+    if (two === "--") { i = text.indexOf("\n", i); if (i < 0) return -1; }
+    else if (two === "/-") { i = text.indexOf("-/", i) + 1; if (i <= 0) return -1; }
+    else if ("([{⟨⦃".includes(text[i])) depth++;
+    else if (")]}⟩⦄".includes(text[i])) depth--;
+    else if (depth === 0 && two === ":=") return i;
+    else if (depth === 0 && text[i] === "|") {
+      const line = text.lastIndexOf("\n", i) + 1;
+      if (i > line - 1 && !text.slice(line, i).trim()) return line;
+    }
+  }
+  return -1;
+};
+
 // A person's color in note threads, the same wherever their name appears.
 window.reviewHue = name => [...name].reduce((hue, c) => (hue * 31 + c.codePointAt(0)) % 360, 7);
 
@@ -42,10 +61,12 @@ window.reviewWatch = onMarks => {
       me.title = `Your id is ${now.me.id}: the name of your marks file. --name and --id change them.`;
     }
     if (first) built = now.built;
-    // Also on the first look: marks can change while a large page loads.
-    if (first || now.marks !== marks) await onMarks();
+    // Also on the first look: marks can change while a large page loads. Noted first, so a failure
+    // isn't repeated on every look.
+    const changed = first || now.marks !== marks;
     first = false;
     marks = now.marks;
+    if (changed) await onMarks();
     if (now.state === "building") say("Rebuilding…");
     else if (now.state === "failed") say("Build failed; showing the last good version.", now.message);
     else if (now.built !== built) say("Docs updated.", null, reload);

@@ -3,10 +3,13 @@
 import http.client
 import json
 import os
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from argparse import Namespace
 from http.server import ThreadingHTTPServer
@@ -154,6 +157,60 @@ class ServerTest(unittest.TestCase):
         self.assertEqual([o["id"] for o in self.shown("A.b")["others"]], ["cy"])
         self.assertEqual(self.status()["unreadable"], ["bo", "di"])
         self.assertEqual((self.folder_marks / "bo.json").read_text(), "<<<<<<< HEAD")
+
+    def test_someone_elses_malformed_entries_are_left_out(self):
+        self.folder_marks.mkdir()
+        for who, entries in (("bo", {"A.b": "agree"}), ("cy", {"A.b": {"status": "agree", "notes": [{"text": "no date"}]}}),
+                             ("di", {"A.b": {"status": ["agree"]}})):
+            (self.folder_marks / f"{who}.json").write_text(json.dumps({"format": 3, "marks": entries}))
+        self.assertEqual(self.post("/review/data", {"name": "A.b", "status": "agree"})[0], 200)
+        self.assertEqual(self.status()["unreadable"], ["bo", "cy", "di"])
+
+    def test_times_are_in_utc(self):
+        self.post("/review/data", {"name": "A.b", "status": "agree", "note": "Hm."})
+        self.assertRegex(self.shown("A.b")["date"], r"Z$")
+        self.assertRegex(self.shown("A.b")["notes"][0]["date"], r"Z$")
+
+    def test_writing_on_a_renamed_name_lands_on_the_new_one(self):
+        self.graph.write_text(json.dumps({"renames": {"Old.name": "New.name"}}))
+        code, entry = self.post("/review/data", {"name": "Old.name", "note": "Hm."})
+        self.assertEqual((code, entry["notes"][0]["text"]), (200, "Hm."))
+        self.assertIn("New.name", self.stored())
+        self.assertNotIn("Old.name", self.stored())
+
+    def test_a_tools_note_isnt_you_responding(self):
+        self.write({"Old.name": {"status": None, "notes": []}})
+        self.write({"New.name": {"status": "question", "date": "2026-01-01T00:00:00",
+                                 "notes": [{"date": "2026-01-01T00:00:00", "text": "Why?"}]}}, "claude", "Claude")
+        self.graph.write_text(json.dumps({"renames": {"Old.name": "New.name"}}))
+        self.assertEqual(self.shown("New.name")["attention"], ["Claude"])
+
+    def test_non_ascii_survives_saving(self):
+        self.post("/review/data", {"name": "A.b", "note": "∀ x"})
+        self.assertIn("∀ x", self.marks.read_bytes().decode("utf-8"))
+
+    def test_head_is_refused_from_another_site_too(self):
+        self.assertEqual(self.raw("HEAD", "/Page.html", headers={"Host": "example.com"})[0], 403)
+        self.assertEqual(self.raw("HEAD", "/Page.html", headers={"Origin": "https://example.com"})[0], 403)
+        self.assertEqual(self.raw("HEAD", "/Page.html")[0], 200)
+
+    def test_another_site_cant_load_it_as_a_resource_but_can_link_to_it(self):
+        cross = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"}
+        self.assertEqual(self.raw("GET", "/review/diagram", headers=cross)[0], 403)
+        self.assertEqual(self.raw("GET", "/review/diagram", headers={**cross, "Sec-Fetch-Mode": "navigate"})[0], 200)
+
+    def test_pages_cant_be_framed_by_another_site(self):
+        connection = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port)
+        self.addCleanup(connection.close)
+        connection.request("GET", "/review/diagram")
+        self.assertEqual(connection.getresponse().getheader("Content-Security-Policy"), "frame-ancestors 'self'")
+
+    def test_source_starts_where_lean_says_past_a_comment_above(self):
+        (self.root / "src").mkdir()
+        (self.root / "src" / "M.lean").write_text("def a : Nat := 1\n\n/- a plain comment -/\ndef b : Nat := 2\n")
+        self.graph.write_text(json.dumps({"declarations": {"b": {"module": "M", "lines": [4, 4], "kind": "def"}}}))
+        server.args.source = [self.root / "src"]
+        self.assertEqual(json.loads(self.get("/review/source?name=b"))["text"], "def b : Nat := 2")
 
     def test_your_own_unreadable_file_still_stops_you(self):
         self.folder_marks.mkdir()
@@ -517,6 +574,25 @@ class StartupTest(unittest.TestCase):
     def run_server(self, *extra):
         return subprocess.run([sys.executable, str(ROOT / "lean_review" / "server.py"), *extra],
                               capture_output=True, text=True, timeout=20)
+
+    def test_ctrl_c_stops_it_quietly(self):
+        with tempfile.TemporaryDirectory() as folder, socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+            probe.close()
+            process = subprocess.Popen([sys.executable, str(ROOT / "lean_review" / "server.py"), "--docs", folder, "--marks", str(Path(folder) / "marks"),
+                                        "--prefix", "P", "--id", "ada", "--port", str(port)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.addCleanup(process.kill)
+            process.stdout.readline()
+            for _ in range(100):
+                try:
+                    urlopen(f"http://127.0.0.1:{port}/review/status").read()
+                    break
+                except OSError:
+                    time.sleep(0.05)
+            process.send_signal(signal.SIGINT)
+            _, errors = process.communicate(timeout=15)
+            self.assertNotIn("Traceback", errors)
 
     def test_refuses_an_unsafe_id(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -19,7 +19,8 @@
   is the one thing that looks inside proofs, so it never affects fingerprints.
 - **Fingerprints** are hashes of Lean's expressions. A mark stores the fingerprint of the
   declaration and of everything below it when it was made; the page compares them with the
-  current graph.
+  current graph. A `partial def` counts its body, a structure its default field values, and a
+  module doc its text.
 
 ## Limits
 

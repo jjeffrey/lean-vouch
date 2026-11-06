@@ -1,6 +1,7 @@
 """DeclGraph's fingerprints: proofs don't matter, statements and definitions do. Needs Lean (elan)."""
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -68,6 +69,40 @@ class GraphTest(unittest.TestCase):
         self.assertEqual({n: d["own"] for n, d in both["declarations"].items() if n != "Extra.gcd_self"},
                          {n: d["own"] for n, d in self.before["declarations"].items()},
                          "another root changes no fingerprint in the first")
+
+    def extra(self, text):
+        """The graph of a small second library holding `text`."""
+        copy = Path(tempfile.mkdtemp(dir=self.folder.name)) / "project"
+        shutil.copytree(self.original, copy)
+        with (copy / "lakefile.toml").open("a") as lakefile:
+            lakefile.write('\n[[lean_lib]]\nname = "Extra"\n')
+        (copy / "Extra.lean").write_text(text)
+        return graph_of(copy, "Extra")
+
+    def test_a_partial_defs_body_counts(self):
+        one, two = (self.extra(f"partial def spin (n : Nat) : Nat := spin (n + {k})\n") for k in (1, 2))
+        self.assertNotEqual(one["declarations"]["spin"]["own"], two["declarations"]["spin"]["own"])
+
+    def test_what_a_partial_def_calls_is_a_dependency(self):
+        graph = self.extra("def helper (n : Nat) : Nat := n\npartial def spin (n : Nat) : Nat := spin (helper n)\n")
+        self.assertIn("helper", graph["declarations"]["spin"]["deps"])
+
+    def test_a_field_default_counts(self):
+        one, two = (self.extra(f"structure S where\n  x : Nat := {k}\n") for k in (1, 2))
+        self.assertNotEqual(one["declarations"]["S"]["own"], two["declarations"]["S"]["own"])
+
+    def test_a_module_doc_has_a_fingerprint(self):
+        one, two = (self.extra(f"/-! {text} -/\n\ndef x : Nat := 1\n") for text in ("One.", "Two."))
+        self.assertNotEqual(one["moduleDocs"]["Extra"], two["moduleDocs"]["Extra"])
+        self.assertEqual(one["declarations"]["x"]["own"], two["declarations"]["x"]["own"])
+
+    def test_the_graph_can_go_to_a_file_away_from_what_a_project_prints(self):
+        copy = Path(tempfile.mkdtemp(dir=self.folder.name)) / "project"
+        shutil.copytree(self.original, copy)
+        out = copy / "out.json"
+        subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_review" / "graph" / "DeclGraph.lean"), "ReviewExample"], cwd=copy,
+                       check=True, capture_output=True, text=True, env={**os.environ, "LEAN_REVIEW_GRAPH": str(out)})
+        self.assertEqual(json.loads(out.read_text())["root"], "ReviewExample")
 
     def test_changing_a_proof_changes_no_fingerprint(self):
         after = self.edited(DIVIDES, "⟨1, (Nat.mul_one n).symm⟩", "⟨1, by simp⟩")

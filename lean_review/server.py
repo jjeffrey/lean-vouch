@@ -17,7 +17,7 @@ import os
 import re
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -51,7 +51,8 @@ unreadable = []  # others' marks files that the latest view had to leave out
 
 
 def now():
-    return datetime.now().isoformat(timespec="seconds")
+    """In UTC, so that times from different machines sort, and compare, correctly."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Graph:
@@ -166,7 +167,7 @@ class Graph:
 def load_json(path, default):
     # A file being written (the graph, while DeclGraph runs) reads as empty until it's done.
     try:
-        return json.loads(path.read_text()) if path and path.exists() else default
+        return json.loads(path.read_text(encoding="utf-8")) if path and path.exists() else default
     except ValueError:
         return default
 
@@ -179,7 +180,7 @@ def load_file(path, key):
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except ValueError as error:
         raise MarksError(f"{path} is not valid JSON ({error}); fix it before reviewing") from error
     if not isinstance(data, dict):
@@ -195,12 +196,27 @@ def save_file(path, data):
     text = json.dumps({"format": MARKS_FORMAT, **data}, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     # Write beside the file, then swap, so a crash can't leave half a review.
     temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text)
+    temporary.write_text(text, encoding="utf-8")
     os.replace(temporary, path)
 
 
+def is_note(note):
+    return isinstance(note, dict) and isinstance(note.get("date"), str) and isinstance(note.get("text"), str)
+
+
+def is_entry(entry):
+    return (isinstance(entry, dict) and isinstance(entry.get("date", ""), str)
+            and isinstance(entry.get("status"), (str, type(None))) and entry.get("status") in STATUSES
+            and isinstance(entry.get("fingerprint") or {}, dict)
+            and isinstance(entry.get("notes", []), list) and all(is_note(note) for note in entry.get("notes", [])))
+
+
 def person(who, name=None):
-    data = load_file(args.marks / f"{who}.json", "marks")
+    path = args.marks / f"{who}.json"
+    data = load_file(path, "marks")
+    for declaration, entry in data.get("marks", {}).items():
+        if not is_entry(entry):
+            raise MarksError(f"{path} has a malformed entry for {declaration}")
     return {"name": name or data.get("name") or who, "marks": data.get("marks", {})}
 
 
@@ -209,7 +225,12 @@ def save_person(who, data):
 
 
 def quiz_answers():
-    return load_file(args.quiz / f"{args.id}.json", "answers").get("answers", {})
+    path = args.quiz / f"{args.id}.json"
+    answers = load_file(path, "answers").get("answers", {})
+    if not all(isinstance(kept, list) and all(is_note(answer) and isinstance(answer.get("quiz"), dict) for answer in kept)
+               for kept in answers.values()):
+        raise MarksError(f"{path} has a malformed answer")
+    return answers
 
 
 def save_quiz(answers):
@@ -274,12 +295,13 @@ def view():
                 item.update({key: value for key, value in entry.items() if key != "notes"})
             elif entry.get("status"):
                 item["others"].append({"id": who, "name": data["name"], **{
-                    key: entry[key] for key in ("status", "date", "fingerprint", "signature") if key in entry}})
+                    key: entry[key] for key in ("status", "date", "fingerprint") if key in entry}})
     for name, answers in quiz_answers().items():
         at(name)["notes"] += [{"by": people[args.id]["name"], **answer, "who": args.id, "mine": True} for answer in answers]
     for item in shown.values():
         item["notes"].sort(key=lambda note: note["date"])
-        seen = max([item.get("date", ""), *(n["date"] for n in item["notes"] if n["mine"] and "quiz" not in n)])
+        seen = max([item.get("date", ""), *(n["date"] for n in item["notes"]
+                                            if n["mine"] and "quiz" not in n and n["by"] != "lean-review")])
         new = [note for note in item["notes"] if note["date"] > seen and not note["mine"] and note["by"] != "lean-review"]
         wrote = {note["who"] for note in item["notes"] if note["by"] != "lean-review"}
         asking = [other for other in item["others"] if other["status"] == "question" and other["id"] in wrote]
@@ -299,18 +321,10 @@ def source_of(name):
     folder = next((folder for folder in args.source if (folder / module).exists()), None)
     if folder is None:
         return {"error": f"{module} not found"}
-    lines = (folder / module).read_text().splitlines()
+    lines = (folder / module).read_text(encoding="utf-8").splitlines()
     start, end = decl["lines"][0] - 1, decl["lines"][1]
     if end > len(lines):
         return {"error": f"{module} has changed since the last build. Rebuild to see this declaration's code."}
-    # Include a doc comment (and attributes) directly above the declaration.
-    if start > 0 and lines[start - 1].rstrip().endswith("-/"):
-        i = start - 1
-        while i > 0 and "/--" not in lines[i]:
-            i -= 1
-        start = i
-    while start > 0 and lines[start - 1].lstrip().startswith("@["):
-        start -= 1
     # Lines come from the last build, so an edit since then can put them in the wrong place.
     edited = args.graph and args.graph.exists() and (folder / module).stat().st_mtime > args.graph.stat().st_mtime
     return {"file": str(module), "start": start + 1, "end": end, "edited": bool(edited),
@@ -358,6 +372,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'self'")   # no clicks through another site's frame
         self.end_headers()
         self.wfile.write(body)
 
@@ -370,7 +385,14 @@ class Handler(SimpleHTTPRequestHandler):
         at 127.0.0.1. A browser can't forge these headers."""
         hosts = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
         origin = self.headers.get("Origin")
-        return self.headers.get("Host") in hosts and (origin is None or origin in {f"http://{h}" for h in hosts})
+        # A link from elsewhere is fine; a page elsewhere loading this as a resource isn't.
+        foreign = self.headers.get("Sec-Fetch-Site") == "cross-site" and self.headers.get("Sec-Fetch-Mode") != "navigate"
+        return self.headers.get("Host") in hosts and not foreign and (origin is None or origin in {f"http://{h}" for h in hosts})
+
+    def do_HEAD(self):
+        if not self.from_this_server():
+            return self.send_error(403)
+        super().do_HEAD()
 
     def do_GET(self):
         if not self.from_this_server():
@@ -445,7 +467,8 @@ class Handler(SimpleHTTPRequestHandler):
         data = current(who, body.get("author"))
         marks = data["marks"]
         answers = quiz_answers() if who == args.id else {}
-        name = body.get("name")
+        renames = graph.current().get("renames", {})
+        name = renames.get(body.get("name"), body.get("name"))
         if self.path == "/review/verdict":
             if not answers.get(name) or body.get("verdict") not in VERDICTS:
                 return self.send_json({"error": "bad request"}, 400)
@@ -464,19 +487,15 @@ class Handler(SimpleHTTPRequestHandler):
             entry = marks.setdefault(name, {"status": None, "notes": []})
             if "status" in body:
                 entry["status"] = body["status"]
-                # A graph fingerprint replaces the older text signature; keep whichever was sent.
                 if body.get("fingerprint"):
                     entry["fingerprint"] = body["fingerprint"]
-                    entry.pop("signature", None)
-                elif body.get("signature"):
-                    entry["signature"] = body["signature"]
                 entry["date"] = now()
             if body.get("note"):
                 entry["notes"].append({"date": now(), "text": body["note"]})
             save_person(who, data)
             return self.send_json(view()[name])
         if self.path == "/review/move":
-            old, new = body.get("from"), body.get("to")
+            old, new = body.get("from"), renames.get(body.get("to"), body.get("to"))
             if (old not in marks and old not in answers) or not new or new in marks or new in answers:
                 return self.send_json({"error": "cannot move"}, 400)
             if old in marks:
@@ -540,7 +559,10 @@ def main():
         httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     except OSError as error:
         sys.exit(f"lean-review: can't use port {args.port} ({error.strerror}). Choose another with --port.")
-    httpd.serve_forever()
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

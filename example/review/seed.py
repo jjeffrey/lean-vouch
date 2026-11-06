@@ -9,7 +9,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 graph = json.loads((HERE / "graph.json").read_text())
 decls, library = graph["declarations"], graph["library"]
-info = lambda n: decls.get(n) or library.get(n)
+info = lambda n: {"own": graph["moduleDocs"].get(n[7:])} if n.startswith("module ") else decls.get(n) or library.get(n)
 P = "ReviewExample."
 
 
@@ -35,7 +35,7 @@ def mark(name, status, *notes, changed=()):
 
 
 marks = {
-    "module ReviewExample.Divides": mark("module", "agree"),
+    "module ReviewExample.Divides": mark("module ReviewExample.Divides", "agree"),
     P + "Divides": mark(P + "Divides", "agree",
         ("Ada", "Why define this as ∃ k, n = d * k rather than n % d = 0?"),
         ("assistant", "They agree for every d and n, but the existential form is what proofs need: "

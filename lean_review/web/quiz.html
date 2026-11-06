@@ -112,8 +112,12 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   const closure = new Map();
   const below = n => {
     if (closure.has(n)) return closure.get(n);
-    const out = new Set(); closure.set(n, out);
-    for (const d of [...(decls[n]?.deps ?? []), ...(decls[n]?.uses ?? [])]) { out.add(d); for (const x of below(d)) out.add(x); }
+    const out = new Set(), stack = [n];
+    while (stack.length) {
+      const d = decls[stack.pop()];
+      for (const dep of [...(d?.deps ?? []), ...(d?.uses ?? [])]) if (!out.has(dep)) { out.add(dep); stack.push(dep); }
+    }
+    closure.set(n, out);
     return out;
   };
   const fingerprint = n => {
@@ -500,8 +504,8 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json());
     if (!src.error) {
       let text = stripComments(src.text);
-      const starts = [/:=\s*by\b/, /:=\s*$/m, /^\s*\|/m].map(r => text.search(r)).filter(k => k > 0);
-      if (kind === "theorem" && starts.length) text = text.slice(0, Math.min(...starts)).trimEnd();
+      const proof = kind === "theorem" ? reviewProofStart(text) : -1;
+      if (proof > 0) text = text.slice(0, proof).trimEnd();
       texts.push(text);
       main.append(el("h2", null, kind === "theorem" ? "As written" : "Code"), writtenSource(text, name, hints));
     }
