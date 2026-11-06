@@ -7,14 +7,14 @@ statements mean what they should. It adds review tools to a project's doc-gen4 p
 
 ## Try it
 
-You need Lean v4.30 or newer through elan, and Python 3. From the root of a Lake project:
+You need Lean v4.30 or newer through elan, and Python 3.11 or newer. From the root of a Lake project:
 
 ```bash
 pipx install lean-review
 lean-review
 ```
 
-Then open <http://127.0.0.1:8797/review/diagram>. The first run takes about 7 minutes, or about 35
+With uv, install it with `uv tool install lean-review`. Then open <http://127.0.0.1:8797/review/diagram>. The first run takes about 7 minutes, or about 35
 with Mathlib. Later runs take seconds. Your marks and notes are in `.lean-review/marks/`, which git
 tracks unless you opt out; quiz answers stay local.
 
@@ -28,7 +28,7 @@ tracks unless you opt out; quiz answers stay local.
 - **Flags** when something you marked, or anything it depends on, changes.
 - **A dependency diagram** colored by your marks, which handles projects as large as Mathlib.
 - **`sorry` tracing:** everything that relies on one, even through proofs.
-- **A quiz:** read a statement with its name hidden, say what it means, then compare.
+- **Quiz mode:** read a statement with its name hidden, say what it means, then compare.
 
 lean-review is a review aid, not a checker: for soundness, use
 [lean4checker](https://github.com/leanprover/lean4checker) or Comparator. lean-review is still early: it handles
@@ -36,7 +36,7 @@ projects as large as Mathlib, but has mostly been used to review small ones.
 
 ## More
 
-[Features](https://github.com/jjeffrey/lean-review/blob/main/docs/features.md) · [Usage](https://github.com/jjeffrey/lean-review/blob/main/docs/usage.md) · [The quiz](https://github.com/jjeffrey/lean-review/blob/main/docs/quiz.md) ·
+[Features](https://github.com/jjeffrey/lean-review/blob/main/docs/features.md) · [Usage](https://github.com/jjeffrey/lean-review/blob/main/docs/usage.md) · [Quiz mode](https://github.com/jjeffrey/lean-review/blob/main/docs/quiz.md) ·
 [How it works](https://github.com/jjeffrey/lean-review/blob/main/docs/internals.md) · [Developing](https://github.com/jjeffrey/lean-review/blob/main/docs/development.md) ·
 [Changelog](https://github.com/jjeffrey/lean-review/blob/main/CHANGELOG.md)
 

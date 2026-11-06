@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Jonathan Jeffrey" }]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = []
 keywords = ["lean", "lean4", "formal verification", "code review", "doc-gen4"]
 classifiers = [

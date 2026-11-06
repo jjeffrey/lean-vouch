@@ -29,7 +29,7 @@
 - The diagram loads d3 and d3-graphviz from a CDN, and so needs an internet connection.
 - Above 5,000 declarations the server sends each page what it needs: a module's declarations, what's
   below them, and what directly uses them. So on a library page "Used by the project in" lists only
-  what's loaded, and the quiz still downloads the whole graph. For Mathlib the graph takes about six
+  what's loaded, and quiz mode still downloads the whole graph. For Mathlib the graph takes about six
   minutes and 5 GB to build and is 200 MB; the server needs a few seconds and a few GB to read it.
 - The server is for one person on their own machine: it binds to 127.0.0.1 and refuses requests from other sites, but has no login, so anyone logged in to the machine can reach it.
 - Splits and merges can't be remapped automatically; their marks show up as orphans.
@@ -64,5 +64,5 @@ Three things are versioned separately:
 | `lean_review/graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and fingerprints (`own`, and `deep`, which includes everything below it). |
 | `lean_review/server.py` | Serves the doc-gen4 output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames. Python standard library only. |
 | `lean_review/web/review.js`, `review.css` | The controls in the pages. |
-| `lean_review/web/quiz.html` | The quiz: blind descriptions of declarations at the edge of what you have marked. |
+| `lean_review/web/quiz.html` | Quiz mode: blind descriptions of declarations at the edge of what you have marked. |
 | `lean_review/web/graph.html` | The dependency diagram, laid out by Graphviz (via d3-graphviz, as on Lean blueprint pages). It zooms with the scroll wheel and pans by dragging. |

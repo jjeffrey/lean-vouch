@@ -4,9 +4,9 @@
 
 First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4.
 
-- Marks, note threads, change tracking, library marks, orphaned notes, the dependency diagram and the quiz.
+- Marks, note threads, change tracking, library marks, orphaned notes, the dependency diagram and quiz mode.
 - The diagram opens large projects as folders, click to expand; tested on all of Mathlib.
-- The quiz can be limited to a folder or module, or asked in random order, and records whether your reading matched.
+- Quiz mode can be limited to a folder or module, or asked in random order, and records whether your reading matched.
 - `sorry` and non-standard axioms are shown wherever they reach, even through proofs.
 - `lean-review` sets a project up and serves it in one command. It installs with pip or pipx.
 - The graph lists exactly what the docs list, using doc-gen4's rule for what a person wrote.

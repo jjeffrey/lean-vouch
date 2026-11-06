@@ -30,3 +30,4 @@ shot diagram 1600 1000 "review/diagram#ReviewExample.gcd"
 shot sorry 1400 1000 "ReviewExample/Multiples/Lcm.html?only&focus=ReviewExample.gcd_mul_lcm,ReviewExample.gcd_divides_mul"
 shot sorry-diagram 1600 1000 "review/diagram#ReviewExample.gcd_divides_mul"
 shot review-page-dark 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd" 0
+shot quiz 1400 1000 "review/quiz?name=ReviewExample.divides_gcd"

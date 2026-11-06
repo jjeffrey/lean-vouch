@@ -1,7 +1,9 @@
-# The quiz
+# Quiz mode
 
-A mark records what you think you understand; the quiz checks it. Open "quiz" from the bar at the
+A mark records what you think you understand; quiz mode checks it. Open "quiz" from the bar at the
 bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaration).
+
+![quiz mode, with a statement to describe and its name hidden](images/quiz.png)
 
 - **You choose what it asks about:** everything, a folder or a module, in the box at the top or with
   "Quiz this" on a box in the diagram. By default it picks declarations at the edge of what you have
@@ -21,7 +23,7 @@ bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaratio
   misses first.
 - **Keyboard:** Cmd-Enter saves your answer or moves on, and 1, 2, 3 say how it compared.
 - **Open book:** while answering, every declaration you have marked ✓ or ? can be looked up
-  (statement and docstring), from the list beside the quiz or by clicking a name in the statement.
+  (statement and docstring), from the list beside it or by clicking a name in the statement.
   Anything else asks first, with "Show anyway".
 - **Hints explain notation, never meaning:** which parts are arguments and which the conclusion,
   what `{n : Nat}` (implicit), `[…]` and `⦃…⦄` arguments are, that `.zero` is shorthand for
