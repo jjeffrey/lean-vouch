@@ -82,6 +82,11 @@
   #sidebar .review-notes .by-tool { background: none; border-color: #ccc; color: #777; font-style: italic; font-size: 0.9em; }
   /* Highlighting the selected node, what it depends on (below) and what depends on it (above). */
   .hl-dim { opacity: 0.45; }
+  g.node.hl-change { opacity: 1; }
+  g.node.hl-change path, g.node.hl-change polygon, g.node.hl-change rect { stroke: #f0a020 !important; stroke-width: 3px !important; }
+  g.edge.hl-change { opacity: 1; }
+  g.edge.hl-change path, g.edge.hl-change polygon { stroke: #f0a020 !important; stroke-width: 2.5px !important; }
+  g.edge.hl-change polygon { fill: #f0a020; }
   .hl-selected path, .hl-selected polygon, .hl-selected rect { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
   .hl-down path, .hl-down polygon, .hl-down rect { stroke: #2a7de1 !important; stroke-width: 2.5px !important; }
   .hl-up path, .hl-up polygon, .hl-up rect { stroke: #8e44ad !important; stroke-width: 2.5px !important; }
@@ -107,8 +112,8 @@
   <nav><a id="docs-link" href="/">docs</a><a href="/review/quiz">quiz</a></nav></header>
 <details class="note"><summary>How to read this diagram</summary><p>Each arrow points from a declaration to one it depends on, with the arrows implied
 by others left out (a Hasse diagram). For a theorem, only its statement counts; for a definition,
-its statement and body. Colors are your marks; an orange border means something below changed
-since you marked it. Scroll to zoom, drag to pan. Click a node to see its code and notes, and to
+its statement and body. Colors are your marks; a solid orange border means it changed since a mark that relies on it, a
+dashed one that something below it did; selecting one traces the way down to the change. Scroll to zoom, drag to pan. Click a node to see its code and notes, and to
 highlight <span class="key-down">what it depends on</span> and <span class="key-up">what depends
 on it</span>; click empty space to clear. Boxes are folders and modules, with how many of their
 declarations you have marked: click one to open it, and click an open box's label to close it.
@@ -123,6 +128,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   <button type="button" id="close-all">close all</button>
   <button type="button" id="open-all" hidden>open all</button>
   <button type="button" id="clear-pins" hidden>show everything</button>
+  <button type="button" id="what-changed" hidden></button>
   <label><input type="checkbox" id="clusters" checked> group by module</label>
   <label><input type="checkbox" id="across"> arrows across folders</label>
   <label><input type="checkbox" id="library"> show library definitions</label>
@@ -137,6 +143,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     <span><i class="swatch" style="background:#fff"></i>unmarked</span>
     <span><i class="swatch" style="background:#eee"></i>library</span>
     <span id="attention-key" hidden><span class="attention-mark">!</span> needs your attention</span>
+    <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px solid #f0a020"></i>changed</span>
+    <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #f0a020"></i>relies on a change</span>
     <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px solid #c62828"></i>contains sorry</span>
     <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #c62828"></i>relies on sorry</span>
     <span class="gaps-key" id="gaps-total" hidden></span>
@@ -240,6 +248,18 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return current.size > 1 ? "disagree" : everyMark(n)[0]?.status;
   };
   const stale = n => viewer.value === "all" ? false : isOld(n, shownMark(n));
+  // What changed, and how many marks rely on each: every mark recorded what lay below it, so this
+  // includes declarations nobody marked. Marks shown are the viewer's; everyone's has no single view.
+  const changedNames = () => {
+    const found = new Map();
+    if (viewer.value === "all") return found;
+    for (const n of Object.keys(marks)) {
+      const c = changes(n, shownMark(n));
+      for (const d of [...(c.self ? [n] : []), ...c.deps]) found.set(d, (found.get(d) ?? 0) + 1);
+    }
+    return found;
+  };
+  const changeOf = n => changedNames().has(n) ? "changed" : stale(n) ? "affected" : null;
   const asked = n => marks[n]?.attention?.length > 0;
   const waitingIn = node => Object.keys(marks).filter(n => asked(n) && node.modules.includes(decls[n]?.module)).length;
   const ORANGE = "#e07000";
@@ -251,9 +271,10 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const SORRY = "#c62828";
   const showGaps = () => document.getElementById("gaps").checked;
   const gapOf = n => !showGaps() ? null : decls[n]?.sorry ? "source" : decls[n]?.sorryFrom?.length ? "affected" : null;
-  const border = (isStale, gap, stroke) => gap === "source" ? { color: SORRY, width: 3 }
+  const border = (change, gap, stroke) => gap === "source" ? { color: SORRY, width: 3 }
     : gap === "affected" ? { color: SORRY, width: 2, dashed: true }
-    : isStale ? { color: "#f0a020", width: 3 } : { color: stroke, width: 1 };
+    : change === "affected" ? { color: "#f0a020", width: 2, dashed: true }
+    : change ? { color: "#f0a020", width: 3 } : { color: stroke, width: 1 };
   // Direct dependents of each declaration: for the sidebar, and for arrows from closed boxes.
   const usedBy = new Map();
   const indexUsers = () => {
@@ -397,9 +418,10 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     // The diagram as data, drawn by drawGraphviz below.
     const ids = new Map([...inGraph].map((n, i) => [n, "n" + i]));
     model = { nodes: [], edges: [], name: new Map(), id: ids, box: new Map(), down: new Map(), up: new Map(), weight: new Map() };
+    model.boxIdOf = n => { const box = boxOf.get(decls[n]?.module); return box ? boxId(box) : undefined; };
     for (const n of inGraph) {
       model.name.set(ids.get(n), n);
-      model.nodes.push({ id: ids.get(n), label: short(n).replaceAll('"', "'"), stale: stale(n), gap: gapOf(n),
+      model.nodes.push({ id: ids.get(n), label: short(n).replaceAll('"', "'"), stale: changeOf(n), gap: gapOf(n),
         cls: nodeClass(n),
         module: decls[n] ? decls[n].module : null });                    // library: no module box
     }
@@ -483,6 +505,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     await drawGraphviz(model, target);
     retitle();
     drawBadges();
+    showChanged();
     // Clicking a node selects it; clicking empty space clears the selection.
     target.addEventListener("click", e => {
       // A click on an open box's label closes it.
@@ -716,15 +739,54 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   function highlight(id) {
     const nodes = nodeElements(), edges = edgeElements();
     for (const el of [...nodes.values(), ...edges.map(e => e[2])])
-      el.classList.remove("hl-dim", "hl-selected", "hl-down", "hl-up", "hl-both");
+      el.classList.remove("hl-dim", "hl-selected", "hl-down", "hl-up", "hl-both", "hl-change");
     if (!id) return;
     const down = walk(id, model.down), up = walk(id, model.up);
+    const trail = changeTrail(id);
     for (const [n, el] of nodes)
       el.classList.add(n === id ? "hl-selected" : down.has(n) ? "hl-down" : up.has(n) ? "hl-up" : "hl-dim");
     for (const [a, b, el] of edges)
       el.classList.add((a === id || down.has(a)) && (b === id || down.has(b)) ? "hl-down"
         : (b === id || up.has(b)) && (a === id || up.has(a)) ? "hl-up" : "hl-dim");
+    for (const [n, el] of nodes) if (trail.has(n)) el.classList.add("hl-change");
+    for (const [a, b, el] of edges) if (trail.has(a) && trail.has(b)) el.classList.add("hl-change");
   }
+  // The way down from a flagged declaration to what changed: everything between, and those changes.
+  function changeTrail(id) {
+    const name = model.name.get(id), c = name ? changes(name, shownMark(name)) : { self: false, deps: [] };
+    const targets = new Set(c.deps.map(d => model.id.get(d) ?? model.boxIdOf?.(d)).filter(Boolean));
+    if (c.self) targets.add(id);
+    const reaches = new Map();
+    const reach = n => {
+      if (!reaches.has(n)) {
+        reaches.set(n, targets.has(n));
+        reaches.set(n, targets.has(n) || [...(model.down.get(n) ?? [])].map(reach).some(Boolean));
+      }
+      return reaches.get(n);
+    };
+    return targets.size && reach(id) ? new Set([id, ...[...reaches].filter(([, on]) => on).map(([n]) => n)]) : new Set();
+  }
+  const changedButton = document.getElementById("what-changed");
+  const showChanged = () => {
+    const found = changedNames();
+    changedButton.textContent = `what changed (${found.size})`;
+    changedButton.hidden = !found.size;
+    for (const key of document.querySelectorAll(".change-key")) key.hidden = !found.size;
+  };
+  // The lowest first: what a change means depends on what's beneath it.
+  changedButton.onclick = () => {
+    selected = null;
+    highlight(null);
+    const list = el("ul");
+    const found = changedNames();
+    for (const n of [...found.keys()].sort((a, b) => below(a).size - below(b).size || a.localeCompare(b))) {
+      const item = el("li");
+      item.append(ref(n), ` (${found.get(n)} ${found.get(n) === 1 ? "mark relies" : "marks rely"} on it)`);
+      list.append(item);
+    }
+    sidebar.replaceChildren(el("h2", null, "What changed"),
+      el("p", "muted", "Lowest first, since what a change means depends on what's beneath it."), list);
+  };
 
   // Update one node's colors after its mark changes, without redrawing (which would reset zoom).
   function recolor(name) {
@@ -732,17 +794,19 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const id = model.id.get(name);
     const g = id && nodeElements().get(id);
     if (!g) return;
-    const [fill, stroke] = COLORS[nodeClass(name)], isStale = stale(name), b = border(isStale, gapOf(name), stroke);
+    const [fill, stroke] = COLORS[nodeClass(name)], change = changeOf(name), b = border(change, gapOf(name), stroke);
     for (const shape of g.querySelectorAll("path, polygon, rect")) {
       shape.setAttribute("fill", fill);
       shape.setAttribute("stroke", b.color);
       shape.style.fill = fill;
       shape.style.stroke = b.color;
       shape.style.strokeWidth = `${b.width}px`;
+      shape.style.strokeDasharray = b.dashed ? "5,2" : "";
     }
     const node = model.nodes.find(n => n.id === id);
-    if (node) Object.assign(node, { cls: nodeClass(name), stale: isStale });
+    if (node) Object.assign(node, { cls: nodeClass(name), stale: change });
     drawBadges();
+    showChanged();
   }
 
   function select(name) {

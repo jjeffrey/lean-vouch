@@ -133,6 +133,18 @@
 
   const renderers = new Map();   // how to redraw each declaration on this page
 
+  // What changed, and how many of your marks rely on each. Every mark recorded what lay below it,
+  // so this includes declarations you never marked.
+  const changedNames = () => {
+    const found = new Map();
+    for (const [name, mark] of Object.entries(marks)) {
+      if (!mark.status || !mark.fingerprint) continue;
+      const c = changes(name, mark);
+      for (const d of [...(c.self ? [name] : []), ...c.deps]) found.set(d, (found.get(d) ?? 0) + 1);
+    }
+    return found;
+  };
+
   function controls(name, element, library) {
     const textSignature = textFingerprint(element.textContent);
     const box = el("div", "review");
@@ -202,13 +214,16 @@
       element.dataset.reviewStatus = e.status ?? "";
       const c = e.status ? changes(name, e, textSignature) : { self: false, deps: [] };
       stale.replaceChildren();
+      const relying = changedNames().get(name);
       if (c.self) stale.append("changed since you marked it");
+      else if (relying) stale.append(`changed since ${relying} of your marks relied on it`);
       else if (c.deps.length) {
         stale.append("depends on ");
         c.deps.forEach((d, i) => { if (i) stale.append(", "); stale.append(link(d, short(d))); });
         stale.append(", which changed since you marked it");
       }
       element.dataset.reviewStale = c.self || c.deps.length ? "yes" : "";
+      element.dataset.reviewChange = c.self || relying ? "changed" : c.deps.length ? "affected" : "";
       // Only marks of what's there now can disagree.
       const isCurrent = m => { const d = changes(name, m, textSignature); return !d.self && !d.deps.length; };
       const current = [...(e.status && isCurrent(e) ? [e.status] : []),
@@ -283,6 +298,23 @@
     document.body.append(panel);
   }
 
+  // The lowest first: what a change means depends on what's beneath it.
+  function changedPanel() {
+    const panel = el("div", "review-orphans");
+    const close = el("button", "review-close", "close");
+    close.onclick = () => panel.remove();
+    panel.append(el("h3", null, "What changed"), close,
+      el("p", null, "Each of these changed since marks that rely on it were made. Start at the top: what a change means depends on what's beneath it."));
+    const list = el("ul"), found = changedNames();
+    for (const name of [...found.keys()].sort((a, b) => closure(a).size - closure(b).size || a.localeCompare(b))) {
+      const item = el("li");
+      item.append(link(name, name), ` (${found.get(name)} ${found.get(name) === 1 ? "mark relies" : "marks rely"} on it)`);
+      list.append(item);
+    }
+    panel.append(list);
+    document.body.append(panel);
+  }
+
   const needingAttention = () => Object.keys(marks).filter(n => marks[n].attention?.length);
 
   function attentionPanel() {
@@ -353,6 +385,15 @@
     };
     showAsked();
     bar.append(askedButton);
+    const changedButton = el("button", "review-orphan-button");
+    changedButton.onclick = changedPanel;
+    const showChanged = () => {
+      const found = changedNames().size;
+      changedButton.textContent = `what changed (${found})`;
+      changedButton.style.display = found ? "" : "none";
+    };
+    showChanged();
+    bar.append(changedButton);
     if (location.hash === "#review-attention" && needingAttention().length) attentionPanel();
     const filters = el("details", "review-filters");
     filters.append(el("summary", null, "show plumbing"));
@@ -412,6 +453,7 @@
         if (JSON.stringify(marks[name]) !== JSON.stringify(fresh[name])) render(fresh[name] ?? {});
       marks = fresh;
       showAsked();
+      showChanged();
       summarize();
     });
     // ?focus=A,B scrolls to those declarations once the review controls are in place; adding

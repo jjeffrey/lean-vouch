@@ -122,7 +122,7 @@ class PagesTest(unittest.TestCase):
         docs.joinpath(*parts).write_text(text)
         return docs
 
-    def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None):
+    def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None, graph=None):
         """Run `script` in a real page, which can't be clicked from outside headless Chrome, and return
         what it adds to `results`. It sees `doc`, the page's document, and any uncaught error fails."""
         driver = DRIVER.replace("SCRIPT", script)
@@ -133,7 +133,7 @@ class PagesTest(unittest.TestCase):
         else:
             docs = self.docs_with(page, (DOCS / page).read_text().replace("</body>", driver + "</body>", 1))
             path = page
-        self.serve(marks, self.graph, docs, people, build)
+        self.serve(marks, graph or self.graph, docs, people, build)
         found = re.search(r'<pre id="driven">(.*?)</pre>', self.page(path, 30000), re.S)
         self.assertIsNotNone(found, "the page's script didn't finish")
         done = json.loads(html.unescape(found[1]))
@@ -269,6 +269,85 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(results[0], "yes")
         self.assertIn("Claude: ?", results[1])
         self.assertEqual(results[2:], [True, ""])
+
+    def changed_below(self):
+        """Marks on `gcd_divides` and `Divides`, made before `gcd` changed. `gcd_divides` relies on it."""
+        marks = {name: {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00", "fingerprint": fingerprint(self.graph, name)}
+                 for name in ("ReviewExample.gcd_divides", "ReviewExample.Divides")}
+        graph = json.loads(json.dumps(self.graph))
+        graph["declarations"][GCD]["own"] = "0000000000000000"
+        return marks, graph
+
+    def test_the_diagram_tells_what_changed_from_what_relies_on_it(self):
+        marks, graph = self.changed_below()
+        results = self.click_through(marks, """
+            await ready("#diagram g.node");
+            await ready("#what-changed:not([hidden])");
+            const node = name => [...doc.querySelectorAll("#diagram g.node")].find(g => g.querySelector("text").textContent === name);
+            const dashes = name => node(name).querySelector("path, polygon").getAttribute("stroke-dasharray") ?? node(name).querySelector("path, polygon").style.strokeDasharray;
+            const color = name => node(name).querySelector("path, polygon").getAttribute("stroke");
+            results.push(color("gcd"), !!dashes("gcd"), color("gcd_divides"), !!dashes("gcd_divides"), color("Divides.refl"));
+            results.push(doc.getElementById("what-changed").textContent);
+        """, frame=f"review/diagram#{GCD}", graph=graph)
+        self.assertEqual(results[0], results[2])
+        self.assertEqual(results[1:2] + results[3:4], [False, True])
+        self.assertNotEqual(results[4], results[0])
+        self.assertEqual(results[5], "what changed (1)")
+
+    def test_selecting_a_flagged_declaration_traces_the_way_down(self):
+        marks, graph = self.changed_below()
+        results = self.click_through(marks, """
+            await ready("#diagram g.node.hl-selected");
+            const lit = [...doc.querySelectorAll("#diagram g.node.hl-change")].map(g => g.querySelector("text").textContent).sort();
+            results.push(lit, doc.querySelectorAll("#diagram g.edge.hl-change").length > 0);
+        """, frame="review/diagram#ReviewExample.gcd_divides", graph=graph)
+        self.assertEqual(results, [["gcd", "gcd_divides"], True])
+
+    def test_a_change_in_a_closed_folder_is_traced_to_its_box(self):
+        names = {f"P.Big.M{i}.x{k}": {"kind": "def", "module": f"P.Big.M{i}", "lines": [1, 1], "own": "1", "deep": "1", "deps": [], "uses": []}
+                 for i in range(3) for k in range(30)}
+        names["P.Other.y"] = {"kind": "def", "module": "P.Other", "lines": [1, 1], "own": "1", "deep": "1", "deps": ["P.Big.M0.x0"], "uses": []}
+        graph = {"format": 1, "root": "P", "declarations": names, "library": {}, "renames": {},
+                 "modules": {m: [] for m in {d["module"] for d in names.values()}}}
+        marks = {"P.Other.y": {"status": "agree", "notes": [], "date": "2026-01-01T00:00:00",
+                               "fingerprint": {"own": "1", "deps": {"P.Big.M0.x0": "0"}}}}
+        results = self.click_through(marks, """
+            await ready("#diagram g.node");
+            await ready("#what-changed:not([hidden])");
+            results.push(doc.getElementById("what-changed").textContent);
+        """, frame="review/diagram", graph=graph)
+        self.assertEqual(results, ["what changed (1)"])
+
+    def test_what_changed_lists_the_lowest_first(self):
+        marks, graph = self.changed_below()
+        graph["declarations"]["ReviewExample.Divides"]["own"] = "1111111111111111"
+        results = self.click_through(marks, """
+            await ready("#what-changed:not([hidden])");
+            doc.getElementById("what-changed").click();
+            await ready("#sidebar li");
+            results.push(...[...doc.querySelectorAll("#sidebar li")].map(li => li.textContent));
+        """, frame="review/diagram", graph=graph)
+        self.assertEqual(len(results), 2)
+        self.assertIn("Divides", results[0])
+        self.assertIn("gcd", results[1])
+        self.assertIn("1 mark relies on it", results[1])
+
+    def test_a_docs_page_tells_what_changed_from_what_relies_on_it(self):
+        marks, graph = self.changed_below()
+        results = self.click_through(marks, """
+            await ready(".decl[data-review-change=affected]");
+            const decl = name => doc.getElementById(name);
+            results.push(decl("ReviewExample.gcd").dataset.reviewChange, decl("ReviewExample.gcd").querySelector(".review-stale").textContent);
+            results.push(decl("ReviewExample.gcd_divides").dataset.reviewChange);
+            const button = [...doc.querySelectorAll("#review-summary button")].find(b => b.textContent.startsWith("what changed"));
+            results.push(button.textContent);
+            button.click();
+            results.push(doc.querySelector(".review-orphans li").textContent);
+        """, graph=graph)
+        self.assertEqual(results[0], "changed")
+        self.assertIn("1 of your marks", results[1])
+        self.assertEqual(results[2:4], ["affected", "what changed (1)"])
+        self.assertIn("1 mark relies on it", results[4])
 
     LIVE_NOTE = """fetch("/review/data", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: "claude", author: "Claude", name: "ReviewExample.gcd", status: "question", note: "Live." }) });"""

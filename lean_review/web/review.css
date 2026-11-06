@@ -37,7 +37,8 @@
 .decl[data-review-status="agree"] { border-left: 4px solid #3a3; }
 .decl[data-review-status="question"] { border-left: 4px solid #d9a400; }
 .decl[data-review-status="reject"] { border-left: 4px solid #d44; }
-.decl[data-review-stale="yes"] { box-shadow: -4px 0 0 #f0a020; }
+.decl[data-review-change="changed"] { box-shadow: -4px 0 0 #f0a020; }
+.decl[data-review-change="affected"] { box-shadow: -4px 0 0 #f0a02066; }
 .decl[data-review-disagree="yes"] { border-left: 4px solid #7b4fb5; }
 .review-hide-generated .review-generated { display: none; }
 #review-summary { position: fixed; right: 1em; bottom: 1em; z-index: 10; display: flex; gap: 1em; align-items: center;
