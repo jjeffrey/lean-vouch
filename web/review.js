@@ -8,6 +8,7 @@
     ["question", "?", "I have a question"],
     ["reject", "✗", "I reject how this is defined"],
   ];
+  const SYMBOL = { agree: "✓", question: "?", reject: "✗" };
   const LIBRARY_STATUS = [
     ["agree", "✓", "I understand this"],
     ["question", "?", "I have a question about this"],
@@ -91,17 +92,18 @@
     return (h >>> 0).toString(16);
   };
 
-  // One note in a thread: the author and date on a line of their own, then the text. Reviewer,
-  // assistant and tool notes are styled differently, like a conversation.
+  // One note in a thread: the author and date on a line of their own, then the text. Yours, other
+  // people's and the tool's are styled differently, like a conversation.
   const noteItem = n => {
     const li = document.createElement("li");
-    li.className = n.by === "assistant" ? "by-assistant" : n.by === "lean-review" ? "by-tool" : "by-reviewer";
+    li.className = n.by === "lean-review" ? "by-tool" : n.mine ? "by-reviewer" : "by-other";
+    li.style.setProperty("--person-hue", reviewHue(n.by));
     const head = document.createElement("div");
     head.className = "note-head";
     head.textContent = n.by + (n.quiz ? " · quiz answer " : " ");
     const date = document.createElement("span");
     date.className = "note-date";
-    date.textContent = n.date;
+    date.textContent = n.date.slice(0, 10);
     head.append(date);
     const text = document.createElement("div");
     text.textContent = n.text;
@@ -179,16 +181,21 @@
     });
     const stale = el("span", "review-stale");
     row.append(stale);
-    box.append(row);
+    const others = el("div", "review-others");
+    box.append(row, others);
     const notes = el("ul", "review-notes");
     const input = el("textarea");
-    input.placeholder = "Add a note or question…";
+    input.placeholder = "Add a note…";
     input.rows = 2;
     const add = el("button", "review-add", "Add note");
     box.append(notes, input, add);
+    const prompt = el("div", "review-prompt", "What's your question? Others see it once you write one.");
+    notes.after(prompt);
+    const unexplained = e => e.status === "question" && !(e.notes ?? []).some(n => n.mine && n.by !== "lean-review");
 
     const render = e => {
       marks[name] = e;
+      prompt.hidden = !unexplained(e);
       for (const b of buttons) b.classList.toggle("active", e.status === b.dataset.status);
       element.dataset.reviewStatus = e.status ?? "";
       const c = e.status ? changes(name, e, textSignature) : { self: false, deps: [] };
@@ -200,18 +207,30 @@
         stale.append(", which changed since you marked it");
       }
       element.dataset.reviewStale = c.self || c.deps.length ? "yes" : "";
+      // Only marks of what's there now can disagree.
+      const isCurrent = m => { const d = changes(name, m, textSignature); return !d.self && !d.deps.length; };
+      const current = [...(e.status && isCurrent(e) ? [e.status] : []),
+        ...(e.others ?? []).filter(isCurrent).map(o => o.status)];
+      const disagree = new Set(current).size > 1;
+      element.dataset.reviewDisagree = disagree ? "yes" : "";
+      element.dataset.reviewAttention = e.attention?.length ? "yes" : "";
+      others.replaceChildren(...(e.others ?? []).map(o =>
+        el("span", isCurrent(o) ? null : "old", `${o.name}: ${SYMBOL[o.status]}${isCurrent(o) ? "" : " (changed since)"}`)));
+      if (disagree) others.append(el("span", "disagree", "disagreement"));
+      if (e.attention?.length) others.append(el("span", "attention", `needs your attention: ${e.attention.join(", ")}`));
       notes.replaceChildren(...(e.notes ?? []).map(noteItem));
       summarize();
     };
     for (const b of buttons)
       b.onclick = async () => {
         const status = b.classList.contains("active") ? null : b.dataset.status;
-        render(await post("/__review__/data", { name, status, fingerprint: fingerprint(name) }));
+        render(await post("/review/data", { name, status, fingerprint: fingerprint(name) }));
+        if (unexplained(marks[name])) input.focus();
       };
     add.onclick = async () => {
       const note = input.value.trim();
       if (!note) return;
-      render(await post("/__review__/data", { name, note }));
+      render(await post("/review/data", { name, note }));
       input.value = "";
     };
     element.append(box);
@@ -221,8 +240,8 @@
   // Marks whose declaration no longer exists, e.g. after a refactor.
   function orphans() {
     const modules = new Set(graph.moduleNames ?? Object.values(graph.declarations).map(d => d.module));
-    return Object.keys(marks).filter(k =>
-      k.startsWith("module ") ? !modules.has(k.slice(7)) : !info(k));
+    return Object.keys(marks).filter(k => (marks[k].status || marks[k].notes?.some(n => n.mine)) &&
+      (k.startsWith("module ") ? !modules.has(k.slice(7)) : !info(k)));
   }
 
   function orphanPanel() {
@@ -241,14 +260,14 @@
       to.setAttribute("list", "review-names");
       const move = el("button", null, "Move");
       move.onclick = async () => {
-        const r = await post("/__review__/move", { from: name, to: to.value.trim() });
+        const r = await post("/review/move", { from: name, to: to.value.trim() });
         if (r.error) return alert(r.error);
         location.reload();
       };
       const del = el("button", null, "Delete");
       del.onclick = async () => {
         if (!confirm(`Delete the mark and notes for ${name}?`)) return;
-        await post("/__review__/delete", { name });
+        await post("/review/delete", { name });
         location.reload();
       };
       item.append(notes, to, move, del);
@@ -258,6 +277,24 @@
     names.id = "review-names";
     for (const n of Object.keys(graph.declarations)) names.append(Object.assign(el("option"), { value: n }));
     panel.append(names);
+    document.body.append(panel);
+  }
+
+  const needingAttention = () => Object.keys(marks).filter(n => marks[n].attention?.length);
+
+  function attentionPanel() {
+    const panel = el("div", "review-orphans");
+    const close = el("button", "review-close", "close");
+    close.onclick = () => panel.remove();
+    panel.append(el("h3", null, "Needs your attention"), close,
+      el("p", null, "Someone is waiting on you here: they asked a question, or answered yours. Mark it or reply to clear it."));
+    const list = el("ul");
+    for (const name of needingAttention()) {
+      const item = el("li");
+      item.append(link(name, name), ` (${marks[name].attention.join(", ")})`);
+      list.append(item);
+    }
+    panel.append(list);
     document.body.append(panel);
   }
 
@@ -276,10 +313,10 @@
 
   async function init() {
     [marks, graph] = await Promise.all([
-      fetch("/__review__/data").then(checked),
+      fetch("/review/data").then(checked),
       // A large project sends what this page needs; a small one sends everything.
-      fetch(typeof MODULE_NAME === "undefined" ? "/__review__/graph"
-        : `/__review__/graph?marked&module=${encodeURIComponent(MODULE_NAME)}`).then(r => r.json()),
+      fetch(typeof MODULE_NAME === "undefined" ? "/review/graph"
+        : `/review/graph?marked&module=${encodeURIComponent(MODULE_NAME)}`).then(r => r.json()),
     ]);
     graph.declarations ??= {};
     graph.library ??= {};
@@ -290,10 +327,10 @@
     // So the graph and quiz pages can link back here.
     try { sessionStorage.setItem("lean-review-docs", location.href); } catch {}
     const graphLink = el("a", null, "dependency graph");
-    graphLink.href = "/__review__/diagram";
+    graphLink.href = "/review/diagram";
     bar.append(graphLink);
     const quizLink = el("a", null, "quiz");
-    quizLink.href = "/__review__/quiz";
+    quizLink.href = "/review/quiz";
     quizLink.title = "Describe unmarked declarations from their statement alone";
     bar.append(quizLink);
     const lost = orphans();
@@ -303,6 +340,13 @@
       bar.append(b);
       // A link to page.html#review-orphans opens the list directly.
       if (location.hash === "#review-orphans") orphanPanel();
+    }
+    const asked = needingAttention();
+    if (asked.length) {
+      const b = el("button", "review-orphan-button", `needs attention (${asked.length})`);
+      b.onclick = attentionPanel;
+      bar.append(b);
+      if (location.hash === "#review-attention") attentionPanel();
     }
     const filters = el("details", "review-filters");
     filters.append(el("summary", null, "show plumbing"));

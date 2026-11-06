@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
 """Set up lean-review for a Lake project, build what it needs, and serve it. From the project's root:
 
-    python3 path/to/lean-review/review.py MyProject
-    python3 path/to/lean-review/review.py MyProject MyProject.Examples
+    python3 path/to/lean-review/review.py
+    python3 path/to/lean-review/review.py MyLibrary My.Module
 
-Name the project's root module, then any others to review, such as a second library's root. Safe to rerun: it refreshes the
+It reviews every library in the project, or just the libraries and modules you name. Safe to rerun: it refreshes the
 docs and graph after you change the code.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 MINIMUM = (4, 30)  # the oldest Lean this has been run on, end to end; see docs/internals.md
 TESTED = (4, 35)   # the newest
+HOME = Path(".lean-review")
+FORMAT = 3  # MARKS_FORMAT in server/server.py
 
 DOCBUILD = """\
 # Builds this project's API documentation with doc-gen4, for lean-review.
 name = "docbuild"
 reservoir = false
 version = "0.1.0"
-packagesDir = "../.lake/packages"
+packagesDir = "../../.lake/packages"
 
 [[require]]
 scope = "leanprover"
@@ -34,7 +38,15 @@ rev = "{version}"
 
 [[require]]
 name = "{package}"
-path = "../"
+path = "../../"
+"""
+
+# Everything here can be rebuilt but the marks, and quiz answers stay with the person.
+GITIGNORE = """\
+*
+!.gitignore
+!marks/
+!marks/**
 """
 
 
@@ -75,6 +87,43 @@ def package_name():
     return found[1].strip("«»")
 
 
+def library_names():
+    """The project's libraries, as its lakefile declares them."""
+    if Path("lakefile.toml").exists():
+        blocks = Path("lakefile.toml").read_text().split("[[")
+        return [found[1] for block in blocks if block.startswith("lean_lib]]")
+                if (found := re.search(r'^name\s*=\s*"(.*?)"', block, re.M))]
+    found = re.findall(r"^(?:@\[.*?\]\s*)?lean_lib\s+(\S+)", Path("lakefile.lean").read_text(), re.M)
+    return [name.strip('«»"') for name in found]
+
+
+def modules_of(names):
+    """What to review: the modules of the libraries named, or of them all, and any modules named.
+    Lake lists a library's modules, since its globs decide them. The first named comes first, as the
+    project's name; then the shortest names, which is what the graph keeps as its roots."""
+    libraries = library_names()
+    chosen = names or libraries
+    modules = []
+    for name in chosen:
+        if name in libraries:
+            listed = subprocess.run(["lake", "query", f"{name}:modules"], stdout=subprocess.PIPE, text=True)
+            if listed.returncode:
+                fail(f"Lake couldn't list the modules of {name}; see above.")
+            modules += listed.stdout.split()
+        else:
+            modules.append(name)
+    if not modules:
+        fail("found no modules to review. Name them, as in `review.py MyProject`.")
+    return sorted(set(modules), key=lambda m: (m != chosen[0], m.count("."), m))
+
+
+def tops(imports):
+    """The modules no other module imports. doc-gen4 documents what a module imports, once per
+    module named, so these are enough, and a library with one root takes one pass."""
+    imported = {module for names in imports.values() for module in names}
+    return [module for module in imports if module not in imported]
+
+
 def packages_in(manifest):
     return {p["name"].strip("«»") for p in json.loads(manifest.read_text()).get("packages", [])} if manifest.exists() else set()
 
@@ -90,9 +139,8 @@ def clear_doc_packages(manifest):
 def set_up_folders(tag, package):
     """Docs live in their own folder, so the project gains no dependency. doc-gen4 tags match Lean's
     versions, and it must match the project's: its main branch needs the newest Lean."""
-    docbuild, review = Path("docbuild"), Path("review")
-    docbuild.mkdir(exist_ok=True)
-    review.mkdir(exist_ok=True)
+    docbuild = HOME / "docbuild"
+    docbuild.mkdir(parents=True, exist_ok=True)
     wanted, written = Path("lean-toolchain").read_text(), docbuild / "lean-toolchain"
     new = not (docbuild / "lakefile.toml").exists()
     changed = new or not written.exists() or written.read_text() != wanted
@@ -103,11 +151,10 @@ def set_up_folders(tag, package):
         clear_doc_packages(docbuild / "lake-manifest.json")
         (docbuild / "lake-manifest.json").unlink(missing_ok=True)
     if new:
-        (docbuild / ".gitignore").write_text(".lake/\n")
-        (review / ".gitignore").write_text("graph.json\ngraph.json.new\nlinks.local.json\n")
-        print(f"lean-review: created docbuild/ (doc-gen4 {tag}) and review/.", flush=True)
+        (HOME / ".gitignore").write_text(GITIGNORE)
+        print(f"lean-review: created {HOME}/ (doc-gen4 {tag}).", flush=True)
     elif changed:
-        print(f"lean-review: moved docbuild/ to doc-gen4 {tag}, for the project's Lean.", flush=True)
+        print(f"lean-review: moved to doc-gen4 {tag}, for the project's Lean.", flush=True)
 
 
 def source_folders():
@@ -126,7 +173,7 @@ def run(command, cwd=".", env=None):
 
 
 def build_docs(modules):
-    docbuild = Path("docbuild")
+    docbuild = HOME / "docbuild"
     if not (docbuild / "lake-manifest.json").exists():
         # Keeps Mathlib's update hook from fetching its cache again.
         run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"})
@@ -141,7 +188,7 @@ def build_docs(modules):
 
 def build_graph(modules):
     """Lean prints compile errors to stdout, so a failure leaves them in the output file: show them."""
-    new = Path("review/graph.json.new")
+    new = HOME / "graph.json.new"
     with new.open("w") as output:
         done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules], stdout=output)
     if done.returncode:
@@ -149,7 +196,61 @@ def build_graph(modules):
         new.unlink()
         fail(f"building the declaration graph failed:\n{errors}\n"
              "If this is about Lean itself, not your project, please open an issue.")
-    new.replace("review/graph.json")
+    new.replace(HOME / "graph.json")
+
+
+def slug(name):
+    """A name as plain lowercase words, which every filesystem and git agree on."""
+    plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", plain.lower()).strip("-")
+
+
+def git_config(key):
+    return subprocess.run(["git", "config", key], capture_output=True, text=True).stdout.strip()
+
+
+def identity(chosen_id, chosen_name):
+    """Who's reviewing. The id tells two people of the same name apart by their email, without
+    publishing it, and comes out the same on each of their machines."""
+    name = chosen_name or git_config("user.name") or chosen_id or "reviewer"
+    if chosen_id:
+        return chosen_id, name
+    base = slug(name)
+    if not base:
+        fail(f"can't make a file name from {name!r}. Choose one with --id, such as --id my-name.")
+    return f"{base}-{hashlib.sha256(git_config('user.email').encode()).hexdigest()[:4]}", name
+
+
+def import_old_marks(who, name):
+    """Split a review/marks.json from before each person had their own file: marks and your notes
+    to you, others' notes to them, and quiz answers to your quiz file. The old file is left alone."""
+    old, folder = Path("review/marks.json"), HOME / "marks"
+    if not old.exists() or folder.exists():
+        return
+    data = json.loads(old.read_text())
+    marks = data["marks"] if data.get("__format__") == 2 else {k: v for k, v in data.items() if k != "__format__"}
+    people, answers = {who: {"name": name, "marks": {}}}, {}
+    for declaration, entry in marks.items():
+        kept = {key: entry[key] for key in ("status", "date", "fingerprint", "signature") if key in entry}
+        people[who]["marks"][declaration] = {**kept, "notes": []}
+        for note in entry.get("notes", []):
+            text = {"date": note["date"], "text": note["text"]}
+            if "quiz" in note:
+                answers.setdefault(declaration, []).append({**text, "quiz": note["quiz"]})
+            elif note["by"] == "lean-review":
+                people[who]["marks"][declaration]["notes"].append(note)
+            else:
+                author = who if note["by"] == name else slug(note["by"]) or who
+                person = people.setdefault(author, {"name": note["by"], "marks": {}})
+                person["marks"].setdefault(declaration, {"status": None, "notes": []})["notes"].append(text)
+    folder.mkdir(parents=True)
+    for author, person in people.items():
+        (folder / f"{author}.json").write_text(json.dumps({"format": FORMAT, **person}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
+    if answers:
+        (HOME / "quiz").mkdir(exist_ok=True)
+        (HOME / "quiz" / f"{who}.json").write_text(json.dumps({"format": FORMAT, "answers": answers}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
+    print(f"lean-review: copied {len(marks)} marks from {old} to {folder}/. review/ and docbuild/ are no longer "
+          "used; delete them when you're happy.", flush=True)
 
 
 def clean_docs(docs, root, modules):
@@ -170,30 +271,34 @@ def clean_docs(docs, root, modules):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("modules", nargs="+", metavar="MODULE", help="the root module, then any others to review")
+    parser.add_argument("names", nargs="*", metavar="NAME", help="libraries or modules to review (default: every library)")
     parser.add_argument("--port", type=int, default=8797)
-    parser.add_argument("--reviewer", help="the name on your notes (default: your git name)")
+    parser.add_argument("--name", help="the name to show on your marks and notes (default: your git name)")
+    parser.add_argument("--id", help="who you are, as the name of your marks file (default: from your git name and email)")
     parser.add_argument("--no-serve", action="store_true", help="only rebuild the docs and graph")
     parser.add_argument("--clean", action="store_true", help="delete docs pages left by renamed or removed modules")
     args = parser.parse_args()
     package = package_name()
     tag, version = toolchain()
     check_version(tag, version)
+    who, name = identity(args.id, args.name)
     set_up_folders(tag, package)
-    run(["lake", "build"])
-    build_docs(args.modules)
-    build_graph(args.modules)
+    import_old_marks(who, name)
+    modules = modules_of(args.names)
+    print(f"lean-review: reviewing {len(modules)} modules.", flush=True)
+    run(["lake", "build", *[f"+{module}" for module in modules]])
+    build_graph(modules)
+    built = json.loads((HOME / "graph.json").read_text())
+    build_docs(tops(built["modules"]))
     if args.clean:
-        modules = json.loads(Path("review/graph.json").read_text())["modules"]
-        for root in args.modules:
-            clean_docs(Path("docbuild/.lake/build/doc"), root, modules)
+        for root in built["roots"]:
+            clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
     if args.no_serve:
         return
-    reviewer = args.reviewer or subprocess.run(["git", "config", "user.name"], capture_output=True, text=True).stdout.strip()
-    command = [sys.executable, str(HERE / "server/server.py"), "--docs", "docbuild/.lake/build/doc",
-               "--marks", "review/marks.json", "--graph", "review/graph.json",
+    command = [sys.executable, str(HERE / "server/server.py"), "--docs", str(HOME / "docbuild/.lake/build/doc"),
+               "--marks", str(HOME / "marks"), "--graph", str(HOME / "graph.json"),
                *[option for folder in source_folders() for option in ("--source", str(folder))],
-               "--prefix", args.modules[0], "--reviewer", reviewer or "reviewer", "--port", str(args.port)]
+               "--prefix", modules[0], "--id", who, "--name", name, "--port", str(args.port)]
     os.execv(sys.executable, command)
 
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Check that a project's graph and docs list the same declarations. From a project set up by
-review.py: python3 path/to/check_docs_match.py MyProject [MoreRoots ...]"""
+review.py: python3 path/to/check_docs_match.py"""
 import html
 import json
 import re
 import sys
 from pathlib import Path
 
-graph = json.loads(Path("review/graph.json").read_text())
-docs = Path("docbuild/.lake/build/doc")
-folders = [docs / root.replace(".", "/") for root in sys.argv[1:]]
+graph = json.loads(Path(".lean-review/graph.json").read_text())
+docs = Path(".lean-review/docbuild/.lake/build/doc")
+folders = [docs / root.replace(".", "/") for root in graph["roots"]]
 pages = [page for folder in folders for page in (folder.with_name(folder.name + ".html"), *folder.glob("**/*.html"))]
 documented = {html.unescape(name) for page in pages
               for name in re.findall(r'class="decl[^"]*" id="([^"]+)"', page.read_text())}

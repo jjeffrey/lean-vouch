@@ -1,0 +1,238 @@
+{
+  "format": 3,
+  "marks": {
+    "Nat.mod": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {},
+        "own": "f3b171f5c35ada13"
+      },
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "m % 0 = m. Noted; gcd never takes a remainder by 0."
+        }
+      ],
+      "status": "agree"
+    },
+    "ReviewExample.Divides": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.mul": "6540b66d943bf0bb"
+        },
+        "own": "0dfe923a99c9aa54"
+      },
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "Why define this as ∃ k, n = d * k rather than n % d = 0?"
+        },
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "So 0 divides only 0, and every number divides 0?"
+        }
+      ],
+      "status": "agree"
+    },
+    "ReviewExample.Divides.mod": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "ReviewExample.Divides": "0dfe923a99c9aa54"
+        },
+        "own": "71492c4ca5df6679"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "ReviewExample.Divides.of_mod": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "ReviewExample.Divides": "0dfe923a99c9aa54"
+        },
+        "own": "e50f985bfa39afb8"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "ReviewExample.Divides.refl": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.mul": "6540b66d943bf0bb",
+          "ReviewExample.Divides": "0dfe923a99c9aa54"
+        },
+        "own": "376db7f92d83c15d"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "ReviewExample.Divides.zero": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.mul": "6540b66d943bf0bb",
+          "ReviewExample.Divides": "0dfe923a99c9aa54"
+        },
+        "own": "28c5f3ef7322fb11"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "ReviewExample.divides_gcd": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.add": "b22dc563ea09c091",
+          "Nat.lt": "a504b25cc7f8a015",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "PSigma": "027603f61043ad97",
+          "ReviewExample.Divides": "0000000000000000",
+          "ReviewExample.gcd": "dbdffe02f3928447",
+          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+        },
+        "own": "9aefa9c1dbe03520"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "ReviewExample.gcd": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.add": "b22dc563ea09c091",
+          "Nat.lt": "a504b25cc7f8a015",
+          "Nat.mod": "f3b171f5c35ada13",
+          "PSigma": "027603f61043ad97",
+          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+        },
+        "own": "dbdffe02f3928447"
+      },
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "gcd 0 0 = 0. Is that right?"
+        }
+      ],
+      "status": "question"
+    },
+    "ReviewExample.gcd_divides_mul": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.add": "b22dc563ea09c091",
+          "Nat.lt": "a504b25cc7f8a015",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "PSigma": "027603f61043ad97",
+          "ReviewExample.Divides": "0dfe923a99c9aa54",
+          "ReviewExample.gcd": "dbdffe02f3928447",
+          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+        },
+        "own": "523ff39db45889a1"
+      },
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "The statement looks right, but is this proved?"
+        }
+      ],
+      "status": "question"
+    },
+    "ReviewExample.gcd_dvd": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "And": "b44379ec9afb6bcb",
+          "Eq": "d65236ee59b4fb4e",
+          "Exists": "9061cf3d424f1f3a",
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.add": "b22dc563ea09c091",
+          "Nat.lt": "a504b25cc7f8a015",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "PSigma": "027603f61043ad97",
+          "ReviewExample.Divides": "0dfe923a99c9aa54",
+          "ReviewExample.gcd": "dbdffe02f3928447",
+          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+        },
+        "own": "b9aac3338366be19"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "ReviewExample.hcf": {
+      "date": "2026-11-01T10:00:00",
+      "notes": [
+        {
+          "date": "2026-11-01T10:00:00",
+          "text": "Do we still need hcf here?"
+        }
+      ],
+      "status": "question"
+    },
+    "ReviewExample.lcm": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.add": "b22dc563ea09c091",
+          "Nat.div": "194be92d938693d3",
+          "Nat.lt": "a504b25cc7f8a015",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "PSigma": "027603f61043ad97",
+          "ReviewExample.gcd": "dbdffe02f3928447",
+          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+        },
+        "own": "3ad3e0d064f54865"
+      },
+      "notes": [],
+      "status": "agree"
+    },
+    "module ReviewExample.Divides": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {},
+        "own": "0"
+      },
+      "notes": [],
+      "status": "agree"
+    }
+  },
+  "name": "Ada"
+}

@@ -49,18 +49,20 @@ Three things are versioned separately:
 
   `review.py` stops on an older Lean, since the graph needs newer library functions, and warns on a newer one.
 
-- **`marks.json`** is your review record, so its format changes only with a migration. It is
-  `{"__format__": 2, "marks": {...}}`, with marks kept apart from the format because `__format__` is a legal
-  Lean name; older files are converted on the next save. The graph stores `format` and the Lean version that made it; regenerate
-  it freely. The server refuses a format it doesn't read rather than guessing.
+- **Marks files** are the review record, so their format changes only with a migration. `marks/ID.json` is
+  `{"format": 3, "name": "...", "marks": {declaration: entry}}`, where the filename is the person's id and the
+  name is only for display. Quiz answers are in `quiz/ID.json`, as `{"format": 3, "answers": {...}}`.
+  `review.py` imports an older `review/marks.json` once, and leaves it in place. The graph stores `format` and
+  the Lean version that made it; regenerate it freely. The server refuses a format it doesn't read rather than
+  guessing.
 
 ## Pieces
 
 | Path | What it does |
 | --- | --- |
-| `review.py` | Sets up `docbuild/` and `review/`, builds the docs and graph, and starts the server. |
+| `review.py` | Sets up `.lean-review/`, builds the docs and graph, and starts the server. |
 | `graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and fingerprints (`own`, and `deep`, which includes everything below it). |
-| `server/server.py` | Serves the doc-gen4 output with the review script added; saves marks and notes to a JSON file; applies renames. Python standard library only. |
+| `server/server.py` | Serves the doc-gen4 output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames. Python standard library only. |
 | `web/review.js`, `web/review.css` | The controls in the pages. |
 | `web/quiz.html` | The quiz: blind descriptions of declarations at the edge of what you have marked. |
 | `web/graph.html` | The dependency diagram, laid out by Graphviz (via d3-graphviz, as on Lean blueprint pages). It zooms with the scroll wheel and pans by dragging. |

@@ -38,11 +38,11 @@ jobs:
         with:
           path: |
             project/.lake
-            project/docbuild/.lake
+            project/.lean-review/docbuild/.lake
           key: minimum-lean-${{ runner.os }}-v4.30.0
       - name: Set up the project, build its docs and graph
         working-directory: project
-        run: python3 ../review.py Cli --no-serve
+        run: python3 ../review.py --no-serve
       - name: The graph and the docs agree
         working-directory: project
-        run: python3 ../tests/check_docs_match.py Cli
+        run: python3 ../tests/check_docs_match.py

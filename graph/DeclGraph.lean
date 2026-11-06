@@ -39,6 +39,11 @@ def isGeneratedPart (s : String) : Bool :=
   s == "brecOn" || s == "binductionOn" ||
   ["match_", "proof_", "eq_", "rec_", "brecOn_", "below_", "binductionOn_", "congr_eq_", "hcongr_"].any (isNumbered s)
 
+/-- Whether a module above `n` is one of `names`. -/
+def isUnder (names : NameSet) : Name → Bool
+  | .str parent _ | .num parent _ => names.contains parent || isUnder names parent
+  | .anonymous => false
+
 /-- Where a declaration is in its source file. Lean records this for what a person wrote, and
 doc-gen4 documents only what has one. -/
 def sourceRange? (env : Environment) (n : Name) :=
@@ -283,7 +288,10 @@ unsafe def main (args : List String) : IO UInt32 := do
   -- More than one module, for a project whose root module doesn't import everything, or whose
   -- libraries don't share a prefix. Each is reviewed, with the modules under it.
   let env ← importModules ((root :: extra).toArray.map fun m => { module := m.toName }) {} (loadExts := true) (level := .private)
-  let g : Graph := { env, inScope := fun m => roots.any (·.isPrefixOf m) }
+  -- Only the outermost, since this is asked for every constant, and a project can name every module.
+  let named := roots.foldl NameSet.insert {}
+  let outermost := roots.filter (!isUnder named ·)
+  let g : Graph := { env, inScope := fun m => outermost.any (·.isPrefixOf m) }
   -- Reviewed declarations: in the project, not helpers, not constructors or fields.
   let names := env.constants.fold (init := #[]) fun acc n _ =>
     if g.inProject n && !isDetail env n && g.owner n == n &&
@@ -382,7 +390,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("format", (1 : Nat)),  -- GRAPH_FORMAT in server/server.py
     ("lean", Lean.versionString),
     ("root", root),
-    ("roots", toJson (root :: extra)),
+    ("roots", toJson (outermost.map (·.toString))),
     ("modules", Json.mkObj (modules.qsort (·.1 < ·.1)).toList),
     ("declarations", Json.mkObj decls.toList),
     ("library", Json.mkObj libraryDecls.toList),

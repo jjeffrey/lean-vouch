@@ -61,6 +61,8 @@ class GraphTest(unittest.TestCase):
         both = graph_of(copy, "ReviewExample", "Extra")
         self.assertEqual(both["root"], "ReviewExample")
         self.assertEqual(both["roots"], ["ReviewExample", "Extra"])
+        self.assertEqual(graph_of(copy, "ReviewExample", "ReviewExample.Gcd", "Extra")["roots"], ["ReviewExample", "Extra"],
+                         "only the outermost are kept")
         self.assertIn("Extra", both["modules"])
         self.assertIn("ReviewExample.gcd", both["declarations"]["Extra.gcd_self"]["deps"])
         self.assertEqual({n: d["own"] for n, d in both["declarations"].items() if n != "Extra.gcd_self"},

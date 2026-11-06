@@ -2,8 +2,8 @@
 
 Under every declaration:
 
-- **A mark:** ✓ agree, ? question, ✗ reject how it's defined.
-- **A note thread,** stored with the mark, for questions and answers.
+- **A mark:** ✓ agree, ? question, ✗ reject how it's defined. Click it again to clear it.
+- **A note thread,** for questions and answers, from everyone reviewing.
 - **Change tracking:** the mark is flagged when the declaration has changed since it was made, or
   when anything it depends on has ("depends on `Divides`, which changed since you marked it").
   For a theorem only its statement counts, since Lean checks the proof; for a definition, its
@@ -65,8 +65,8 @@ and the sidebar showing its documentation, review and code.
 
 ![the dependency diagram with gcd selected](images/diagram.png)
 
-**A `sorry` and what relies on it:** `gcd_mul_lcm` isn't proved, so `gcd_divides_mul` is agreed but
-only conditionally. Its statement never mentions `gcd_mul_lcm`; the proof does.
+**A `sorry` and what relies on it:** `gcd_mul_lcm` isn't proved, so `gcd_divides_mul` holds only if it
+is, which a reviewer has asked about. Its statement never mentions `gcd_mul_lcm`; the proof does.
 
 ![a sorry and a theorem that relies on it](images/sorry.png)
 

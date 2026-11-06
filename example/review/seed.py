@@ -1,4 +1,4 @@
-"""Write review/marks.seed.json: example marks that show each lean-review feature.
+"""Write review/seed/: example marks for each person, that show each lean-review feature.
 
 Run after generating review/graph.json. Fingerprints come from the current graph, so the marks
 are up to date, except where a change is simulated on purpose.
@@ -30,8 +30,8 @@ def mark(name, status, *notes, changed=()):
         fp["deps"] = {d: (info(d) or {}).get("own") for d in below(name)}
     for d in changed:
         fp["deps"][d] = "0000000000000000"
-    return {"status": status, "date": "2026-11-02", "fingerprint": fp,
-            "notes": [{"by": by, "date": "2026-11-02", "text": text} for by, text in notes]}
+    return {"status": status, "date": "2026-11-02T10:00:00", "fingerprint": fp,
+            "notes": [{"by": by, "date": "2026-11-02T10:00:00", "text": text} for by, text in notes]}
 
 
 marks = {
@@ -59,13 +59,32 @@ marks = {
     # Marked before Divides changed below it: flagged for re-checking.
     P + "divides_gcd": mark(P + "divides_gcd", "agree", changed=[P + "Divides"]),
     # A declaration that was removed: listed under orphaned notes.
-    P + "hcf": {"status": "question", "date": "2026-11-01", "notes": [
-        {"by": "Ada", "date": "2026-11-01", "text": "Do we still need hcf here?"}]},
-    # A statement can be agreed while its proof still rests on a `sorry`.
-    P + "gcd_divides_mul": mark(P + "gcd_divides_mul", "agree",
-        ("Ada", "The statement is right, but is this proved?"),
-        ("assistant", "Not yet: the proof uses gcd_mul_lcm, which is still a sorry. The mark stands, since "
-                      "it's about the statement. Follow the dashed red arrow to the gap.")),
+    P + "hcf": {"status": "question", "date": "2026-11-01T10:00:00", "notes": [
+        {"by": "Ada", "date": "2026-11-01T10:00:00", "text": "Do we still need hcf here?"}]},
+    # A question about a proof that still rests on a `sorry`.
+    P + "gcd_divides_mul": mark(P + "gcd_divides_mul", "question",
+        ("Ada", "The statement looks right, but is this proved?"),
+        ("assistant", "Not yet: the proof uses gcd_mul_lcm, which is still a sorry. "
+                      "Follow the dashed red arrow to the gap.")),
+    P + "lcm": mark(P + "lcm", "agree"),
 }
-(HERE / "marks.seed.json").write_text(json.dumps(marks, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
-print(f"wrote {len(marks)} marks")
+# An assistant raises something: a question after Ada's mark, so it needs her attention.
+raised = dict(mark(P + "lcm", "question", ("assistant",
+    "With a = b = 0 this divides by gcd 0 0 = 0. Lean's 0 / 0 is 0, so lcm 0 0 = 0, the usual value, "
+    "but only by way of that convention. Is that what you want?")), date="2026-11-03T09:00:00")
+raised["notes"][0]["date"] = "2026-11-03T09:00:00"
+
+people = {"ada": ("Ada", {}), "assistant": ("assistant", {P + "lcm": {**raised, "notes": []}})}
+for name, entry in marks.items():
+    people["ada"][1][name] = {key: value for key, value in entry.items() if key != "notes"} | {"notes": []}
+    for note in entry["notes"]:
+        who = note["by"].lower()
+        text = {"date": note["date"], "text": note["text"]}
+        people[who][1].setdefault(name, {"status": None, "notes": []})["notes"].append(text)
+people["assistant"][1][P + "lcm"]["notes"] = [{key: raised["notes"][0][key] for key in ("date", "text")}]
+
+(HERE / "seed").mkdir(exist_ok=True)
+for who, (name, entries) in people.items():
+    text = json.dumps({"format": 3, "name": name, "marks": entries}, indent=2, ensure_ascii=False, sort_keys=True)
+    (HERE / "seed" / f"{who}.json").write_text(text + "\n")
+print(f"wrote {sum(len(entries) for _, entries in people.values())} entries")

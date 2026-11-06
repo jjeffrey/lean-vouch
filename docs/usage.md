@@ -1,12 +1,23 @@
 # Using lean-review
 
-The first run adds two folders, each with its own `.gitignore`, and doc-gen4's packages to
-`.lake/packages`:
+The first run adds doc-gen4's packages to `.lake/packages`, and a `.lean-review` folder:
 
-- `docbuild/`, which builds the docs with the [doc-gen4](https://github.com/leanprover/doc-gen4) version
-  that matches your `lean-toolchain`, so your project gains no dependency.
-- `review/`, with the declaration graph and `marks.json`. Commit `review/marks.json`: it is the review
-  record.
+```text
+.lean-review/
+├── .gitignore        tracked
+├── marks/            tracked: each person's marks and notes
+│   └── ada-lovelace-3f9a.json
+├── quiz/             ignored: each person's quiz answers
+├── graph.json        ignored
+├── links.local.json  ignored, optional
+└── docbuild/         ignored
+    └── .lake/build/doc/   the HTML
+```
+
+`docbuild` builds the docs with the [doc-gen4](https://github.com/leanprover/doc-gen4) version that
+matches your `lean-toolchain`, so your project gains no dependency. Everything but the marks can be
+rebuilt or is yours alone, so `.lean-review/.gitignore` ignores it. To keep marks out of git too, edit
+that file: it's only written on the first run. In a public repository, committed notes are public.
 
 The first docs build takes time, because doc-gen4 documents everything the project imports:
 
@@ -21,9 +32,11 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 
 | Option | Meaning |
 | --- | --- |
-| `review.py MyProject MyProjectTests` | Also review another root and the modules under it, such as a second library or modules the first doesn't import. Without it they aren't covered. Each must be a module Lake can build. |
+| `review.py` | Review every library in the project, tests included |
+| `review.py MyLibrary My.Module` | Review only these libraries and modules. A library that doesn't build needs leaving out this way. |
 | `--port N` | Serve on another port, for reviewing two projects at once (default 8797) |
-| `--reviewer NAME` | The name on your notes (default your git name) |
+| `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
+| `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git email changes, pass your old id to stay the same person. |
 | `--no-serve` | Only rebuild the docs and graph |
 | `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
 
@@ -32,4 +45,27 @@ run for GitHub links instead.
 
 To open links in docstrings from your own copies, add `review/links.local.json`, as
 `{"https://example.org/paper.pdf": "your copy's URL"}`. The page rewrites them when you view the
-docs, adding `?page=N` if the link text ends in `, p. N`.
+docs, adding `?page=N` if the link text ends in `(p. N)` or `(page N)`.
+
+## Working with others
+
+Each person's marks are their own, and the diagram shows yours unless you choose someone else's or
+everyone's. Commit `.lean-review/marks/` to share them. A mark that's out of date is flagged for its
+owner alone, and differing current marks show as a disagreement.
+
+A `?` alone is your own reminder. With a note, it asks the others. A declaration needs your attention,
+shown by a `!`, when someone is waiting on you: they asked, wrote more under their `?`, or answered
+yours. It clears when you mark the declaration or reply.
+
+Marks are shared with plain git, and lean-review never commits or pushes for you. Commit your file
+with your work, and pull to get everyone else's, which appear on your next page load. Each person writes
+only their own file, so marks don't conflict.
+
+An assistant, human or not, is another person with its own file. By convention it leaves notes and `?`s,
+and doesn't mark ✓ or ✗: the record says what a person has checked. While the server runs, it can write
+as itself:
+
+```bash
+curl -X POST http://127.0.0.1:8797/review/data -H "Content-Type: application/json" \
+  -d '{"id": "claude", "author": "Claude", "name": "MyProject.foo", "status": "question", "note": "Is 0 meant to be included?"}'
+```

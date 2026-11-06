@@ -1,0 +1,62 @@
+{
+  "format": 3,
+  "marks": {
+    "ReviewExample.Divides": {
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "They agree for every d and n, but the existential form is what proofs need: to show d divides n you give the k, and from a proof you get the k back. It is also how Mathlib defines divisibility."
+        },
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "Yes. Both are now theorems: Divides.zero (every d divides 0) in this module, and Divides.zero_left (0 divides n exactly when n = 0) in ReviewExample.Zero."
+        }
+      ],
+      "status": null
+    },
+    "ReviewExample.gcd": {
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "It is the usual convention: every number divides 0, and 0 is the greatest in the divisibility order. divides_gcd states exactly that."
+        }
+      ],
+      "status": null
+    },
+    "ReviewExample.gcd_divides_mul": {
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "Not yet: the proof uses gcd_mul_lcm, which is still a sorry. Follow the dashed red arrow to the gap."
+        }
+      ],
+      "status": null
+    },
+    "ReviewExample.lcm": {
+      "date": "2026-11-03T09:00:00",
+      "fingerprint": {
+        "deps": {
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "00f1b84d862fbf33",
+          "Nat.add": "b22dc563ea09c091",
+          "Nat.div": "194be92d938693d3",
+          "Nat.lt": "a504b25cc7f8a015",
+          "Nat.mod": "f3b171f5c35ada13",
+          "Nat.mul": "6540b66d943bf0bb",
+          "PSigma": "027603f61043ad97",
+          "ReviewExample.gcd": "dbdffe02f3928447",
+          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+        },
+        "own": "3ad3e0d064f54865"
+      },
+      "notes": [
+        {
+          "date": "2026-11-03T09:00:00",
+          "text": "With a = b = 0 this divides by gcd 0 0 = 0. Lean's 0 / 0 is 0, so lcm 0 0 = 0, the usual value, but only by way of that convention. Is that what you want?"
+        }
+      ],
+      "status": "question"
+    }
+  },
+  "name": "assistant"
+}

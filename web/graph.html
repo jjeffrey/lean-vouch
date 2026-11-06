@@ -16,6 +16,7 @@
   header.views nav a { color: #1a5fb4; }
   .controls { display: flex; gap: 0.6em 1.5em; align-items: center; flex-wrap: wrap; margin-bottom: 0.8em; }
   .legend span { display: inline-block; margin-right: 1em; }
+  .legend span[hidden] { display: none; }
   .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; vertical-align: middle;
     margin-right: 0.3em; border: 1px solid #888; }
   .note { color: #555; max-width: 60em; margin: 0 0 0.6em; }
@@ -33,6 +34,11 @@
   .row .twisty { width: 1em; flex: none; text-align: center; color: #888; }
   .row .label { overflow: hidden; text-overflow: ellipsis; }
   .row .count { margin-left: auto; padding-left: 0.5em; color: #888; font-size: 0.9em; }
+  .row .waiting { margin-left: auto; padding-left: 0.5em; color: #e07000; font-size: 0.9em; }
+  .row .waiting + .count { margin-left: 0; }
+  .attention-mark { display: inline-block; width: 1.2em; height: 1.2em; line-height: 1.15em; text-align: center;
+    border: 1.5px solid #e07000; border-radius: 50%; background: #fff; color: #e07000; font-size: 0.85em; font-weight: 700; }
+  .legend .attention-mark { margin-right: 0.3em; }
   .row.pinned .label { font-weight: 600; }
   .row.focus { background: #dcebfb; }
   #diagram { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 6px;
@@ -67,7 +73,12 @@
   #sidebar .review-notes .note-date { font-weight: normal; color: #777; margin-left: 0.3em; }
   #sidebar .review-notes li > div:last-child { white-space: pre-wrap; }
   #sidebar .review-notes .by-reviewer { background: #f3f3f3; border-color: #888; }
-  #sidebar .review-notes .by-assistant { background: #e8f1fd; border-color: #2a7de1; }
+  #sidebar .review-notes .by-other { background: hsl(var(--person-hue) 70% 50% / 0.12); border-color: hsl(var(--person-hue) 60% 50%); }
+  #sidebar .prompt { color: #b08800; }
+  #sidebar .others span { margin-right: 0.8em; }
+  #sidebar .others .old { opacity: 0.6; }
+  #sidebar .others .disagree { color: #7b4fb5; font-weight: 600; }
+  #sidebar .others .attention { color: #c77700; font-weight: 600; }
   #sidebar .review-notes .by-tool { background: none; border-color: #ccc; color: #777; font-style: italic; font-size: 0.9em; }
   /* Highlighting the selected node, what it depends on (below) and what depends on it (above). */
   .hl-dim { opacity: 0.45; }
@@ -93,7 +104,7 @@
 </head>
 <body>
 <header class="views"><h1 id="project">Dependency graph</h1>
-  <nav><a id="docs-link" href="/">docs</a><a href="/__review__/quiz">quiz</a></nav></header>
+  <nav><a id="docs-link" href="/">docs</a><a href="/review/quiz">quiz</a></nav></header>
 <details class="note"><summary>How to read this diagram</summary><p>Each arrow points from a declaration to one it depends on, with the arrows implied
 by others left out (a Hasse diagram). For a theorem, only its statement counts; for a definition,
 its statement and body. Colors are your marks; an orange border means something below changed
@@ -116,13 +127,16 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   <label><input type="checkbox" id="across"> arrows across folders</label>
   <label><input type="checkbox" id="library"> show library definitions</label>
   <label id="gaps-label" hidden><input type="checkbox" id="gaps" checked> show sorry</label>
+  <label id="viewer-label" hidden>marks of <select id="viewer"></select></label>
   <span id="groups">plumbing:</span>
   <div class="legend">
     <span><i class="swatch" style="background:#c8ecc8"></i>agree / understood</span>
     <span><i class="swatch" style="background:#fbe9b0"></i>question</span>
     <span><i class="swatch" style="background:#f6c4c4"></i>reject</span>
+    <span id="disagree-key" hidden><i class="swatch" style="background:#e6dcf5"></i>disagreement</span>
     <span><i class="swatch" style="background:#fff"></i>unmarked</span>
     <span><i class="swatch" style="background:#eee"></i>library</span>
+    <span id="attention-key" hidden><span class="attention-mark">!</span> needs your attention</span>
     <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px solid #c62828"></i>contains sorry</span>
     <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #c62828"></i>relies on sorry</span>
     <span class="gaps-key" id="gaps-total" hidden></span>
@@ -140,16 +154,16 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@2.13.0/dist/graphviz.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-graphviz@5.1.0/build/d3-graphviz.min.js"></script>
-<script src="/__review__/links.js"></script>
-<script src="/__review__/math.js"></script>
+<script src="/review/links.js"></script>
+<script src="/review/math.js"></script>
 <script>
 (async () => {
   // A large project sends the folder tree and what the marks need; the declarations of a module
   // arrive when it is opened. A small project sends everything at once.
   let [marks, tree, graph] = await Promise.all([
-    fetch("/__review__/data").then(r => r.json()),
-    fetch("/__review__/tree").then(r => r.json()),
-    fetch("/__review__/graph?marked").then(r => r.json()),
+    fetch("/review/data").then(r => r.json()),
+    fetch("/review/tree").then(r => r.json()),
+    fetch("/review/graph?marked").then(r => r.json()),
   ]);
   const decls = graph.declarations ?? {}, library = graph.library ?? {};
   const isGenerated = n => /\.inst(Repr|DecidableEq|BEq|Hashable|Inhabited|Nonempty)/.test(n);
@@ -202,15 +216,36 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return info(n) ? { own: info(n).own, deps } : null;
   };
   // What changed since `n` was marked: itself, and which things below it.
-  const changes = n => {
-    const fp = marks[n]?.fingerprint;
-    if (!marks[n]?.status || !fp || !info(n)) return { self: false, deps: [] };
+  const changes = (n, mark = marks[n]) => {
+    const fp = mark?.fingerprint;
+    if (!mark?.status || !fp || !info(n)) return { self: false, deps: [] };
     const now = below(n);
     return { self: fp.own !== info(n).own,
       deps: [...new Set([...Object.keys(fp.deps), ...now])].filter(d => visible(d) &&
         (fp.deps[d] ?? null) !== (now.has(d) ? info(d)?.own ?? null : null)) };
   };
-  const stale = n => { const c = changes(n); return c.self || c.deps.length > 0; };
+  const isOld = (n, mark) => { const c = changes(n, mark); return c.self || c.deps.length > 0; };
+  // Whose marks color the diagram: yours, someone else's, or everyone's, where those that differ
+  // show as a disagreement. Solo, none of this appears.
+  const people = new Map(Object.values(marks).flatMap(m => m.others ?? []).map(o => [o.id, o.name]));
+  const viewer = document.getElementById("viewer");
+  viewer.append(new Option("mine", "me"), ...[...people].map(([id, name]) => new Option(name, id)), new Option("everyone", "all"));
+  document.getElementById("viewer-label").hidden = !people.size;
+  const everyMark = n => [...(marks[n]?.status ? [marks[n]] : []), ...(marks[n]?.others ?? [])];
+  const shownMark = n => viewer.value === "me" || !viewer.value ? marks[n]
+    : (marks[n]?.others ?? []).find(o => o.id === viewer.value);
+  const statusOf = n => {
+    if (viewer.value !== "all") return shownMark(n)?.status;
+    const current = new Set(everyMark(n).filter(m => !isOld(n, m)).map(m => m.status));
+    return current.size > 1 ? "disagree" : everyMark(n)[0]?.status;
+  };
+  const stale = n => viewer.value === "all" ? false : isOld(n, shownMark(n));
+  const asked = n => marks[n]?.attention?.length > 0;
+  const waitingIn = node => Object.keys(marks).filter(n => asked(n) && node.modules.includes(decls[n]?.module)).length;
+  const ORANGE = "#e07000";
+  const unexplained = n => marks[n]?.status === "question" && !marks[n].notes.some(x => x.mine && x.by !== "lean-review");
+  const SYMBOL = { agree: "✓", question: "?", reject: "✗" };
+  const nodeClass = n => { const s = statusOf(n); return library[n] && !decls[n] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked"); };
   // Whether a declaration's proof has a gap. The marks say whether a statement is right; this says
   // whether it's proved, so it has its own border, and a mark can stand beside it.
   const SORRY = "#c62828";
@@ -230,7 +265,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   // Bring declarations into the page, by module or by name.
   const loaded = new Set();
   async function load(query) {
-    const part = await fetch(`/__review__/graph?marked&${query}`).then(r => r.json());
+    const part = await fetch(`/review/graph?marked&${query}`).then(r => r.json());
     Object.assign(decls, part.declarations);
     Object.assign(library, part.library);
     closure.clear();
@@ -363,15 +398,14 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const ids = new Map([...inGraph].map((n, i) => [n, "n" + i]));
     model = { nodes: [], edges: [], name: new Map(), id: ids, box: new Map(), down: new Map(), up: new Map(), weight: new Map() };
     for (const n of inGraph) {
-      const s = marks[n]?.status;
       model.name.set(ids.get(n), n);
       model.nodes.push({ id: ids.get(n), label: short(n).replaceAll('"', "'"), stale: stale(n), gap: gapOf(n),
-        cls: library[n] && !decls[n] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked"),
+        cls: nodeClass(n),
         module: decls[n] ? decls[n].module : null });                    // library: no module box
     }
     // Closed boxes, with how much of each has been marked.
     for (const node of new Set(boxOf.values())) {
-      const reviewed = Object.keys(marks).filter(n => marks[n]?.status && boxOf.get(decls[n]?.module) === node);
+      const reviewed = Object.keys(marks).filter(n => statusOf(n) && boxOf.get(decls[n]?.module) === node);
       const changed = reviewed.filter(stale).length;
       model.name.set(boxId(node), node.path);
       model.box.set(boxId(node), node);
@@ -448,6 +482,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     old.replaceWith(target);
     await drawGraphviz(model, target);
     retitle();
+    drawBadges();
     // Clicking a node selects it; clicking empty space clears the selection.
     target.addEventListener("click", e => {
       // A click on an open box's label closes it.
@@ -485,7 +520,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   async function showFocus() {
     const { group, name } = focus;
     // POST, since a folder can hold thousands of modules.
-    const reach = await post("/__review__/reach", { modules: group?.modules ?? [], names: name ? [name] : [],
+    const reach = await post("/review/reach", { modules: group?.modules ?? [], names: name ? [name] : [],
       shown: [...opened].filter(n => n.module).map(n => n.module) });
     if (focus?.group !== group || focus?.name !== name) return;   // superseded by another click
     focus.reach = reach;
@@ -547,13 +582,13 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return box;
   }
   function renderGroup(group, reach) {
-    const marked = Object.keys(marks).filter(n => marks[n]?.status && group.modules.includes(decls[n]?.module)).length;
+    const marked = Object.keys(marks).filter(n => statusOf(n) && group.modules.includes(decls[n]?.module)).length;
     // A folder under the first root is named without it; one under another root is named in full.
     const dotted = group.path.replaceAll("/", ".");
     const scope = group.module ?? [root + dotted, dotted.slice(1)]
       .find(s => s && group.modules.every(m => m === s || m.startsWith(s + "."))) ?? "";
     const quiz = el("a", null, "Quiz this");
-    quiz.href = `/__review__/quiz?scope=${encodeURIComponent(scope)}`;
+    quiz.href = `/review/quiz?scope=${encodeURIComponent(scope)}`;
     sidebar.replaceChildren(el("h2", null, group.name),
       el("p", "muted", `${group.module ? "module" : "folder"}, ${group.count} declarations, ${marked} marked`),
       quiz, reachList(reach));
@@ -568,7 +603,15 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     if (focus?.group === node) row.classList.add("focus");
     row.title = node.path.replace(/^\//, "") + "\nShift-click for everything it depends on and that uses it";
     row.append(el("span", "twisty", expanded.has(node.path) ? "▾" : "▸"),
-      el("span", "label", label), el("span", "count", String(node.count)));
+      el("span", "label", label));
+    const waiting = waitingIn(node);
+    if (waiting) {
+      const mark = el("span", "waiting", String(waiting));
+      mark.prepend(el("span", "attention-mark", "!"), " ");
+      mark.title = `${waiting} need${waiting === 1 ? "s" : ""} your attention`;
+      row.append(mark);
+    }
+    row.append(el("span", "count", String(node.count)));
     row.onclick = e => {
       if (e.shiftKey) return focusOn({ group: node });
       if (e.metaKey || e.ctrlKey) {
@@ -628,6 +671,28 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const key = element.closest("g.node")?.dataset.key;
     return key && model.name.has(key) ? key : null;
   }
+  // A bubble on the top right corner of what needs your attention, a box counting what's inside.
+  function drawBadges() {
+    const NS = "http://www.w3.org/2000/svg";
+    const shape = (tag, attributes) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [key, value] of Object.entries(attributes)) e.setAttribute(key, value);
+      return e;
+    };
+    for (const [id, g] of nodeElements()) {
+      g.querySelector(".attention-badge")?.remove();
+      const box = model.box.get(id);
+      if (!(box ? waitingIn(box) : asked(model.name.get(id)))) continue;
+      const area = g.querySelector("path, polygon, rect").getBBox();
+      const r = area.height * 0.38, x = area.x + area.width, y = area.y;
+      const badge = shape("g", { class: "attention-badge" });
+      const mark = shape("text", { x, y, "text-anchor": "middle", "dominant-baseline": "central",
+        "font-size": r * 1.5, "font-weight": 700, fill: ORANGE });
+      mark.textContent = "!";
+      badge.append(shape("circle", { cx: x, cy: y, r, fill: "#ffffff", stroke: ORANGE, "stroke-width": 1.5 }), mark);
+      g.append(badge);
+    }
+  }
   const nodeElements = () => {
     const map = new Map();
     for (const g of target.querySelectorAll("g.node")) {
@@ -663,12 +728,11 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 
   // Update one node's colors after its mark changes, without redrawing (which would reset zoom).
   function recolor(name) {
+    renderTree();
     const id = model.id.get(name);
     const g = id && nodeElements().get(id);
     if (!g) return;
-    const s = marks[name]?.status;
-    const cls = library[name] && !decls[name] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked");
-    const [fill, stroke] = COLORS[cls], isStale = stale(name), b = border(isStale, gapOf(name), stroke);
+    const [fill, stroke] = COLORS[nodeClass(name)], isStale = stale(name), b = border(isStale, gapOf(name), stroke);
     for (const shape of g.querySelectorAll("path, polygon, rect")) {
       shape.setAttribute("fill", fill);
       shape.setAttribute("stroke", b.color);
@@ -677,7 +741,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       shape.style.strokeWidth = `${b.width}px`;
     }
     const node = model.nodes.find(n => n.id === id);
-    if (node) Object.assign(node, { cls, stale: isStale });
+    if (node) Object.assign(node, { cls: nodeClass(name), stale: isStale });
+    drawBadges();
   }
 
   function select(name) {
@@ -727,15 +792,18 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       ? [["agree", "✓", "I understand this"], ["question", "?", "I have a question about this"], ["reject", "✗", "This surprises me or seems wrong"]]
       : [["agree", "✓", "I agree with this"], ["question", "?", "I have a question"], ["reject", "✗", "I reject how this is defined"]];
     const markRow = el("div", "marks");
+    const input = el("textarea");
+    const add = el("button", null, "Add note");
     const c = changes(name);
     for (const [status, label, title] of STATUS) {
       const b = el("button", marks[name]?.status === status ? "active" : null, label);
       b.title = title; b.dataset.status = status;
       b.onclick = async () => {
         const next = marks[name]?.status === status ? null : status;
-        marks[name] = await post("/__review__/data", { name, status: next, fingerprint: fingerprint(name) });
+        marks[name] = await post("/review/data", { name, status: next, fingerprint: fingerprint(name) });
         recolor(name);   // only this node's color changes, so keep the current zoom and layout
-        renderSidebar(name);
+        await renderSidebar(name);
+        if (unexplained(name)) sidebar.querySelector("textarea")?.focus();
       };
       markRow.append(b, " ");
     }
@@ -747,6 +815,20 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       markRow.append(s);
     }
     sidebar.append(el("h3", null, "Review"), markRow);
+    const others = marks[name]?.others ?? [];
+    if (others.length) {
+      const line = el("p", "others");
+      for (const o of others) line.append(el("span", isOld(name, o) ? "old" : null,
+        `${o.name}: ${SYMBOL[o.status]}${isOld(name, o) ? " (changed since)" : ""}`));
+      if (new Set(everyMark(name).filter(m => !isOld(name, m)).map(m => m.status)).size > 1)
+        line.append(el("span", "disagree", "disagreement"));
+      sidebar.append(line);
+    }
+    if (asked(name)) {
+      const line = el("p", "others");
+      line.append(el("span", "attention", `needs your attention: ${marks[name].attention.join(", ")}`));
+      sidebar.append(line);
+    }
     if (decls[name]?.sorry || decls[name]?.sorryFrom?.length || decls[name]?.axioms?.length) {
       const status = el("p", "gap");
       if (decls[name].sorry) status.append("Contains sorry. ");
@@ -764,19 +846,21 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const notes = el("ul", "review-notes");
     for (const n of marks[name]?.notes ?? []) {
       // The author and date on a line of their own, then the text, styled by who wrote it.
-      const li = el("li", n.by === "assistant" ? "by-assistant" : n.by === "lean-review" ? "by-tool" : "by-reviewer");
+      const li = el("li", n.by === "lean-review" ? "by-tool" : n.mine ? "by-reviewer" : "by-other");
+      li.style.setProperty("--person-hue", reviewHue(n.by));
       const head = el("div", "note-head", n.by + (n.quiz ? " · quiz answer " : " "));
-      head.append(el("span", "note-date", n.date));
+      head.append(el("span", "note-date", n.date.slice(0, 10)));
       li.append(head, el("div", null, n.text));
       notes.append(li);
     }
     sidebar.append(notes.children.length ? notes : el("p", "muted", "No notes yet."));
-    const input = el("textarea"); input.rows = 2; input.placeholder = "Add a note or question…";
-    const add = el("button", null, "Add note");
+    input.rows = 2; input.placeholder = "Add a note…";
+    if (unexplained(name)) sidebar.append(el("p", "prompt", "What's your question? Others see it once you write one."));
     add.onclick = async () => {
       const note = input.value.trim();
       if (!note) return;
-      marks[name] = await post("/__review__/data", { name, note });
+      marks[name] = await post("/review/data", { name, note });
+      recolor(name);
       renderSidebar(name);
     };
     sidebar.append(input, add);
@@ -784,7 +868,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     // Code: a theorem's proof is collapsed, since Lean checks it.
     if (!isLibrary) {
       sidebar.append(el("h3", null, "Code"));
-      const src = await fetch(`/__review__/source?name=${encodeURIComponent(name)}`).then(r => r.json());
+      const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json());
       if (src.error) sidebar.append(el("p", "muted", src.error));
       else {
         sidebar.append(el("p", "muted", `${src.file}, lines ${src.start}–${src.end}`));
@@ -862,7 +946,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const COLORS = { unmarked: ["#ffffff", "#888888"], agree: ["#c8ecc8", "#33aa33"],
     question: ["#fbe9b0", "#cc9900"], reject: ["#f6c4c4", "#cc3333"], lib: ["#eeeeee", "#aaaaaa"],
     lib_agree: ["#e3f3e3", "#33aa33"], lib_question: ["#fbf1d0", "#cc9900"],
-    lib_reject: ["#f9dede", "#cc3333"] };   // six-digit: Graphviz doesn't read the three-digit form
+    lib_reject: ["#f9dede", "#cc3333"], disagree: ["#e6dcf5", "#7b4fb5"], lib_disagree: ["#e6dcf5", "#7b4fb5"] };   // six-digit: Graphviz doesn't read the three-digit form
 
   // A soft color per box (pale fill, matching border and label), the same everywhere.
   const BOX_COLORS = [["#eef4ff", "#7a9fd9"], ["#f4eefc", "#a487d1"], ["#ebf7f1", "#6fb391"],
@@ -973,6 +1057,11 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     panelSize = size;
   }).observe(document.getElementById("diagram"));
   for (const id of ["clusters", "across", "gaps"]) document.getElementById(id).onchange = draw;
+  viewer.onchange = () => {
+    document.getElementById("disagree-key").hidden = viewer.value !== "all";
+    draw();
+  };
+  document.getElementById("attention-key").hidden = !Object.keys(marks).some(asked);
   // The sorry controls appear only for a project that has one.
   const gapTotals = Object.values(tree.gaps).reduce(([a, b], [x, y]) => [a + x, b + y], [0, 0]);
   if (gapTotals[0] + gapTotals[1]) {

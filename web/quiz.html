@@ -58,7 +58,7 @@
 </head>
 <body>
 <header class="views"><h1 id="project">Quiz</h1>
-  <nav><a id="docs-link" href="/">docs</a><a href="/__review__/diagram">dependency graph</a></nav></header>
+  <nav><a id="docs-link" href="/">docs</a><a href="/review/diagram">dependency graph</a></nav></header>
 <p class="note">Read a statement, write what you think it says, then compare with its real name and
 docstring. A mismatch means you misread it or the name or docstring is wrong. Your answer is saved as a
 note on the declaration. Names you have marked ✓ or ? can be looked up while you answer.
@@ -76,13 +76,13 @@ note on the declaration. Names you have marked ✓ or ? can be looked up while y
   <div id="main"></div>
   <aside id="book"></aside>
 </div>
-<script src="/__review__/links.js"></script>
-<script src="/__review__/math.js"></script>
+<script src="/review/links.js"></script>
+<script src="/review/math.js"></script>
 <script>
 (async () => {
   let [marks, graph] = await Promise.all([
-    fetch("/__review__/data").then(r => r.json()),
-    fetch("/__review__/graph").then(r => r.json()),
+    fetch("/review/data").then(r => r.json()),
+    fetch("/review/graph").then(r => r.json()),
   ]);
   const decls = graph.declarations ?? {}, library = graph.library ?? {};
   const root = graph.root ?? "";
@@ -404,7 +404,7 @@ note on the declaration. Names you have marked ✓ or ? can be looked up while y
     for (const x of items) {
       const box = el("div", "past");
       box.dataset.verdict = x.quiz.verdict ?? "";
-      box.append(ref(x.n), el("div", "muted", `${VERDICTS[x.quiz.verdict] ?? "no verdict"}, ${x.date}`), el("div", null, x.quiz.description));
+      box.append(ref(x.n), el("div", "muted", `${VERDICTS[x.quiz.verdict] ?? "no verdict"}, ${x.date.slice(0, 10)}`), el("div", null, x.quiz.description));
       book.append(box);
     }
   }
@@ -497,7 +497,7 @@ note on the declaration. Names you have marked ✓ or ? can be looked up while y
       main.append(el("h2", null, "Statement"), await shadowed(wrapper));
     }
     // The code as written, without comments; a theorem's proof left out.
-    const src = await fetch(`/__review__/source?name=${encodeURIComponent(name)}`).then(r => r.json());
+    const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json());
     if (!src.error) {
       let text = stripComments(src.text);
       const starts = [/:=\s*by\b/, /:=\s*$/m, /^\s*\|/m].map(r => text.search(r)).filter(k => k > 0);
@@ -544,7 +544,7 @@ note on the declaration. Names you have marked ✓ or ? can be looked up while y
       reveal.disabled = true;
       const note = "Quiz answer, written from the statement alone, before seeing the name and docstring.\n" +
         `Name: ${answer.name || "(none)"}\nDescription: ${answer.description}`;
-      marks[name] = await post("/__review__/data", { name, note, quiz: answer });
+      marks[name] = await post("/review/data", { name, note, quiz: answer });
       // Once seen, a reload must not ask it blind again.
       remember(null);
       session.answered++;
@@ -587,7 +587,7 @@ note on the declaration. Names you have marked ✓ or ? can be looked up while y
         if (verdict) session[verdict]--;
         verdict = value;
         session[value]++;
-        marks[name] = await post("/__review__/verdict", { name, verdict: value });
+        marks[name] = await post("/review/verdict", { name, verdict: value });
         for (const other of verdictButtons) other.classList.toggle("chosen", other === b);
         showProgress(candidates().filter(x => x.name !== name).length);
       };
@@ -603,13 +603,13 @@ note on the declaration. Names you have marked ✓ or ? can be looked up while y
     // A note is saved once, and a mark only when it changes, however often the buttons are clicked.
     const saveNote = async text => {
       const note = [text, extra.value.trim()].filter(Boolean).join("\n");
-      if (note) marks[name] = await post("/__review__/data", { name, note });
+      if (note) marks[name] = await post("/review/data", { name, note });
       extra.value = "";
     };
     const act = async (s, button, text) => {
       await saveNote(text);
       if (marks[name]?.status !== s || changedSince(name))
-        marks[name] = await post("/__review__/data", { name, status: s, fingerprint: fingerprint(name) });
+        marks[name] = await post("/review/data", { name, status: s, fingerprint: fingerprint(name) });
       for (const b of markButtons) b.classList.toggle("chosen", b === button);
       status.textContent = `Marked ${s === "agree" ? "✓" : "?"}.`;
     };

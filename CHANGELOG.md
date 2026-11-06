@@ -13,6 +13,8 @@ First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4
 - A list of folders and modules to open, search and pick from; shift-click for everything something depends on and that uses it.
 - `review.py` keeps `docbuild/` on the project's Lean version when that changes.
 - The server answers only its own pages, so other sites open in the browser can't read or change a review.
-- Every module named to `review.py` is reviewed, so libraries needn't share a prefix.
+- `review.py` reviews every library in the project by default, or the libraries and modules you name.
 - Projects whose libraries set `srcDir` show their declarations' code.
-- `marks.json` and the graph record a format; the server refuses a format it doesn't read, and a `marks.json` it can't parse, instead of overwriting it.
+- Each person has their own marks file, shown together: your marks by default, anyone else's or everyone's in the diagram, with disagreements marked. Someone's `?` needs your attention until you mark or reply. An older `review/marks.json` is imported.
+- Everything lives in `.lean-review/`, which git ignores but for the marks. Quiz answers stay local.
+- Marks files and the graph record a format; the server refuses a format it doesn't read, and a marks file it can't parse, instead of overwriting it.

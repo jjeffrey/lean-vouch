@@ -1,7 +1,7 @@
 # The quiz
 
 A mark records what you think you understand; the quiz checks it. Open "quiz" from the bar at the
-bottom of any page (or `/__review__/quiz?name=Full.Name` for a particular declaration).
+bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaration).
 
 - **You choose what it asks about:** everything, a folder or a module, in the box at the top or with
   "Quiz this" on a box in the diagram. By default it picks declarations at the edge of what you have
@@ -11,8 +11,8 @@ bottom of any page (or `/__review__/quiz?name=Full.Name` for a particular declar
   theorem's statement without the proof), with the name hidden, even in recursive calls, and comments,
   including the docstring, removed. You write what it says and the name you would give it; the
   namespace is filled in, and an instance's name isn't asked for.
-- **Then its real name and docstring are shown next to yours.** Your answer is saved first, as a
-  note marked "quiz answer" on the declaration. You say whether your reading matched, which is
+- **Then its real name and docstring are shown next to yours.** Your answer is saved first, in your own quiz file, which git ignores by default, and shows under the
+  declaration for you alone. You say whether your reading matched, which is
   recorded apart from your mark: reading a statement right isn't agreeing with it. A mismatch is
   something to discuss: either you misread it, or the name or docstring is wrong. Buttons mark it ✓ or
   ?, or ? with a note proposing your name as a rename. With no docstring, your answer can be saved as a

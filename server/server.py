@@ -1,12 +1,14 @@
 """Serve doc-gen4 pages with review controls under each declaration.
 
-Marks and note threads are saved to a JSON file, one entry per declaration name. With a declaration
-graph from graph/DeclGraph.lean, marks are flagged when the declaration or anything it depends on
-changes, renames recorded as deprecated aliases move marks automatically, and marks whose
+Each person's marks and notes are saved to a file of their own in a folder, and their quiz answers to
+one in another, so that what's shared and what isn't can be committed separately. Pages get one view:
+the marks of whoever runs the server, everyone's notes, and everyone else's marks beside them. With
+a declaration graph from graph/DeclGraph.lean, marks are flagged when the declaration or anything it
+depends on changes, renames recorded as deprecated aliases move marks automatically, and marks whose
 declaration no longer exists are listed as orphans. Local use only: it binds to 127.0.0.1.
 
-    python3 server/server.py --docs .lake/build/doc --marks review/marks.json \
-        --graph review/graph.json --prefix MyProject
+    python3 server/server.py --docs .lean-review/docbuild/.lake/build/doc --marks .lean-review/marks \
+        --graph .lean-review/graph.json --prefix MyProject --id ada --name Ada
 """
 
 import argparse
@@ -15,40 +17,40 @@ import os
 import re
 import sys
 import threading
-from datetime import date
+from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 VERSION = "0.1.0"
 # Bump a format when old readers would misread the new one; see docs/internals.md.
-# marks.json is {"__format__": 2, "marks": {name: entry}}, so that no declaration can collide with
-# the format: `__format__` is a legal Lean name. Format 1 was the bare {name: entry}.
-MARKS_FORMAT = 2
+# A person's file is {"format": 3, "name": display name, "marks": {declaration: entry}}, and their
+# quiz file {"format": 3, "answers": {declaration: [answer]}}. The file's name is their id.
+MARKS_FORMAT = 3
 GRAPH_FORMAT = 1  # stored in the graph as "format"
-FORMAT_KEY, MARKS_KEY = "__format__", "marks"
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 STATUSES = {"agree", "question", "reject", None}
+ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")   # plain, so that a file can't differ between machines
 VERDICTS = {"match", "partly", "miss"}   # how a quiz answer compared with the real name and docstring
 GENERATED = re.compile(r"\.inst(Repr|DecidableEq|BEq|Hashable|Inhabited|Nonempty)")  # as in web/review.js
 LARGE = 5000  # declarations; above this, pages get the parts of the graph they need, not all of it
-INJECT = (b'<link rel="stylesheet" href="/__review__/review.css"><script src="/__review__/links.js"></script>'
-          b'<script src="/__review__/review.js"></script>')
+INJECT = (b'<link rel="stylesheet" href="/review/review.css"><script src="/review/links.js"></script>'
+          b'<script src="/review/review.js"></script>')
 
 # The tool's own URLs. doc-gen4 ends every module's page in .html, and a Lean module can have almost
 # any name, so these must not end in .html: then none can be a module's page, even in a project with
-# a module called __review__.
-PAGES = {"/__review__/diagram": "graph.html", "/__review__/quiz": "quiz.html", "/__review__/review.js": "review.js",
-         "/__review__/review.css": "review.css", "/__review__/links.js": "links.js", "/__review__/math.js": "math.js"}
+# a module called review.
+PAGES = {"/review/diagram": "graph.html", "/review/quiz": "quiz.html", "/review/review.js": "review.js",
+         "/review/review.css": "review.css", "/review/links.js": "links.js", "/review/math.js": "math.js"}
 
 lock = threading.Lock()
 args = None
 graph = None
 
 
-def today():
-    return date.today().isoformat()
+def now():
+    return datetime.now().isoformat(timespec="seconds")
 
 
 class Graph:
@@ -169,38 +171,48 @@ def load_json(path, default):
 
 
 class MarksError(Exception):
-    """marks.json can't be used. Never treat it as empty: the next save would erase the review."""
+    """A marks file can't be used. Never treat it as empty: the next save would erase the review."""
 
 
-def load_marks():
-    if not args.marks.exists():
+def load_file(path, key):
+    if not path.exists():
         return {}
     try:
-        marks = json.loads(args.marks.read_text())
+        data = json.loads(path.read_text())
     except ValueError as error:
-        raise MarksError(f"{args.marks} is not valid JSON ({error}); fix it before reviewing") from error
-    if not isinstance(marks, dict):
-        raise MarksError(f"{args.marks} is not a JSON object")
-    # In format 1 this key, if present, was a version number or a declaration's mark.
-    format = marks.get(FORMAT_KEY)
-    if not isinstance(format, int):
-        return marks   # format 1; the next save writes format 2
-    if format == 1:
-        del marks[FORMAT_KEY]
-        return marks
-    if format != MARKS_FORMAT or not isinstance(marks.get(MARKS_KEY), dict):
-        raise MarksError(f"{args.marks} has format {format}; this lean-review reads format {MARKS_FORMAT}. "
+        raise MarksError(f"{path} is not valid JSON ({error}); fix it before reviewing") from error
+    if not isinstance(data, dict):
+        raise MarksError(f"{path} is not a JSON object")
+    if data.get("format") != MARKS_FORMAT or not isinstance(data.get(key), dict):
+        raise MarksError(f"{path} has format {data.get('format')}; this lean-review reads format {MARKS_FORMAT}. "
                          "Use a matching version.")
-    return marks[MARKS_KEY]
+    return data
 
 
-def save_marks(marks):
-    args.marks.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps({FORMAT_KEY: MARKS_FORMAT, MARKS_KEY: marks}, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+def save_file(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps({"format": MARKS_FORMAT, **data}, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     # Write beside the file, then swap, so a crash can't leave half a review.
-    temporary = args.marks.with_name(args.marks.name + ".tmp")
+    temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(text)
-    os.replace(temporary, args.marks)
+    os.replace(temporary, path)
+
+
+def person(who, name=None):
+    data = load_file(args.marks / f"{who}.json", "marks")
+    return {"name": name or data.get("name") or who, "marks": data.get("marks", {})}
+
+
+def save_person(who, data):
+    save_file(args.marks / f"{who}.json", data)
+
+
+def quiz_answers():
+    return load_file(args.quiz / f"{args.id}.json", "answers").get("answers", {})
+
+
+def save_quiz(answers):
+    save_file(args.quiz / f"{args.id}.json", {"answers": answers})
 
 
 def apply_renames(marks, graph):
@@ -210,10 +222,57 @@ def apply_renames(marks, graph):
         if old in marks and new not in marks:
             entry = marks.pop(old)
             entry.setdefault("notes", []).append(
-                {"by": "lean-review", "date": today(), "text": f"Moved automatically: {old} was renamed to {new}."})
+                {"by": "lean-review", "date": now(), "text": f"Moved automatically: {old} was renamed to {new}."})
             marks[new] = entry
             moved = True
     return moved
+
+
+def current(who=None, name=None):
+    """A person's marks, with any renames applied."""
+    who = who or args.id
+    data = person(who, name or (args.name if who == args.id else None))
+    if apply_renames(data["marks"], graph.current()):
+        save_person(who, data)
+    return data
+
+
+def view():
+    """What pages read: for each declaration, your mark as its status, date and fingerprint, everyone's
+    notes in order with your quiz answers among them, and what others marked under `others`. Others'
+    files are only read, so a declaration they marked before a rename shows under its new name.
+    `attention` names whoever is waiting on you: someone with a `?` and a note saying what it asks,
+    or who answered your `?`, since you last marked or wrote here. A bare `?` is a person's own reminder."""
+    renames = graph.current().get("renames", {})
+    people = {path.stem: person(path.stem) for path in sorted(args.marks.glob("*.json"))}
+    people[args.id] = current()
+    shown = {}
+
+    def at(name):
+        return shown.setdefault(name, {"status": None, "notes": [], "others": []})
+
+    for who, data in people.items():
+        mine = who == args.id
+        for name, entry in data["marks"].items():
+            item = at(name if mine else renames.get(name, name))
+            item["notes"] += [{"by": data["name"], **note, "who": who, "mine": mine} for note in entry.get("notes", [])]
+            if mine:
+                item.update({key: value for key, value in entry.items() if key != "notes"})
+            elif entry.get("status"):
+                item["others"].append({"id": who, "name": data["name"], **{
+                    key: entry[key] for key in ("status", "date", "fingerprint", "signature") if key in entry}})
+    for name, answers in quiz_answers().items():
+        at(name)["notes"] += [{"by": people[args.id]["name"], **answer, "who": args.id, "mine": True} for answer in answers]
+    for item in shown.values():
+        item["notes"].sort(key=lambda note: note["date"])
+        seen = max([item.get("date", ""), *(n["date"] for n in item["notes"] if n["mine"] and "quiz" not in n)])
+        new = [note for note in item["notes"] if note["date"] > seen and not note["mine"] and note["by"] != "lean-review"]
+        wrote = {note["who"] for note in item["notes"] if note["by"] != "lean-review"}
+        asking = [other for other in item["others"] if other["status"] == "question" and other["id"] in wrote]
+        waiting = {other["name"] for other in asking if other.get("date", "") > seen}
+        waiting |= {note["by"] for note in new if item["status"] == "question" or note["who"] in {o["id"] for o in asking}}
+        item["attention"] = sorted(waiting)
+    return shown
 
 
 def source_of(name):
@@ -243,17 +302,10 @@ def source_of(name):
 def well_formed(body):
     """Whether a POST has the types the handlers rely on; they decide whether its values make sense."""
     return (isinstance(body, dict)
-            and all(isinstance(body.get(key, ""), str) for key in ("name", "from", "to", "verdict", "note"))
+            and all(isinstance(body.get(key, ""), str) for key in ("name", "from", "to", "verdict", "note", "id", "author"))
             and isinstance(body.get("status"), (str, type(None)))
             and all(isinstance(body.get(key, []), list) and all(isinstance(item, str) for item in body.get(key, []))
                     for key in ("modules", "names", "shown")))
-
-
-def current_marks():
-    marks = load_marks()
-    if apply_renames(marks, graph.current()):
-        save_marks(marks)
-    return marks
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -283,25 +335,25 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.from_this_server():
             return self.send_json({"error": "request from another site"}, 403)
         path = self.path.split("?")[0]
-        if path == "/__review__/data":
+        if path == "/review/data":
             with lock:
                 try:
-                    return self.send_json(current_marks())
+                    return self.send_json(view())
                 except MarksError as error:
                     return self.send_json({"error": str(error)}, 500)
-        if path == "/__review__/tree":
+        if path == "/review/tree":
             with lock:
                 return self.send_json(graph.tree())
-        if path == "/__review__/graph":
+        if path == "/review/graph":
             query = parse_qs(urlparse(self.path).query, keep_blank_values=True)
             if not query:
                 return self.send_json(graph.current())
             with lock:
-                marks = load_marks() if "marked" in query else {}
+                marks = view() if "marked" in query else {}
                 return self.send_json(graph.slice(query.get("module", []), query.get("name", []), marks))
-        if path == "/__review__/links":
+        if path == "/review/links":
             return self.send_json(load_json(args.links, {}))
-        if path == "/__review__/source":
+        if path == "/review/source":
             name = parse_qs(urlparse(self.path).query).get("name", [""])[0]
             return self.send_json(source_of(name))
         if path in PAGES:
@@ -330,59 +382,72 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"error": "bad request"}, 400)
         if not well_formed(body):
             return self.send_json({"error": "bad request"}, 400)
-        if self.path == "/__review__/reach":   # a POST, since a folder can hold thousands of modules
+        if self.path == "/review/reach":   # a POST, since a folder can hold thousands of modules
             with lock:
                 return self.send_json(graph.reach(body.get("modules", []), body.get("names", []), body.get("shown", [])))
         with lock:
             try:
-                marks = current_marks()
+                return self.change(body)
             except MarksError as error:
                 return self.send_json({"error": str(error)}, 500)
-            if self.path == "/__review__/verdict":
-                quizzed = [n for n in marks.get(body.get("name"), {}).get("notes", []) if "quiz" in n]
-                if not quizzed or body.get("verdict") not in VERDICTS:
-                    return self.send_json({"error": "bad request"}, 400)
-                quizzed[-1]["quiz"]["verdict"] = body["verdict"]
-                save_marks(marks)
-                return self.send_json(marks[body["name"]])
-            if self.path == "/__review__/data":
-                name = body.get("name")
-                if not isinstance(name, str) or body.get("status") not in STATUSES:
-                    return self.send_json({"error": "bad request"}, 400)
-                entry = marks.setdefault(name, {"status": None, "notes": []})
-                if "status" in body:
-                    entry["status"] = body["status"]
-                    # A graph fingerprint replaces the older text signature; keep whichever was sent.
-                    if body.get("fingerprint"):
-                        entry["fingerprint"] = body["fingerprint"]
-                        entry.pop("signature", None)
-                    elif body.get("signature"):
-                        entry["signature"] = body["signature"]
-                    entry["date"] = today()
-                if body.get("note"):
-                    note = {"by": args.reviewer, "date": today(), "text": body["note"]}
-                    # A quiz answer also keeps the name and description the reviewer wrote blind.
-                    quiz = body.get("quiz")
-                    if isinstance(quiz, dict):
-                        note["quiz"] = {"name": str(quiz.get("name", "")),
-                                        "description": str(quiz.get("description", ""))}
-                    entry["notes"].append(note)
-                save_marks(marks)
-                return self.send_json(entry)
-            if self.path == "/__review__/move":
-                old, new = body.get("from"), body.get("to")
-                if old not in marks or not new or new in marks:
-                    return self.send_json({"error": "cannot move"}, 400)
-                entry = marks.pop(old)
-                entry["notes"].append({"by": args.reviewer, "date": today(), "text": f"Moved from {old}."})
-                marks[new] = entry
-                save_marks(marks)
-                return self.send_json(entry)
-            if self.path == "/__review__/delete":
-                if marks.pop(body.get("name"), None) is None:
-                    return self.send_json({"error": "no such mark"}, 400)
-                save_marks(marks)
-                return self.send_json({})
+
+    def change(self, body):
+        # Anyone local can write as themselves: an assistant has no server of its own.
+        who = body.get("id", args.id)
+        if not ID.fullmatch(who):
+            return self.send_json({"error": "an id is lowercase letters, digits and hyphens"}, 400)
+        data = current(who, body.get("author"))
+        marks = data["marks"]
+        answers = quiz_answers() if who == args.id else {}
+        name = body.get("name")
+        if self.path == "/review/verdict":
+            if not answers.get(name) or body.get("verdict") not in VERDICTS:
+                return self.send_json({"error": "bad request"}, 400)
+            answers[name][-1]["quiz"]["verdict"] = body["verdict"]
+            save_quiz(answers)
+            return self.send_json(view()[name])
+        if self.path == "/review/data":
+            if not isinstance(name, str) or body.get("status") not in STATUSES:
+                return self.send_json({"error": "bad request"}, 400)
+            if isinstance(body.get("quiz"), dict) and body.get("note") and who == args.id:
+                quiz = body["quiz"]
+                answers.setdefault(name, []).append({"date": now(), "text": body["note"], "quiz": {
+                    "name": str(quiz.get("name", "")), "description": str(quiz.get("description", ""))}})
+                save_quiz(answers)
+                return self.send_json(view()[name])
+            entry = marks.setdefault(name, {"status": None, "notes": []})
+            if "status" in body:
+                entry["status"] = body["status"]
+                # A graph fingerprint replaces the older text signature; keep whichever was sent.
+                if body.get("fingerprint"):
+                    entry["fingerprint"] = body["fingerprint"]
+                    entry.pop("signature", None)
+                elif body.get("signature"):
+                    entry["signature"] = body["signature"]
+                entry["date"] = now()
+            if body.get("note"):
+                entry["notes"].append({"date": now(), "text": body["note"]})
+            save_person(who, data)
+            return self.send_json(view()[name])
+        if self.path == "/review/move":
+            old, new = body.get("from"), body.get("to")
+            if old not in marks or not new or new in marks:
+                return self.send_json({"error": "cannot move"}, 400)
+            entry = marks.pop(old)
+            entry["notes"].append({"by": "lean-review", "date": now(), "text": f"Moved from {old}."})
+            marks[new] = entry
+            save_person(who, data)
+            if old in answers:
+                answers[new] = answers.pop(old)
+                save_quiz(answers)
+            return self.send_json(view()[new])
+        if self.path == "/review/delete":
+            if marks.pop(name, None) is None:
+                return self.send_json({"error": "no such mark"}, 400)
+            save_person(who, data)
+            if answers.pop(name, None) is not None:
+                save_quiz(answers)
+            return self.send_json({})
         return self.send_json({"error": "not found"}, 404)
 
     def log_message(self, *a):
@@ -393,28 +458,33 @@ def main():
     global args, graph
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--docs", type=Path, required=True, help="doc-gen4 output folder")
-    p.add_argument("--marks", type=Path, required=True, help="JSON file for marks and notes")
+    p.add_argument("--marks", type=Path, required=True, help="folder for each person's marks and notes")
+    p.add_argument("--quiz", type=Path, help="folder for quiz answers (default: quiz beside the marks)")
+    p.add_argument("--id", required=True, help="who this is: the name of their file, which never changes")
+    p.add_argument("--name", help="the name to show for them (default: the id)")
     p.add_argument("--graph", type=Path, help="declaration graph from graph/DeclGraph.lean")
     p.add_argument("--prefix", required=True, help="root module, e.g. MyProject")
     p.add_argument("--source", type=Path, action="append",
                    help="a folder holding the project's modules, for showing declarations' code; can be repeated")
-    p.add_argument("--reviewer", default="reviewer", help="name shown on notes added in the page")
     p.add_argument("--links", type=Path,
                    help="JSON file linking references to your own copies (default: links.local.json beside the marks)")
     p.add_argument("--port", type=int, default=8797)
     p.add_argument("--version", action="version", version=f"lean-review {VERSION}")
     args = p.parse_args()
     args.links = args.links or args.marks.parent / "links.local.json"
+    args.quiz = args.quiz or args.marks.parent / "quiz"
+    if not ID.fullmatch(args.id):
+        sys.exit(f"lean-review: {args.id} can't be an id: use lowercase letters, digits and hyphens.")
+    graph = Graph(args.graph)
     try:
-        load_marks()
+        view()
     except MarksError as error:
         sys.exit(f"lean-review: {error}")
-    graph = Graph(args.graph)
     graph_format = graph.current().get("format", GRAPH_FORMAT)
     if graph_format != GRAPH_FORMAT:
         sys.exit(f"lean-review: {args.graph} has format {graph_format}; this server reads format "
                  f"{GRAPH_FORMAT}. Rerun this version's graph/DeclGraph.lean.")
-    print(f"lean-review {VERSION}: http://127.0.0.1:{args.port}/__review__/diagram\n"
+    print(f"lean-review {VERSION}: http://127.0.0.1:{args.port}/review/diagram\n"
           f"Docs: http://127.0.0.1:{args.port}/{args.prefix.replace('.', '/')}.html", flush=True)
     try:
         httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)

@@ -7,12 +7,12 @@ CHROME="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 OUT=../docs/images
 mkdir -p "$OUT"
-MARKS=$(mktemp -t lean-review-marks).json
-cp review/marks.seed.json "$MARKS"
-python3 ../server/server.py --docs docbuild/.lake/build/doc --marks "$MARKS" --graph review/graph.json \
-  --source . --prefix ReviewExample --reviewer Ada --port $PORT > /dev/null &
+REVIEW=$(mktemp -d -t lean-review-marks)
+cp -R review/seed "$REVIEW/marks"
+python3 ../server/server.py --docs docbuild/.lake/build/doc --marks "$REVIEW/marks" --graph review/graph.json \
+  --source . --prefix ReviewExample --id ada --name Ada --port $PORT > /dev/null &
 SERVER=$!
-trap 'kill $SERVER; rm -f "$MARKS"' EXIT
+trap 'kill $SERVER; rm -rf "$REVIEW"' EXIT
 sleep 1
 kill -0 $SERVER  # stop here if the server didn't start
 
@@ -26,7 +26,7 @@ shot review-page 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd"
 shot changes 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd_divides,ReviewExample.divides_gcd"
 shot library-mark 1400 1350 "Init/Prelude.html?only&focus=Nat.mod"
 shot orphans 1400 800 "ReviewExample/Gcd.html#review-orphans"
-shot diagram 1600 1000 "__review__/diagram#ReviewExample.gcd"
+shot diagram 1600 1000 "review/diagram#ReviewExample.gcd"
 shot sorry 1400 1000 "ReviewExample/Multiples/Lcm.html?only&focus=ReviewExample.gcd_mul_lcm,ReviewExample.gcd_divides_mul"
-shot sorry-diagram 1600 1000 "__review__/diagram#ReviewExample.gcd_divides_mul"
+shot sorry-diagram 1600 1000 "review/diagram#ReviewExample.gcd_divides_mul"
 shot review-page-dark 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd" 0

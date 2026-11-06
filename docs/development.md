@@ -7,8 +7,8 @@ algorithm in `Divides` (a definition of divisibility and its lemmas), `Zero` (ze
 zero) and `Gcd` (`gcd`, proofs that it divides both numbers and that every common divisor divides it,
 and a deprecated old theorem name), then a `Multiples` folder: `Lcm`, whose key theorem is a `sorry`,
 and `Coprime`, with one theorem that relies on it and one that doesn't. `example/review/seed.py` writes example marks that exercise each feature: a
-conversation, a library definition marked as understood, a rename, a mark to re-check, and an
-orphan.
+conversation, a library definition marked as understood, a rename, a mark to re-check, an
+orphan, and a question from an assistant.
 
 ```bash
 cd example
@@ -18,7 +18,7 @@ cd example
 ```
 
 The first docs build compiles doc-gen4 and takes several minutes. Marks made while trying it go to
-`example/review/marks.json`, which is not committed.
+`example/review/marks/`, which is not committed.
 
 ## Tests
 
@@ -31,7 +31,7 @@ python3 -m unittest discover -s tests
 | --- | --- | --- |
 | `tests/test_server.py` | Python | Marks and notes are saved and read back; renames and moves never overwrite a mark; a broken or newer `marks.json` is refused and left alone. |
 | `tests/test_graph.py` | Lean | On edited copies of the example: changing a proof or a docstring changes no fingerprint, and changing a statement or definition changes the right ones. The graph is compared with `tests/golden/`. |
-| `tests/test_pages.py` | Example docs, Chrome, network | The controls attach to doc-gen4's pages, marks are flagged exactly when something changed, and the diagram draws. |
+| `tests/test_pages.py` | Example docs, Chrome, network | The controls attach to doc-gen4's pages, marks are flagged exactly when something changed, the diagram draws, and clicking the buttons does what it should, from inside the page. |
 
 Tests skip what they can't run. If the golden graph differs after a Lean upgrade, read the difference
 before recording it (`python3 tests/test_graph.py --record`): fingerprints that change on their own would

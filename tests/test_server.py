@@ -28,10 +28,12 @@ class ServerTest(unittest.TestCase):
         (root / "docs" / "Bär.html").write_text("<html><body>page</body></html>")
         (root / "outside.html").write_text("<html><body>outside</body></html>")
         self.root = root
-        self.marks = root / "marks.json"
+        self.folder_marks = root / "marks"
+        self.marks = self.folder_marks / "ada.json"
+        self.quiz = root / "quiz" / "ada.json"
         self.graph = root / "graph.json"
-        server.args = Namespace(docs=root / "docs", marks=self.marks, graph=self.graph, links=root / "links.json",
-                                source=None, reviewer="Ada")
+        server.args = Namespace(docs=root / "docs", marks=self.folder_marks, quiz=root / "quiz", graph=self.graph,
+                                links=root / "links.json", source=None, id="ada", name="Ada")
         server.graph = server.Graph(self.graph)
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -56,6 +58,14 @@ class ServerTest(unittest.TestCase):
     def stored(self):
         return json.loads(self.marks.read_text())["marks"]
 
+    def write(self, marks, who="ada", name="Ada"):
+        self.folder_marks.mkdir(exist_ok=True)
+        (self.folder_marks / f"{who}.json").write_text(json.dumps({"format": 3, "name": name, "marks": marks}))
+
+    def shown(self, name=None):
+        data = json.loads(self.get("/review/data"))
+        return data[name] if name else data
+
     def raw(self, method, path, body=None, headers={}):
         connection = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port)
         self.addCleanup(connection.close)
@@ -75,34 +85,34 @@ class ServerTest(unittest.TestCase):
 
     def test_a_malformed_post_is_a_bad_request(self):
         json_type = {"Content-Type": "application/json"}
-        for path, body in (("/__review__/data", "not json"), ("/__review__/data", "[]"), ("/__review__/data", ""),
-                           ("/__review__/data", '{"name": "A.b", "status": []}'), ("/__review__/data", '{"name": "A.b", "note": {}}'),
-                           ("/__review__/delete", '{"name": []}'), ("/__review__/move", '{"from": [], "to": "B"}'),
-                           ("/__review__/verdict", '{"name": {}, "verdict": "match"}'), ("/__review__/reach", '{"modules": [[]]}')):
+        for path, body in (("/review/data", "not json"), ("/review/data", "[]"), ("/review/data", ""),
+                           ("/review/data", '{"name": "A.b", "status": []}'), ("/review/data", '{"name": "A.b", "note": {}}'),
+                           ("/review/delete", '{"name": []}'), ("/review/move", '{"from": [], "to": "B"}'),
+                           ("/review/verdict", '{"name": {}, "verdict": "match"}'), ("/review/reach", '{"modules": [[]]}')):
             self.assertEqual(self.raw("POST", path, body, json_type)[0], 400, body)
         self.assertFalse(self.marks.exists())
-        self.assertEqual(self.post("/__review__/data", {"name": "A.b", "status": "agree"})[0], 200)
+        self.assertEqual(self.post("/review/data", {"name": "A.b", "status": "agree"})[0], 200)
 
     def test_a_declarations_source_is_found_in_any_source_folder(self):
         (self.root / "src" / "P").mkdir(parents=True)
         (self.root / "src" / "P" / "M.lean").write_text("theorem t : True := trivial\n")
         self.graph.write_text(json.dumps({"declarations": {"P.t": {"module": "P.M", "lines": [1, 1], "kind": "theorem"}}}))
         server.args.source = [self.root / "lib", self.root / "src"]
-        found = json.loads(self.get("/__review__/source?name=P.t"))
+        found = json.loads(self.get("/review/source?name=P.t"))
         self.assertEqual((found["file"], found["text"]), (str(Path("P/M.lean")), "theorem t : True := trivial"))
         server.args.source = [self.root / "lib"]
-        self.assertIn("not found", json.loads(self.get("/__review__/source?name=P.t"))["error"])
+        self.assertIn("not found", json.loads(self.get("/review/source?name=P.t"))["error"])
 
     def test_another_site_cant_change_marks(self):
         json_type = {"Content-Type": "application/json"}
         for headers in ({"Content-Type": "text/plain"}, {**json_type, "Origin": "https://example.com"},
                         {**json_type, "Host": "example.com"}):
-            code, _ = self.post("/__review__/data", {"name": "A.b", "status": "agree"}, headers)
+            code, _ = self.post("/review/data", {"name": "A.b", "status": "agree"}, headers)
             self.assertIn(code, (403, 415), headers)
         self.assertFalse(self.marks.exists())
 
     def test_another_domain_cant_read(self):
-        request = Request(self.url("/__review__/data"), headers={"Host": "example.com"})
+        request = Request(self.url("/review/data"), headers={"Host": "example.com"})
         with self.assertRaises(HTTPError) as caught:
             urlopen(request)
         self.assertEqual(caught.exception.code, 403)
@@ -110,102 +120,182 @@ class ServerTest(unittest.TestCase):
     def test_the_pages_own_origin_is_accepted(self):
         port = self.httpd.server_port
         for origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
-            code, _ = self.post("/__review__/data", {"name": "A.b", "status": "agree"},
+            code, _ = self.post("/review/data", {"name": "A.b", "status": "agree"},
                                 {"Content-Type": "application/json", "Origin": origin})
             self.assertEqual(code, 200)
 
     def test_a_mark_and_note_are_saved_and_read_back(self):
-        self.post("/__review__/data", {"name": "A.b", "status": "agree"})
-        self.post("/__review__/data", {"name": "A.b", "note": "Looks right."})
-        entry = json.loads(self.get("/__review__/data"))["A.b"]
+        self.post("/review/data", {"name": "A.b", "status": "agree"})
+        self.post("/review/data", {"name": "A.b", "note": "Looks right."})
+        entry = self.shown("A.b")
         self.assertEqual(entry["status"], "agree")
-        self.assertEqual([(n["by"], n["text"]) for n in entry["notes"]], [("Ada", "Looks right.")])
+        self.assertEqual([(n["by"], n["text"], n["mine"]) for n in entry["notes"]], [("Ada", "Looks right.", True)])
+        stored = json.loads(self.marks.read_text())
+        self.assertEqual((stored["format"], stored["name"]), (3, "Ada"))
+        self.assertNotIn("by", stored["marks"]["A.b"]["notes"][0], "the file says whose it is")
 
-    def test_saves_record_the_format_and_pages_never_see_it(self):
-        self.post("/__review__/data", {"name": "A.b", "status": "agree"})
-        self.assertEqual(json.loads(self.marks.read_text())[server.FORMAT_KEY], server.MARKS_FORMAT)
-        self.assertEqual(list(json.loads(self.get("/__review__/data"))), ["A.b"])
+    def test_a_declaration_named_like_a_key_is_an_ordinary_mark(self):
+        self.post("/review/data", {"name": "format", "status": "agree"})
+        self.assertEqual(self.shown("format")["status"], "agree")
 
-    def test_a_declaration_named_like_the_format_is_an_ordinary_mark(self):
-        self.post("/__review__/data", {"name": "__format__", "status": "agree"})
-        self.post("/__review__/data", {"name": "marks", "status": "question"})
-        self.assertEqual(json.loads(self.get("/__review__/data"))["__format__"]["status"], "agree")
-        self.assertEqual(json.loads(self.get("/__review__/data"))["marks"]["status"], "question")
+    def test_a_mark_can_be_cleared(self):
+        self.post("/review/data", {"name": "A.b", "status": "agree"})
+        self.post("/review/data", {"name": "A.b", "status": None})
+        self.assertIsNone(self.shown("A.b")["status"])
 
-    def test_a_format_1_file_with_that_declaration_keeps_it(self):
-        self.marks.write_text(json.dumps({"__format__": {"status": "agree", "notes": []}}))
-        self.post("/__review__/data", {"name": "A.b", "status": "agree"})
-        self.assertEqual(self.stored()["__format__"]["status"], "agree")
+    def test_a_question_saves_without_a_note(self):
+        self.assertEqual(self.post("/review/data", {"name": "A.b", "status": "question"})[0], 200)
+        self.assertEqual(self.shown("A.b")["status"], "question")
 
-    def test_a_format_1_file_with_a_version_number_drops_it(self):
-        self.marks.write_text(json.dumps({"__format__": 1, "A.b": {"status": "agree", "notes": []}}))
-        self.assertEqual(list(json.loads(self.get("/__review__/data"))), ["A.b"])
+    def test_a_bare_question_is_your_own_reminder(self):
+        self.write({"A.b": {"status": "question", "date": "2026-01-01T00:00:00", "notes": []}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], [])
 
-    def test_a_file_from_before_formats_is_read_and_kept(self):
-        self.marks.write_text(json.dumps({"Old.mark": {"status": "agree", "notes": []}}))
-        self.post("/__review__/data", {"name": "New.mark", "status": "question"})
-        self.assertEqual(self.stored()["Old.mark"]["status"], "agree")
-        self.assertEqual(self.stored()["New.mark"]["status"], "question")
+    def test_a_note_turns_a_bare_question_into_asking(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-01-15T00:00:00", "notes": []}})
+        self.write({"A.b": {"status": "question", "date": "2026-01-01T00:00:00",
+                            "notes": [{"date": "2026-02-01T00:00:00", "text": "Why?"}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+
+    def test_a_note_alone_doesnt_ask_anything(self):
+        self.write({"A.b": {"status": None, "notes": [{"date": "2026-02-01T00:00:00", "text": "FYI."}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], [])
+
+    def test_two_people_keep_their_own_marks(self):
+        self.write({"A.b": {"status": "reject", "date": "2026-01-01T00:00:00", "notes": [
+            {"date": "2026-01-01T00:00:00", "text": "No."}]}}, "bo", "Bo")
+        self.post("/review/data", {"name": "A.b", "status": "agree", "note": "Yes."})
+        entry = self.shown("A.b")
+        self.assertEqual(entry["status"], "agree")
+        self.assertEqual([(o["id"], o["name"], o["status"]) for o in entry["others"]], [("bo", "Bo", "reject")])
+        self.assertEqual([(n["by"], n["mine"]) for n in entry["notes"]], [("Bo", False), ("Ada", True)])
+        self.assertEqual(json.loads((self.folder_marks / "bo.json").read_text())["marks"]["A.b"]["status"], "reject")
+
+    def test_only_others_marks_show_for_a_declaration_you_havent_touched(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-01-01T00:00:00", "notes": []}}, "bo", "Bo")
+        self.assertIsNone(self.shown("A.b")["status"])
+
+    def test_two_people_of_one_name_stay_apart(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-01-01T00:00:00", "notes": []}}, "ada-1234", "Ada")
+        self.post("/review/data", {"name": "A.b", "status": "reject"})
+        self.assertEqual([(o["id"], o["status"]) for o in self.shown("A.b")["others"]], [("ada-1234", "agree")])
+
+    def test_someone_elses_question_needs_attention_until_you_mark_or_reply(self):
+        self.write({"A.b": {"status": "question", "date": "2026-01-01T00:00:00", "notes": [{"date": "2026-01-01T00:00:00", "text": "Why?"}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+        self.post("/review/data", {"name": "A.b", "note": "Not a concern."})
+        self.assertEqual(self.shown("A.b")["attention"], [])
+        self.write({"A.c": {"status": "question", "date": "2026-01-01T00:00:00", "notes": [{"date": "2026-01-01T00:00:00", "text": "Why?"}]}}, "claude", "Claude")
+        self.post("/review/data", {"name": "A.c", "status": "agree"})
+        self.assertEqual(self.shown("A.c")["attention"], [])
+
+    def test_a_question_asked_after_your_mark_needs_attention(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-01-01T00:00:00", "notes": []}})
+        self.write({"A.b": {"status": "question", "date": "2026-02-01T00:00:00", "notes": [{"date": "2026-02-01T00:00:00", "text": "Why?"}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+
+    def test_an_answer_to_your_question_needs_attention(self):
+        self.post("/review/data", {"name": "A.b", "status": "question", "note": "Why?"})
+        self.assertEqual(self.shown("A.b")["attention"], [])
+        self.write({"A.b": {"status": None, "notes": [{"date": "2999-01-01T00:00:00", "text": "Because."}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+
+    def test_a_new_note_on_a_raised_question_needs_attention_again(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-03-01T00:00:00", "notes": []}})
+        self.write({"A.b": {"status": "question", "date": "2026-01-01T00:00:00",
+                            "notes": [{"date": "2026-02-01T00:00:00", "text": "First."}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], [], "you've seen it")
+        self.write({"A.b": {"status": "question", "date": "2026-01-01T00:00:00",
+                            "notes": [{"date": "2026-04-01T00:00:00", "text": "One more thing."}]}}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+
+    def test_a_plain_note_needs_no_attention(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-01-01T00:00:00", "notes": []}})
+        self.write({"A.b": {"status": "reject", "date": "2026-02-01T00:00:00",
+                            "notes": [{"date": "2026-02-01T00:00:00", "text": "No."}]}}, "bo", "Bo")
+        self.assertEqual(self.shown("A.b")["attention"], [])
+
+    def test_your_own_question_never_needs_your_attention(self):
+        self.post("/review/data", {"name": "A.b", "status": "question", "note": "Why?"})
+        self.assertEqual(self.shown("A.b")["attention"], [])
+
+    def test_an_assistant_can_write_as_itself(self):
+        self.post("/review/data", {"name": "A.b", "id": "claude", "author": "Claude", "status": "question", "note": "Is this right?"})
+        self.assertFalse(self.marks.exists())
+        entry = self.shown("A.b")
+        self.assertEqual(entry["attention"], ["Claude"])
+        self.assertEqual([(n["by"], n["mine"]) for n in entry["notes"]], [("Claude", False)])
+
+    def test_an_unsafe_id_is_refused(self):
+        code, _ = self.post("/review/data", {"name": "A.b", "id": "../evil", "note": "x"})
+        self.assertEqual(code, 400)
 
     def test_invalid_json_is_refused_and_left_alone(self):
-        broken = '{"A.b": {"status": "agree",'
-        self.marks.write_text(broken)
-        code, reply = self.post("/__review__/data", {"name": "C.d", "status": "agree"})
+        self.folder_marks.mkdir()
+        self.marks.write_text("{ not json")
+        code, body = self.post("/review/data", {"name": "A.b", "status": "agree"})
         self.assertEqual(code, 500)
-        self.assertIn("not valid JSON", reply["error"])
-        self.assertEqual(self.marks.read_text(), broken)
+        self.assertIn("not valid JSON", body["error"])
+        self.assertEqual(self.marks.read_text(), "{ not json")
 
     def test_a_newer_format_is_refused_and_left_alone(self):
-        newer = json.dumps({server.FORMAT_KEY: server.MARKS_FORMAT + 1, "marks": {}})
-        self.marks.write_text(newer)
-        code, _ = self.post("/__review__/data", {"name": "C.d", "status": "agree"})
+        self.folder_marks.mkdir()
+        text = json.dumps({"format": 99, "marks": {}})
+        self.marks.write_text(text)
+        code, body = self.post("/review/data", {"name": "A.b", "status": "agree"})
         self.assertEqual(code, 500)
-        self.assertEqual(self.marks.read_text(), newer)
+        self.assertIn("format 99", body["error"])
+        self.assertEqual(self.marks.read_text(), text)
 
     def test_a_save_leaves_no_temporary_file(self):
-        self.post("/__review__/data", {"name": "A.b", "status": "agree"})
-        self.assertEqual([p.name for p in self.marks.parent.glob("marks.json*")], ["marks.json"])
+        self.post("/review/data", {"name": "A.b", "status": "agree"})
+        self.assertEqual([p.name for p in self.folder_marks.iterdir()], ["ada.json"])
 
     def test_a_rename_moves_the_mark_and_says_so(self):
-        self.marks.write_text(json.dumps({"Old.name": {"status": "agree", "notes": []}}))
+        self.write({"Old.name": {"status": "agree", "notes": []}})
         self.graph.write_text(json.dumps({"renames": {"Old.name": "New.name"}}))
-        marks = json.loads(self.get("/__review__/data"))
+        marks = self.shown()
         self.assertNotIn("Old.name", marks)
         self.assertEqual(marks["New.name"]["status"], "agree")
         self.assertIn("renamed", marks["New.name"]["notes"][-1]["text"])
 
     def test_a_rename_never_overwrites_an_existing_mark(self):
-        self.marks.write_text(json.dumps({"Old.name": {"status": "agree", "notes": []},
-                                          "New.name": {"status": "reject", "notes": []}}))
+        self.write({"Old.name": {"status": "agree", "notes": []}, "New.name": {"status": "reject", "notes": []}})
         self.graph.write_text(json.dumps({"renames": {"Old.name": "New.name"}}))
-        marks = json.loads(self.get("/__review__/data"))
+        marks = self.shown()
         self.assertEqual(marks["Old.name"]["status"], "agree")
         self.assertEqual(marks["New.name"]["status"], "reject")
 
+    def test_someone_elses_mark_follows_a_rename_without_touching_their_file(self):
+        self.write({"Old.name": {"status": "agree", "notes": []}}, "bo", "Bo")
+        before = (self.folder_marks / "bo.json").read_text()
+        self.graph.write_text(json.dumps({"renames": {"Old.name": "New.name"}}))
+        self.assertEqual(self.shown("New.name")["others"][0]["id"], "bo")
+        self.assertEqual((self.folder_marks / "bo.json").read_text(), before)
+
     def test_moving_a_mark_onto_another_is_refused(self):
-        self.marks.write_text(json.dumps({"A": {"status": "agree", "notes": []},
-                                          "B": {"status": "reject", "notes": []}}))
-        code, _ = self.post("/__review__/move", {"from": "A", "to": "B"})
+        self.write({"A": {"status": "agree", "notes": []}, "B": {"status": "reject", "notes": []}})
+        code, _ = self.post("/review/move", {"from": "A", "to": "B"})
         self.assertEqual(code, 400)
-        self.assertEqual(json.loads(self.marks.read_text())["B"]["status"], "reject")
+        self.assertEqual(self.stored()["B"]["status"], "reject")
 
     def test_an_invalid_status_is_refused(self):
-        code, _ = self.post("/__review__/data", {"name": "A.b", "status": "maybe"})
+        code, _ = self.post("/review/data", {"name": "A.b", "status": "maybe"})
         self.assertEqual(code, 400)
         self.assertFalse(self.marks.exists())
 
     def test_asking_for_what_the_marks_need_returns_only_that(self):
         decls = {f"x{i}": {"module": "P.X", "deps": [], "uses": []} for i in range(server.LARGE + 1)}
         self.graph.write_text(json.dumps({"root": "P", "declarations": decls}))
-        self.marks.write_text(json.dumps({"x1": {"status": "agree", "notes": []}}))
-        self.assertEqual(list(json.loads(self.get("/__review__/graph?marked"))["declarations"]), ["x1"])
+        self.write({"x1": {"status": "agree", "notes": []}})
+        self.assertEqual(list(json.loads(self.get("/review/graph?marked"))["declarations"]), ["x1"])
 
     def test_a_module_named_like_the_tool_keeps_its_page(self):
-        folder = server.args.docs / "__review__"
+        folder = server.args.docs / "review"
         folder.mkdir()
         (folder / "graph.html").write_text("<html><body>module page</body></html>")
-        self.assertIn(b"module page", self.get("/__review__/graph.html"))
-        self.assertNotIn(b"module page", self.get("/__review__/diagram"))
+        self.assertIn(b"module page", self.get("/review/graph.html"))
+        self.assertNotIn(b"module page", self.get("/review/diagram"))
 
     def test_no_url_of_the_tool_can_be_a_module_page(self):
         self.assertFalse([path for path in server.PAGES if path.endswith(".html")])
@@ -215,21 +305,33 @@ class ServerTest(unittest.TestCase):
             self.assertTrue(self.get(path))
 
     def test_a_verdict_goes_on_the_latest_quiz_answer(self):
-        self.post("/__review__/data", {"name": "A.b", "note": "one", "quiz": {"name": "x", "description": "y"}})
-        self.post("/__review__/data", {"name": "A.b", "note": "two", "quiz": {"name": "x", "description": "z"}})
-        code, _ = self.post("/__review__/verdict", {"name": "A.b", "verdict": "partly"})
+        self.post("/review/data", {"name": "A.b", "note": "one", "quiz": {"name": "x", "description": "y"}})
+        self.post("/review/data", {"name": "A.b", "note": "two", "quiz": {"name": "x", "description": "z"}})
+        code, _ = self.post("/review/verdict", {"name": "A.b", "verdict": "partly"})
         self.assertEqual(code, 200)
-        notes = self.stored()["A.b"]["notes"]
-        self.assertEqual(["verdict" in n["quiz"] for n in notes], [False, True])
+        answers = json.loads(self.quiz.read_text())["answers"]["A.b"]
+        self.assertEqual(["verdict" in a["quiz"] for a in answers], [False, True])
+
+    def test_quiz_answers_stay_out_of_the_marks_file_but_show_on_pages(self):
+        self.post("/review/data", {"name": "A.b", "note": "one", "quiz": {"name": "x", "description": "y"}})
+        self.assertFalse(self.marks.exists())
+        note = self.shown("A.b")["notes"][0]
+        self.assertEqual((note["text"], note["quiz"]["name"], note["mine"]), ("one", "x", True))
+
+    def test_another_persons_quiz_answers_are_not_shown(self):
+        other = self.quiz.with_name("bo.json")
+        other.parent.mkdir()
+        other.write_text(json.dumps({"format": 3, "answers": {"A.b": [{"date": "2026-01-01", "text": "secret", "quiz": {}}]}}))
+        self.assertNotIn("A.b", self.shown())
 
     def test_a_verdict_needs_a_quiz_answer_and_a_known_value(self):
-        self.post("/__review__/data", {"name": "A.b", "note": "plain"})
-        self.assertEqual(self.post("/__review__/verdict", {"name": "A.b", "verdict": "match"})[0], 400)
-        self.post("/__review__/data", {"name": "A.b", "note": "q", "quiz": {"name": "x", "description": "y"}})
-        self.assertEqual(self.post("/__review__/verdict", {"name": "A.b", "verdict": "maybe"})[0], 400)
+        self.post("/review/data", {"name": "A.b", "note": "plain"})
+        self.assertEqual(self.post("/review/verdict", {"name": "A.b", "verdict": "match"})[0], 400)
+        self.post("/review/data", {"name": "A.b", "note": "q", "quiz": {"name": "x", "description": "y"}})
+        self.assertEqual(self.post("/review/verdict", {"name": "A.b", "verdict": "maybe"})[0], 400)
 
     def test_pages_get_the_review_script(self):
-        self.assertIn(b"/__review__/review.js", self.get("/Page.html"))
+        self.assertIn(b"/review/review.js", self.get("/Page.html"))
 
 
 class SliceTest(unittest.TestCase):
@@ -325,14 +427,21 @@ class StartupTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(ROOT / "server" / "server.py"), *extra],
                               capture_output=True, text=True, timeout=20)
 
+    def test_refuses_an_unsafe_id(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = self.run_server("--docs", folder, "--marks", folder, "--prefix", "P", "--id", "Ada Lovelace")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("can't be an id", result.stderr)
+
     def test_version(self):
         self.assertEqual(self.run_server("--version").stdout.strip(), f"lean-review {server.VERSION}")
 
     def test_refuses_to_start_on_a_broken_marks_file(self):
         with tempfile.TemporaryDirectory() as folder:
-            marks = Path(folder) / "marks.json"
-            marks.write_text("{")
-            result = self.run_server("--docs", folder, "--marks", str(marks), "--prefix", "P")
+            marks = Path(folder) / "marks"
+            marks.mkdir()
+            (marks / "ada.json").write_text("{")
+            result = self.run_server("--docs", folder, "--marks", str(marks), "--prefix", "P", "--id", "ada")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("not valid JSON", result.stderr)
 
@@ -340,8 +449,8 @@ class StartupTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             graph = Path(folder) / "graph.json"
             graph.write_text(json.dumps({"format": server.GRAPH_FORMAT + 1}))
-            result = self.run_server("--docs", folder, "--marks", str(Path(folder) / "marks.json"),
-                                     "--graph", str(graph), "--prefix", "P")
+            result = self.run_server("--docs", folder, "--marks", str(Path(folder) / "marks"),
+                                     "--graph", str(graph), "--prefix", "P", "--id", "ada")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("has format", result.stderr)
 

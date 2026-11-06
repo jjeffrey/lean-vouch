@@ -17,13 +17,19 @@
 .review-row button[data-status="question"].active { background: #d9a40040; border-color: #d9a400; }
 .review-row button[data-status="reject"].active { background: #d4444040; border-color: #d44; }
 .review-stale { color: #e08a10; font-style: italic; }
+.review-prompt { color: #b08800; font-size: 0.9em; margin: 0.2em 0; }
+.review-others { font-size: 0.9em; margin: 0.3em 0; }
+.review-others span { margin-right: 0.8em; }
+.review-others .old { opacity: 0.6; }
+.review-others .disagree { color: #7b4fb5; font-weight: 600; }
+.review-others .attention { color: #c77700; font-weight: 600; }
 .review-notes { list-style: none; margin: 0.4em 0; padding-left: 0; }
 .review-notes li { margin: 0.4em 0; padding: 0.35em 0.6em; border-left: 3px solid; border-radius: 4px; }
 .review-notes .note-head { font-weight: 600; font-size: 0.85em; margin-bottom: 0.1em; }
 .review-notes .note-date { font-weight: normal; opacity: 0.65; margin-left: 0.3em; }
 .review-notes li > div:last-child { white-space: pre-wrap; }
 .review-notes .by-reviewer { background: var(--code-bg); border-color: #888; }
-.review-notes .by-assistant { background: #2a7de124; border-color: #2a7de1; }
+.review-notes .by-other { background: hsl(var(--person-hue) 70% 50% / 0.14); border-color: hsl(var(--person-hue) 60% 50%); }
 .review-notes .by-tool { background: none; border-color: #8886; opacity: 0.75; font-style: italic; font-size: 0.9em; }
 .review textarea, .review-orphans input { width: 100%; box-sizing: border-box; font: inherit;
   background: var(--body-bg); color: var(--text-color); border: 1px solid #8888; border-radius: 4px; }
@@ -32,6 +38,7 @@
 .decl[data-review-status="question"] { border-left: 4px solid #d9a400; }
 .decl[data-review-status="reject"] { border-left: 4px solid #d44; }
 .decl[data-review-stale="yes"] { box-shadow: -4px 0 0 #f0a020; }
+.decl[data-review-disagree="yes"] { border-left: 4px solid #7b4fb5; }
 .review-hide-generated .review-generated { display: none; }
 #review-summary { position: fixed; right: 1em; bottom: 1em; z-index: 10; display: flex; gap: 1em; align-items: center;
   padding: 0.5em 0.8em; background: var(--body-bg); color: var(--text-color); border: 1px solid #8888;
