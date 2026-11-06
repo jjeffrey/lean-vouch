@@ -47,6 +47,7 @@ PAGES = {"/review/diagram": "graph.html", "/review/quiz": "quiz.html", "/review/
 lock = threading.Lock()
 args = None
 graph = None
+unreadable = []  # others' marks files that the latest view had to leave out
 
 
 def now():
@@ -234,6 +235,11 @@ def current(who=None, name=None):
     data = person(who, name or (args.name if who == args.id else None))
     if apply_renames(data["marks"], graph.current()):
         save_person(who, data)
+    if who == args.id:
+        answers = quiz_answers()
+        moves = {old: new for old, new in graph.current().get("renames", {}).items() if old in answers and new not in answers}
+        if moves:
+            save_quiz({moves.get(name, name): kept for name, kept in answers.items()})
     return data
 
 
@@ -244,8 +250,16 @@ def view():
     `attention` names whoever is waiting on you: someone with a `?` and a note saying what it asks,
     or who answered your `?`, since you last marked or wrote here. A bare `?` is a person's own reminder."""
     renames = graph.current().get("renames", {})
-    people = {path.stem: person(path.stem) for path in sorted(args.marks.glob("*.json"))}
-    people[args.id] = current()
+    # Your own file has to be right, or a save could lose it. Someone else's only gets read here,
+    # and arrives through git, so a conflict or a newer version of theirs needn't stop you.
+    people, unreadable[:] = {args.id: current()}, []
+    for path in sorted(args.marks.glob("*.json")):
+        if path.stem != args.id:
+            try:
+                people[path.stem] = person(path.stem)
+            except MarksError as error:
+                unreadable.append(path.stem)
+                print(f"lean-review: leaving out {error}", file=sys.stderr, flush=True)
     shown = {}
 
     def at(name):
@@ -287,6 +301,8 @@ def source_of(name):
         return {"error": f"{module} not found"}
     lines = (folder / module).read_text().splitlines()
     start, end = decl["lines"][0] - 1, decl["lines"][1]
+    if end > len(lines):
+        return {"error": f"{module} has changed since the last build. Rebuild to see this declaration's code."}
     # Include a doc comment (and attributes) directly above the declaration.
     if start > 0 and lines[start - 1].rstrip().endswith("-/"):
         i = start - 1
@@ -315,12 +331,13 @@ def status():
     lean-review which project this server is for, and `me` shows who's reviewing."""
     files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
     build = load_json(args.build, {})
+    build = build if isinstance(build, dict) else {}
     state, message = build.get("state"), build.get("message")
     if state == "building" and not alive(build.get("pid")):
         state, message = "failed", "The build stopped before it finished."
     return {"marks": ",".join(f"{path.stem}:{path.stat().st_mtime_ns}" for path in files), "state": state,
             "message": message, "built": build.get("built"), "marks_folder": str(args.marks.resolve()),
-            "me": {"id": args.id, "name": person(args.id, args.name)["name"]}}
+            "me": {"id": args.id, "name": args.name or args.id}, "unreadable": unreadable}
 
 
 def well_formed(body):
@@ -375,7 +392,10 @@ class Handler(SimpleHTTPRequestHandler):
             if not query:
                 return self.send_json(graph.current())
             with lock:
-                marks = view() if "marked" in query else {}
+                try:
+                    marks = view() if "marked" in query else {}
+                except MarksError as error:
+                    return self.send_json({"error": str(error)}, 500)
                 return self.send_json(graph.slice(query.get("module", []), query.get("name", []), marks))
         if path == "/review/links":
             return self.send_json(load_json(args.links, {}))
@@ -457,20 +477,22 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(view()[name])
         if self.path == "/review/move":
             old, new = body.get("from"), body.get("to")
-            if old not in marks or not new or new in marks:
+            if (old not in marks and old not in answers) or not new or new in marks or new in answers:
                 return self.send_json({"error": "cannot move"}, 400)
-            entry = marks.pop(old)
-            entry["notes"].append({"by": "lean-review", "date": now(), "text": f"Moved from {old}."})
-            marks[new] = entry
-            save_person(who, data)
+            if old in marks:
+                entry = marks.pop(old)
+                entry["notes"].append({"by": "lean-review", "date": now(), "text": f"Moved from {old}."})
+                marks[new] = entry
+                save_person(who, data)
             if old in answers:
                 answers[new] = answers.pop(old)
                 save_quiz(answers)
             return self.send_json(view()[new])
         if self.path == "/review/delete":
-            if marks.pop(name, None) is None:
+            if name not in marks and name not in answers:
                 return self.send_json({"error": "no such mark"}, 400)
-            save_person(who, data)
+            if marks.pop(name, None) is not None:
+                save_person(who, data)
             if answers.pop(name, None) is not None:
                 save_quiz(answers)
             return self.send_json({})

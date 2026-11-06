@@ -42,12 +42,14 @@ window.reviewWatch = onMarks => {
       me.title = `Your id is ${now.me.id}: the name of your marks file. --name and --id change them.`;
     }
     if (first) built = now.built;
-    else if (now.marks !== marks) await onMarks();
+    // Also on the first look: marks can change while a large page loads.
+    if (first || now.marks !== marks) await onMarks();
     first = false;
     marks = now.marks;
     if (now.state === "building") say("Rebuilding…");
     else if (now.state === "failed") say("Build failed; showing the last good version.", now.message);
     else if (now.built !== built) say("Docs updated.", null, reload);
+    else if (now.unreadable.length) say(`Left out marks that can't be read: ${now.unreadable.join(", ")}.`);
     else say(null);
   };
   tick();

@@ -118,6 +118,16 @@ class IdentityTest(unittest.TestCase):
         self.assertIn("--id", str(caught.exception))
         self.assertEqual(self.identity("李明", "a@example.com", "li-ming", None), ("li-ming", "李明"))
 
+    def test_a_new_name_is_still_the_same_person(self):
+        self.assertEqual(self.identity("Ada Lovelace", "a@example.com", None, "Ada")[0],
+                         self.identity("Ada Lovelace", "a@example.com")[0])
+        self.assertEqual(self.identity("Ada Lovelace", "a@example.com", None, "Ada")[1], "Ada")
+
+    def test_a_bad_id_stops_before_any_build(self):
+        with self.assertRaises(SystemExit) as caught:
+            self.identity("Ada", "a@example.com", "Ada L", None)
+        self.assertIn("can't be an id", str(caught.exception))
+
     def test_both_can_be_chosen(self):
         self.assertEqual(self.identity("Ada", "a@example.com", "claude", "Claude"), ("claude", "Claude"))
 
@@ -139,6 +149,15 @@ class ReportTest(unittest.TestCase):
         self.assertEqual((self.status()["state"], self.status()["built"]), ("building", "then"))
         review.report("failed", message="It broke.")
         self.assertEqual((self.status()["built"], self.status()["message"]), ("then", "It broke."))
+
+    def test_a_garbled_status_file_doesnt_stop_a_build(self):
+        (review.HOME / "build.json").write_text("{ partial")
+        review.report("building")
+        self.assertEqual(self.status()["state"], "building")
+
+    def test_an_interrupted_build_has_a_reason(self):
+        self.assertEqual(review.reason(KeyboardInterrupt()), "The build was interrupted.")
+        self.assertEqual(review.reason(SystemExit("lean-review: first\nsecond")), "lean-review: first")
 
     def test_no_server_is_none(self):
         with socket.socket() as probe:

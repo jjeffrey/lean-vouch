@@ -70,7 +70,8 @@ yours. It clears when you mark the declaration or reply.
 
 Marks are shared with plain git, and lean-review never commits or pushes for you. Commit your file
 with your work, and pull to get everyone else's, which appear on open pages by themselves. Each person writes
-only their own file, so marks don't conflict.
+only their own file, so marks don't conflict. If someone else's file can't be read, such as during a
+merge conflict, pages say so and carry on without it.
 
 An assistant, human or not, is another person with its own file. By convention it leaves notes and `?`s,
 and doesn't mark ✓ or ✗: the record says what a person has checked. While the server runs, it can write

@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.request import urlopen
 
-from lean_review.server import VERSION
+from lean_review.server import ID, VERSION
 
 HERE = Path(__file__).resolve().parent
 MINIMUM = (4, 30)  # the oldest Lean this has been run on, end to end; see docs/internals.md
@@ -214,10 +214,14 @@ def git_config(key):
 def identity(chosen_id, chosen_name):
     """Who's reviewing. The id tells two people of the same name apart by their email, without
     publishing it, and comes out the same on each of their machines."""
-    name = chosen_name or git_config("user.name") or chosen_id or "reviewer"
+    git_name = git_config("user.name")
+    name = chosen_name or git_name or chosen_id or "reviewer"
     if chosen_id:
+        if not ID.fullmatch(chosen_id):
+            fail(f"{chosen_id} can't be an id: use lowercase letters, digits and hyphens.")
         return chosen_id, name
-    base = slug(name)
+    # Not from --name, which can change without making you someone else.
+    base = slug(git_name) or slug(name)
     if not base:
         fail(f"can't make a file name from {name!r}. Choose one with --id, such as --id my-name.")
     return f"{base}-{hashlib.sha256(git_config('user.email').encode()).hexdigest()[:4]}", name
@@ -243,8 +247,19 @@ def report(state, **details):
     """Say how a build is going, for a server and the pages open on it. The time of the last good
     build carries over a failure, since those pages still show it."""
     status = HOME / "build.json"
-    built = json.loads(status.read_text()).get("built") if status.exists() else None
-    status.write_text(json.dumps({"built": built, **details, "state": state, "pid": os.getpid()}))
+    try:
+        built = json.loads(status.read_text()).get("built")
+    except (OSError, ValueError, AttributeError):
+        built = None
+    # Swapped in whole, since the server reads it while this runs.
+    temporary = status.with_name(status.name + ".tmp")
+    temporary.write_text(json.dumps({"built": built, **details, "state": state, "pid": os.getpid()}))
+    os.replace(temporary, status)
+
+
+def reason(error):
+    """The first line of what stopped a build. Ctrl-C has nothing to say."""
+    return (str(getattr(error, "code", error)).splitlines() or ["The build was interrupted."])[0]
 
 
 def running_server(port):
@@ -288,7 +303,7 @@ def main():
             for root in built["roots"]:
                 clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
     except (SystemExit, Exception, KeyboardInterrupt) as error:
-        report("failed", message=str(getattr(error, "code", error) or "interrupted").splitlines()[0])
+        report("failed", message=reason(error))
         raise
     report("done", built=datetime.now().isoformat(timespec="seconds"))
     if args.rebuild or serving:

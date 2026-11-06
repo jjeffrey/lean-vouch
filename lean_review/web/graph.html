@@ -252,8 +252,10 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const stale = n => viewer.value === "all" ? false : isOld(n, shownMark(n));
   // What changed, and how many marks rely on each: every mark recorded what lay below it, so this
   // includes declarations nobody marked. Marks shown are the viewer's; everyone's has no single view.
+  let changedNow = null;   // worked out once per redraw: it reads every mark
   const changedNames = () => {
-    const found = new Map();
+    if (changedNow) return changedNow;
+    const found = changedNow = new Map();
     if (viewer.value === "all") return found;
     for (const n of Object.keys(marks)) {
       const c = changes(n, shownMark(n));
@@ -419,6 +421,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     };
     // The diagram as data, drawn by drawGraphviz below.
     const ids = new Map([...inGraph].map((n, i) => [n, "n" + i]));
+    changedNow = null;
     model = { nodes: [], edges: [], name: new Map(), id: ids, box: new Map(), down: new Map(), up: new Map(), weight: new Map() };
     model.boxIdOf = n => { const box = boxOf.get(decls[n]?.module); return box ? boxId(box) : undefined; };
     for (const n of inGraph) {
@@ -798,6 +801,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 
   // Update one node's colors after its mark changes, without redrawing (which would reset zoom).
   function recolorAll() {
+    changedNow = null;
     const elements = nodeElements();
     for (const name of model.id.keys()) repaint(name, elements);
     renderTree();

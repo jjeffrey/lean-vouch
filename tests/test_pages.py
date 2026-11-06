@@ -86,7 +86,8 @@ class PagesTest(unittest.TestCase):
         if build:
             Path(folder.name, "build.json").write_text(json.dumps(build))
         for who, (name, entries) in people.items():
-            (marks_folder / f"{who}.json").write_text(json.dumps({"format": 3, "name": name, "marks": entries}))
+            text = entries if isinstance(entries, str) else json.dumps({"format": 3, "name": name, "marks": entries})
+            (marks_folder / f"{who}.json").write_text(text)
         server = subprocess.Popen([sys.executable, str(ROOT / "lean_review" / "server.py"), "--docs", str(docs),
                                    "--marks", str(marks_folder), "--graph", str(graph_file), "--source", str(EXAMPLE),
                                    "--prefix", "ReviewExample", "--id", "ada", "--name", "Ada", "--port", str(self.port)], stdout=subprocess.DEVNULL)
@@ -490,6 +491,13 @@ class PagesTest(unittest.TestCase):
             results.push(doc.querySelectorAll(".decl .review-row").length > 0);
         """, build={"state": "failed", "message": "It broke.", "pid": 1})
         self.assertEqual(results, ["Build failed; showing the last good version.", "It broke.", True])
+
+    def test_an_unreadable_file_is_announced(self):
+        results = self.click_through({}, """
+            await ready("#review-build:not([hidden])");
+            results.push(doc.getElementById("review-build").textContent, doc.querySelectorAll(".decl .review-row").length > 0);
+        """, people={"bo": ("Bo", "<<<<<<< HEAD")})
+        self.assertEqual(results, ["Left out marks that can't be read: bo.", True])
 
     def test_nothing_is_announced_after_a_good_build(self):
         results = self.click_through({}, """

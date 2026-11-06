@@ -112,6 +112,10 @@ class ServerTest(unittest.TestCase):
         server.args.build.write_text(json.dumps({"state": "failed", "message": "It broke.", "pid": 1}))
         self.assertEqual((self.status()["state"], self.status()["message"]), ("failed", "It broke."))
 
+    def test_a_garbled_build_file_is_no_build(self):
+        server.args.build.write_text("[1, 2]")
+        self.assertIsNone(self.status()["state"])
+
     def test_a_build_that_died_shows_as_failed(self):
         dead = subprocess.Popen([sys.executable, "-c", ""])
         dead.wait()
@@ -133,6 +137,48 @@ class ServerTest(unittest.TestCase):
         self.assertFalse(json.loads(self.get("/review/source?name=t"))["edited"])
         os.utime(file, (2_100_000_000, 2_100_000_000))
         self.assertTrue(json.loads(self.get("/review/source?name=t"))["edited"])
+
+    def test_a_broken_marks_file_doesnt_break_status_or_says_why_elsewhere(self):
+        self.folder_marks.mkdir()
+        self.marks.write_text("{ not json")
+        self.assertEqual(self.status()["me"]["id"], "ada")
+        status, body = self.raw("GET", "/review/graph?marked")
+        self.assertEqual(status, 500)
+        self.assertIn("not valid JSON", json.loads(body)["error"])
+
+    def test_someone_elses_unreadable_file_is_left_out(self):
+        self.write({"A.b": {"status": "agree", "date": "2026-01-01T00:00:00", "notes": []}}, "cy", "Cy")
+        (self.folder_marks / "bo.json").write_text("<<<<<<< HEAD")
+        (self.folder_marks / "di.json").write_text(json.dumps({"format": 99, "marks": {}}))
+        self.post("/review/data", {"name": "A.b", "status": "agree"})
+        self.assertEqual([o["id"] for o in self.shown("A.b")["others"]], ["cy"])
+        self.assertEqual(self.status()["unreadable"], ["bo", "di"])
+        self.assertEqual((self.folder_marks / "bo.json").read_text(), "<<<<<<< HEAD")
+
+    def test_your_own_unreadable_file_still_stops_you(self):
+        self.folder_marks.mkdir()
+        self.marks.write_text("<<<<<<< HEAD")
+        self.assertEqual(self.post("/review/data", {"name": "A.b", "status": "agree"})[0], 500)
+
+    def test_a_quiz_answer_alone_can_be_moved_and_deleted(self):
+        self.post("/review/data", {"name": "A.b", "note": "one", "quiz": {"name": "x", "description": "y"}})
+        self.assertEqual(self.post("/review/move", {"from": "A.b", "to": "A.c"})[0], 200)
+        self.assertIn("A.c", json.loads(self.quiz.read_text())["answers"])
+        self.assertEqual(self.post("/review/delete", {"name": "A.c"})[0], 200)
+        self.assertEqual(json.loads(self.quiz.read_text())["answers"], {})
+
+    def test_a_rename_moves_quiz_answers(self):
+        self.post("/review/data", {"name": "Old.name", "note": "one", "quiz": {"name": "x", "description": "y"}})
+        self.graph.write_text(json.dumps({"renames": {"Old.name": "New.name"}}))
+        self.shown()
+        self.assertEqual(list(json.loads(self.quiz.read_text())["answers"]), ["New.name"])
+
+    def test_source_from_a_file_that_got_shorter_says_so(self):
+        (self.root / "src").mkdir()
+        (self.root / "src" / "M.lean").write_text("theorem t : True := trivial\n")
+        self.graph.write_text(json.dumps({"declarations": {"t": {"module": "M", "lines": [40, 41], "kind": "theorem"}}}))
+        server.args.source = [self.root / "src"]
+        self.assertIn("Rebuild", json.loads(self.get("/review/source?name=t"))["error"])
 
     def test_a_declarations_source_is_found_in_any_source_folder(self):
         (self.root / "src" / "P").mkdir(parents=True)

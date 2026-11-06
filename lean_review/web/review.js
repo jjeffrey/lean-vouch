@@ -141,8 +141,10 @@
 
   // What changed, and how many of your marks rely on each. Every mark recorded what lay below it,
   // so this includes declarations you never marked.
+  let changedNow = null;
   const changedNames = () => {
-    const found = new Map();
+    if (changedNow) return changedNow;
+    const found = changedNow = new Map();
     for (const [name, mark] of Object.entries(marks)) {
       if (!mark.status || !mark.fingerprint) continue;
       const c = changes(name, mark);
@@ -214,6 +216,7 @@
     const unexplained = e => e.status === "question" && !(e.notes ?? []).some(n => n.mine && n.by !== "lean-review");
 
     const render = e => {
+      if (e !== marks[name] && (e.status || marks[name]?.status)) changedNow = null;
       marks[name] = e;
       prompt.hidden = !unexplained(e);
       for (const b of buttons) b.classList.toggle("active", e.status === b.dataset.status);
@@ -469,6 +472,7 @@
     reviewWatch(async () => {
       const fresh = await fetch("/review/data").then(checked);
       marks = fresh;
+      changedNow = null;
       redraw();
     });
     // ?focus=A,B scrolls to those declarations once the review controls are in place; adding
