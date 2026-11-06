@@ -38,14 +38,14 @@
         "deps": {
           "InvImage": "cb86e38fe61dc40c",
           "Nat": "00f1b84d862fbf33",
-          "Nat.add": "b22dc563ea09c091",
-          "Nat.div": "194be92d938693d3",
-          "Nat.lt": "a504b25cc7f8a015",
-          "Nat.mod": "f3b171f5c35ada13",
-          "Nat.mul": "6540b66d943bf0bb",
+          "Nat.add": "08d8e9c21679be3f",
+          "Nat.div": "ecdc01769bbb1c01",
+          "Nat.lt": "407cf44a46ac326c",
+          "Nat.mod": "01051b0f42e30cc4",
+          "Nat.mul": "d3fba1d51f5311c7",
           "PSigma": "027603f61043ad97",
           "ReviewExample.gcd": "dbdffe02f3928447",
-          "WellFounded.Nat.fix": "a15a8f77b9f99888"
+          "WellFounded.Nat.fix": "4078000dad188905"
         },
         "own": "3ad3e0d064f54865"
       },

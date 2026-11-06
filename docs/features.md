@@ -5,7 +5,8 @@ Under every declaration:
 - **A mark:** ✓ agree, ? question, ✗ reject how it's defined. Click it again to clear it.
 - **A note thread,** for questions and answers, from everyone reviewing.
 - **Change tracking:** the mark is flagged when the declaration has changed since it was made, or
-  when anything below it has, however far ("depends on `Divides`, which changed since you marked it").
+  when anything below it has, however far, in libraries too ("depends on `Divides`, which changed since
+  you marked it").
   For a theorem only its statement counts, since Lean checks the proof; for a definition, its
   statement and body. A change only to how an argument is passed, such as `(n : Nat)` to
   `{n : Nat}`, isn't flagged: it changes how the declaration is called, not what it says.

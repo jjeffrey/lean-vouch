@@ -188,6 +188,45 @@ def reviewedExprs (g : Graph) (n : Name) : Array Expr :=
   | some info => #[info.type]
   | none => #[]
 
+/-- What a library constant's meaning rests on: the constants its reviewed expressions mention, so
+a theorem's statement and a definition's body, but nothing of a `partial def`'s compiled code, whose
+recursion isn't a dependency. Theorems cited inside a body are left out: they're proofs, and which
+proof it uses can't change what it means. -/
+def libraryBelow (g : Graph) (n : Name) : NameSet :=
+  let exprs := match g.env.find? n with
+    | some (.opaqueInfo o) => #[o.type, o.value]
+    | _ => g.reviewedExprs n
+  exprs.foldl (init := {}) fun found e =>
+    e.getUsedConstants.foldl (init := found) fun found c =>
+      if g.env.find? c matches some (.thmInfo _) then found else found.insert c
+
+/-- Fingerprints of library constants that take in everything reachable from them, so that a change
+to something a used definition is built on is seen. Each is a sum over the set of what's reachable,
+which depends on that set alone: not on the order of the walk, or on how many paths lead to a
+constant, which vary between Lean versions. `flat` is a constant's fingerprint by itself. -/
+def libraryDepths (g : Graph) (roots : Array Name) (flat : Name → UInt64) : Std.HashMap Name UInt64 := Id.run do
+  let mut done : Std.HashMap Name UInt64 := {}
+  let mut known : Std.HashMap Name (UInt64 × NameSet) := {}
+  for root in roots do
+    let mut seen : NameSet := {}
+    let mut todo := #[root]
+    let mut sum : UInt64 := 0
+    while !todo.isEmpty do
+      let n := todo.back!
+      todo := todo.pop
+      if seen.contains n then continue
+      seen := seen.insert n
+      let (own, below) ← match known.get? n with
+        | some entry => pure entry
+        | none =>
+          let entry := (flat n, g.libraryBelow n)
+          known := known.insert n entry
+          pure entry
+      sum := sum + own
+      todo := below.foldl Array.push todo
+    done := done.insert root sum
+  return done
+
 /-- Whether `c` is a method of a type class, such as `LE.le` behind `≤`. -/
 def isClassMethod (g : Graph) (c : Name) : Bool :=
   match g.env.getProjectionFnInfo? c with
@@ -325,9 +364,12 @@ unsafe def main (args : List String) : IO UInt32 := do
     deps := deps.insert n d
     uses := uses.insert n l
     library := library.union l
-  -- A library constant's own fingerprint: its statement and, for a definition, its body.
-  let libraryOwn (n : Name) : UInt64 :=
+  -- A library constant's fingerprint by itself: its statement and, for a definition, its body.
+  let libraryFlat (n : Name) : UInt64 :=
     mixHash (hash n) ((g.reviewedExprs n).map (·.hash) |>.foldl mixHash 7)
+  -- And with everything it rests on, down through the library.
+  let depths := g.libraryDepths library.toArray libraryFlat
+  let libraryOwn (n : Name) : UInt64 := (depths.get? n).getD 0
   -- `deep` fingerprints, depth first over the dependency graph (it has no cycles).
   let mut deep : Std.HashMap Name UInt64 := {}
   let rec visit (n : Name) (deep : Std.HashMap Name UInt64) (fuel : Nat) :

@@ -20,10 +20,16 @@
 - **Fingerprints** are hashes of Lean's expressions. A mark stores the fingerprint of the
   declaration and of everything below it when it was made; the page compares them with the
   current graph. A `partial def` counts its body, a structure its default field values, and a
-  module doc its text.
+  module doc its text. A library definition's fingerprint takes in everything it's built on, down
+  through the library, leaving out proofs, so upgrading Lean or a dependency flags marks when something
+  beneath what they use really changed, even if the change is harmless.
 
 ## Limits
 
+- Fingerprints use Lean's expression hash, which is 32 bits and not cryptographic. An accidental
+  collision is very unlikely, but someone could craft one, so don't rely on them against an adversary.
+- Library tracking covers the library definitions listed under a declaration. Type classes and instances
+  stand for the operations they provide, so a change to a class itself isn't followed.
 - Lean v4.30 to v4.35 (see [Versions](#versions)). `DeclGraph.lean` uses Lean's internals, which change between versions. It works with and without the module system (`module`); it reads private data, so unexposed bodies are covered.
 - `DeclGraph.lean` is `unsafe` only to load the imported modules' environment extensions (which
   record instances and deprecations); it reads, never writes.

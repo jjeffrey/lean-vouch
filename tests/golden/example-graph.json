@@ -1,7 +1,7 @@
 {
  "declarations": {
   "ReviewExample.Coprime": {
-   "deep": "f18ec42330116483",
+   "deep": "3bc8f59c3f419f86",
    "deps": [
     "ReviewExample.gcd"
    ],
@@ -18,7 +18,7 @@
    ]
   },
   "ReviewExample.Coprime.divides_one": {
-   "deep": "0dc65bb6e899a0e7",
+   "deep": "2e963ba10b7cd44f",
    "deps": [
     "ReviewExample.Coprime",
     "ReviewExample.Divides"
@@ -35,7 +35,7 @@
    ]
   },
   "ReviewExample.Coprime.lcm_eq": {
-   "deep": "fe64c9e10baf4594",
+   "deep": "457851b92ab8cc8a",
    "deps": [
     "ReviewExample.Coprime",
     "ReviewExample.lcm"
@@ -60,7 +60,7 @@
    ]
   },
   "ReviewExample.Divides": {
-   "deep": "6c671e7e68b9c10f",
+   "deep": "fd3f76f00a8271c1",
    "deps": [],
    "kind": "def",
    "lines": [
@@ -77,7 +77,7 @@
    ]
   },
   "ReviewExample.Divides.mod": {
-   "deep": "392ebbbafb8da760",
+   "deep": "63d72f108fa3b663",
    "deps": [
     "ReviewExample.Divides"
    ],
@@ -94,7 +94,7 @@
    ]
   },
   "ReviewExample.Divides.of_mod": {
-   "deep": "994403b8ee60e04d",
+   "deep": "be58ffea72366746",
    "deps": [
     "ReviewExample.Divides"
    ],
@@ -111,7 +111,7 @@
    ]
   },
   "ReviewExample.Divides.refl": {
-   "deep": "66a5cf12dbf7d8e0",
+   "deep": "9ac89ec2032054e6",
    "deps": [
     "ReviewExample.Divides"
    ],
@@ -127,7 +127,7 @@
    ]
   },
   "ReviewExample.Divides.zero": {
-   "deep": "f2a923c6f5d3cf4c",
+   "deep": "55b2cda2e970638a",
    "deps": [
     "ReviewExample.Divides"
    ],
@@ -143,7 +143,7 @@
    ]
   },
   "ReviewExample.Divides.zero_left": {
-   "deep": "e112b593f85f4a61",
+   "deep": "fc9fbf3a270122a7",
    "deps": [
     "ReviewExample.Divides"
    ],
@@ -173,7 +173,7 @@
    "uses": []
   },
   "ReviewExample.Steps.count": {
-   "deep": "ae510acb10650333",
+   "deep": "798657f5ea6a396e",
    "deps": [
     "ReviewExample.Steps"
    ],
@@ -194,7 +194,7 @@
    ]
   },
   "ReviewExample.divides_gcd": {
-   "deep": "f69e0be99c047c61",
+   "deep": "d094e4dd639b2036",
    "deps": [
     "ReviewExample.Divides",
     "ReviewExample.gcd"
@@ -211,7 +211,7 @@
    ]
   },
   "ReviewExample.gcd": {
-   "deep": "27155ff3b019a9de",
+   "deep": "7eb556f64949b03e",
    "deps": [],
    "kind": "def",
    "lines": [
@@ -231,7 +231,7 @@
    ]
   },
   "ReviewExample.gcd_divides": {
-   "deep": "19a784f93827fe6f",
+   "deep": "e65f3c7140c5e59c",
    "deps": [
     "ReviewExample.Divides",
     "ReviewExample.gcd"
@@ -249,7 +249,7 @@
    ]
   },
   "ReviewExample.gcd_divides_mul": {
-   "deep": "5f7666f9df1a1e36",
+   "deep": "fd05b2d78b1984db",
    "deps": [
     "ReviewExample.Divides",
     "ReviewExample.gcd"
@@ -273,7 +273,7 @@
    ]
   },
   "ReviewExample.gcd_divides_mul_comm": {
-   "deep": "962da3656a195d7d",
+   "deep": "8c00c34ba7a84880",
    "deps": [
     "ReviewExample.Divides",
     "ReviewExample.gcd"
@@ -297,7 +297,7 @@
    ]
   },
   "ReviewExample.gcd_mul_lcm": {
-   "deep": "3319614ab08c35ba",
+   "deep": "5fb5767ef887251f",
    "deps": [
     "ReviewExample.gcd",
     "ReviewExample.lcm"
@@ -317,7 +317,7 @@
    ]
   },
   "ReviewExample.lcm": {
-   "deep": "6befd4447aea1c97",
+   "deep": "9bc1eabb3ca706d8",
    "deps": [
     "ReviewExample.gcd"
    ],
@@ -335,7 +335,7 @@
    ]
   },
   "ReviewExample.lcm_mul_gcd": {
-   "deep": "31419fa8c88705ee",
+   "deep": "a297184bdda25043",
    "deps": [
     "ReviewExample.gcd",
     "ReviewExample.lcm"
@@ -403,31 +403,31 @@
    "group": null,
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "b22dc563ea09c091"
+   "own": "08d8e9c21679be3f"
   },
   "Nat.div": {
    "group": null,
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "194be92d938693d3"
+   "own": "ecdc01769bbb1c01"
   },
   "Nat.lt": {
    "group": null,
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "a504b25cc7f8a015"
+   "own": "407cf44a46ac326c"
   },
   "Nat.mod": {
    "group": null,
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "f3b171f5c35ada13"
+   "own": "01051b0f42e30cc4"
   },
   "Nat.mul": {
    "group": null,
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "6540b66d943bf0bb"
+   "own": "d3fba1d51f5311c7"
   },
   "PProd": {
    "group": "compiler",
@@ -451,19 +451,19 @@
    "group": "compiler",
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "a0d8ca4cd89f4d49"
+   "own": "e3d9f8300f9612b1"
   },
   "Unit.unit": {
    "group": "compiler",
    "kind": "def",
    "module": "Init.Prelude",
-   "own": "c1dd9350469fafd4"
+   "own": "735eb584f087433a"
   },
   "WellFounded.Nat.fix": {
    "group": "internals",
    "kind": "def",
    "module": "Init.WF",
-   "own": "a15a8f77b9f99888"
+   "own": "4078000dad188905"
   }
  },
  "moduleDocs": {

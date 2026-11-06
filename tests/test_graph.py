@@ -79,6 +79,40 @@ class GraphTest(unittest.TestCase):
         (copy / "Extra.lean").write_text(text)
         return graph_of(copy, "Extra")
 
+    def two_libraries(self, lower):
+        """The graph of `Upper`, for which `Lower` is a library."""
+        copy = Path(tempfile.mkdtemp(dir=self.folder.name)) / "project"
+        shutil.copytree(self.original, copy)
+        with (copy / "lakefile.toml").open("a") as lakefile:
+            lakefile.write('\n[[lean_lib]]\nname = "Lower"\n\n[[lean_lib]]\nname = "Upper"\n')
+        (copy / "Lower.lean").write_text(lower)
+        (copy / "Upper.lean").write_text("import Lower\n\ndef use : " + ("bar = bar" if "theorem foo" in lower else "foo = foo") + " := "
+                                         + ("foo\n" if "theorem foo" in lower else "rfl\n"))
+        return graph_of(copy, "Upper")
+
+    def test_a_change_below_a_library_definition_is_seen(self):
+        lower = "def bar : Nat := {}\ndef middle : Nat := bar\ndef foo : Nat := middle\n"
+        one, two = self.two_libraries(lower.format(1)), self.two_libraries(lower.format(2))
+        self.assertIn("foo", one["declarations"]["use"]["uses"])
+        self.assertNotEqual(one["library"]["foo"]["own"], two["library"]["foo"]["own"])
+        self.assertEqual(one["declarations"]["use"]["own"], two["declarations"]["use"]["own"], "only the mark's record notices")
+
+    def test_a_library_proof_doesnt_count(self):
+        lower = "theorem t : 1 = 1 := {}\ndef foo : Nat := have _ := t; 1\n"
+        one, two = self.two_libraries(lower.format("rfl")), self.two_libraries(lower.format("by simp"))
+        self.assertEqual(one["library"]["foo"]["own"], two["library"]["foo"]["own"])
+
+    def test_a_theorem_cited_in_a_library_body_doesnt_count(self):
+        # `Q` is reached only through `t`, whose statement isn't copied into `foo`.
+        lower = "def Q : Prop := {}\ntheorem t : Q := by unfold Q; decide\ndef foo : Fin 2 := ⟨0, t⟩\n"
+        one, two = self.two_libraries(lower.format("0 < 2")), self.two_libraries(lower.format("0 < 1 + 1"))
+        self.assertEqual(one["library"]["foo"]["own"], two["library"]["foo"]["own"])
+
+    def test_a_definition_in_a_library_theorems_statement_does_count(self):
+        lower = "def bar : Nat := {}\ntheorem foo : bar = bar := rfl\n"
+        one, two = self.two_libraries(lower.format(1)), self.two_libraries(lower.format(2))
+        self.assertNotEqual(one["library"]["foo"]["own"], two["library"]["foo"]["own"])
+
     def test_a_partial_defs_body_counts(self):
         one, two = (self.extra(f"partial def spin (n : Nat) : Nat := spin (n + {k})\n") for k in (1, 2))
         self.assertNotEqual(one["declarations"]["spin"]["own"], two["declarations"]["spin"]["own"])
