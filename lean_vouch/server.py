@@ -439,7 +439,7 @@ def status():
         state, message = "failed", "The build stopped before it finished."
     since = build.get("since")
     stale = state != "building" and isinstance(since, (int, float)) and newest_change() > since
-    progress = {key: build.get(key) for key in ("step", "done", "total")} if state == "building" else {}
+    progress = {key: build.get(key) for key in ("step", "step_since", "done", "total")} if state == "building" else {}
     return {"marks": ",".join(f"{path.stem}:{path.stat().st_mtime_ns}" for path in files), "state": state,
             "message": message, "built": build.get("built"), "stale": stale, "can_rebuild": project() is not None,
             **progress, "marks_folder": str(args.marks.resolve()),

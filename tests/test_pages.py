@@ -599,8 +599,9 @@ class PagesTest(unittest.TestCase):
             await ready("#review-build:not([hidden])");
             const banner = doc.getElementById("review-build");
             results.push(banner.firstChild.textContent, banner.querySelector("a").getAttribute("href"));
-        """, build={"state": "building", "pid": os.getpid(), "step": "docs", "done": 3, "total": 10})
-        self.assertEqual(results, ["Rebuilding: building the docs, 3 of 10 so far…", "/review/log"])
+        """, build={"state": "building", "pid": os.getpid(), "step": "docs", "step_since": time.time() - 150, "done": 3, "total": 10})
+        self.assertRegex(results[0], r"^Rebuilding: building the docs, 3 of 10 so far, 2m 3\ds…$")
+        self.assertEqual(results[1], "/review/log")
 
     def test_a_failed_build_is_announced_and_the_page_still_works(self):
         results = self.click_through({}, """

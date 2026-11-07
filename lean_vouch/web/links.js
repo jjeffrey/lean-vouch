@@ -97,7 +97,13 @@ window.reviewWatch = onMarks => {
   log.style.marginLeft = "0.6em";
   // Lake finds more to build as it goes, so its total can grow.
   const STEPS = { project: "building the project", graph: "building the declaration graph", docs: "building the docs" };
-  const progress = now => `Rebuilding: ${STEPS[now.step] ?? "starting"}${now.total ? `, ${now.done} of ${now.total} so far` : ""}…`;
+  // How long the step has taken, since Lake says nothing while a job runs, and one can take many minutes.
+  const elapsed = since => {
+    const seconds = Math.max(0, Math.floor(Date.now() / 1000 - since));
+    return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
+  };
+  const progress = now => `Rebuilding: ${STEPS[now.step] ?? "starting"}${now.total ? `, ${now.done} of ${now.total} so far` : ""}` +
+    `${typeof now.step_since === "number" ? `, ${elapsed(now.step_since)}` : ""}…`;
   const say = (text, title, ...extra) => {
     banner.hidden = !text;
     banner.title = title ?? "";

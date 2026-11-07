@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Pages say when the code has changed since the last build, with a button to rebuild, and show how far a rebuild has got. A build's output also goes to `.lean-vouch/build.log`.
+- Pages say when the code has changed since the last build, with a button to rebuild, and show how far a rebuild has got and how long each step has taken. A build's output also goes to `.lean-vouch/build.log`.
 - A run no longer shows the project's own build warnings, which `lake build` shows. A failing build still shows everything.
 - The diagram takes `?open=` with a list of modules, opening only the folders on the way to them.
 - Docs: a walkthrough of finding and fixing a definition that doesn't mean what it should, and sharper screenshots.

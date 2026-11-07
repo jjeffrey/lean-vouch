@@ -205,6 +205,18 @@ class ReportTest(unittest.TestCase):
         self.assertIn("build.log", str(stopped.exception))
         self.assertIn("error: it broke", review.LOG.read_text())
 
+    def test_a_step_keeps_its_start_while_it_reports(self):
+        review.report("building", step="docs")
+        since = self.status()["step_since"]
+        time.sleep(0.01)
+        review.report("building", step="docs", done=3, total=10)
+        self.assertEqual(self.status()["step_since"], since)
+        review.report("building", step="graph")
+        self.assertGreater(self.status()["step_since"], since)
+
+    def test_elapsed_time_reads_as_minutes_and_seconds(self):
+        self.assertEqual([review.elapsed(s) for s in (5, 65, 3600)], ["5s", "1m 05s", "60m 00s"])
+
     def test_what_the_run_reviewed_carries_over(self):
         review.report("building", names=["Lib"])
         review.report("done", built="now", since=5.0)

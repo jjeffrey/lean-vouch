@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 import unicodedata
@@ -187,30 +188,76 @@ LOG = HOME / "build.log"
 JOB = re.compile(r"^\S+ \[(\d+)/(\d+)\] ")   # Lake's line for each job it finishes: "✔ [3/10] Built M"
 
 
+STEPS = {"project": "building the project", "graph": "building the declaration graph", "docs": "building the docs"}
+
+
+def elapsed(seconds):
+    minutes, seconds = divmod(int(seconds), 60)
+    return f"{minutes}m {seconds:02}s" if minutes else f"{seconds}s"
+
+
+class Terminal:
+    """What a step shows in a terminal. Each finished job replaces the one before, as Lake's own display
+    does, and everything else stays. Lake says nothing while a job runs, and one can take many
+    minutes, so after ten quiet seconds the line says how long the step has taken."""
+
+    def __init__(self, step):
+        self.live = sys.stdout.isatty()
+        self.width = shutil.get_terminal_size().columns - 1
+        self.label, self.began = STEPS.get(step, "building"), time.monotonic()
+        self.heard, self.shown = self.began, False
+        self.lock, self.done = threading.Lock(), threading.Event()
+
+    def __enter__(self):
+        if self.live:
+            threading.Thread(target=self.wait, daemon=True).start()
+        return self
+
+    def __exit__(self, *_):
+        self.done.set()
+        with self.lock:
+            self.clear()
+
+    def clear(self):
+        if self.shown:
+            sys.stdout.write("\r\033[K")
+            sys.stdout.flush()
+        self.shown = False
+
+    def wait(self):
+        while not self.done.wait(1):
+            with self.lock:
+                if not self.done.is_set() and time.monotonic() - self.heard >= 10:
+                    self.clear()
+                    sys.stdout.write(f"lean-vouch: still {self.label}, {elapsed(time.monotonic() - self.began)} so far"[:self.width])
+                    sys.stdout.flush()
+                    self.shown = True
+
+    def line(self, line, passing=False):
+        """Show a line of output; `passing` lines are replaced by the next."""
+        with self.lock:
+            self.clear()
+            self.heard = time.monotonic()
+            self.shown = self.live and passing
+            sys.stdout.write(line.rstrip("\n")[:self.width] if self.shown else line)
+            sys.stdout.flush()
+
+
 def run(command, cwd=".", env=None, step=None):
     """Run a build command, its output going to the terminal and to the build log. Lake's count of jobs
-    goes to open pages. In a terminal, each finished job replaces the one before, as Lake's own display
-    does, and everything else stays."""
-    terminal = sys.stdout.isatty()
-    width = shutil.get_terminal_size().columns - 1
-    shown = reported = 0
-    with LOG.open("a", encoding="utf-8") as log, subprocess.Popen(
+    goes to open pages."""
+    reported = 0
+    with LOG.open("a", encoding="utf-8") as log, Terminal(step) as terminal, subprocess.Popen(
             command, cwd=cwd, env={**os.environ, **(env or {})}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace") as process:
         log.write(f"$ {' '.join(command)}\n")
         for line in process.stdout:
             log.write(line)
             job = JOB.match(line)
-            if shown:
-                sys.stdout.write("\r\033[K")
-            shown = terminal and job is not None and line.startswith("✔")
-            sys.stdout.write(line.rstrip("\n")[:width] if shown else line)
-            sys.stdout.flush()
+            terminal.line(line, passing=job is not None and line.startswith("✔"))
             if job and step and time.monotonic() - reported > 0.5:
                 reported = time.monotonic()
                 report("building", step=step, done=int(job[1]), total=int(job[2]))
-        if shown:
-            sys.stdout.write("\r\033[K")
     if process.returncode:
         fail(f"`{' '.join(command)}` failed. Its output is in {LOG}.")
 
@@ -248,9 +295,10 @@ def build_graph(modules):
     initializers can print to stdout, where Lean also puts compile errors: show those on failure."""
     new = HOME / "graph.json.new"
     report("building", step="graph")
-    done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules],
-                          stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-                          env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())})
+    with Terminal("graph"):
+        done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules],
+                              stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                              env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())})
     if done.returncode:
         new.unlink(missing_ok=True)
         fail(f"building the declaration graph failed:\n{done.stdout[-4000:]}\n"
@@ -321,7 +369,11 @@ def report(state, **details):
         before = json.loads(status.read_text(encoding="utf-8"))
         kept = {key: before[key] for key in KEPT if key in before}
     except (OSError, ValueError, TypeError, AttributeError):
-        kept = {"built": None}
+        before, kept = {}, {"built": None}
+    # When this step started, for pages to say how long it has taken.
+    if state == "building" and details.get("step"):
+        same = before.get("state") == "building" and before.get("step") == details["step"] and before.get("pid") == os.getpid()
+        details = {**details, "step_since": before.get("step_since") if same else time.time()}
     # Swapped in whole, since the server reads it while this runs.
     temporary = status.with_name(status.name + ".tmp")
     temporary.write_text(json.dumps({**kept, **details, "state": state, "pid": os.getpid()}), encoding="utf-8")
