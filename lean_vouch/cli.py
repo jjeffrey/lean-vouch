@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 import unicodedata
 from datetime import datetime
@@ -182,9 +183,36 @@ def source_folders():
 QUIET = "--log-level=error"
 
 
-def run(command, cwd=".", env=None):
-    if subprocess.run(command, cwd=cwd, env={**os.environ, **(env or {})}).returncode:
-        fail(f"`{' '.join(command)}` failed; see above.")
+LOG = HOME / "build.log"
+JOB = re.compile(r"^\S+ \[(\d+)/(\d+)\] ")   # Lake's line for each job it finishes: "✔ [3/10] Built M"
+
+
+def run(command, cwd=".", env=None, step=None):
+    """Run a build command, its output going to the terminal and to the build log. Lake's count of jobs
+    goes to open pages. In a terminal, each finished job replaces the one before, as Lake's own display
+    does, and everything else stays."""
+    terminal = sys.stdout.isatty()
+    width = shutil.get_terminal_size().columns - 1
+    shown = reported = 0
+    with LOG.open("a", encoding="utf-8") as log, subprocess.Popen(
+            command, cwd=cwd, env={**os.environ, **(env or {})}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace") as process:
+        log.write(f"$ {' '.join(command)}\n")
+        for line in process.stdout:
+            log.write(line)
+            job = JOB.match(line)
+            if shown:
+                sys.stdout.write("\r\033[K")
+            shown = terminal and job is not None and line.startswith("✔")
+            sys.stdout.write(line.rstrip("\n")[:width] if shown else line)
+            sys.stdout.flush()
+            if job and step and time.monotonic() - reported > 0.5:
+                reported = time.monotonic()
+                report("building", step=step, done=int(job[1]), total=int(job[2]))
+        if shown:
+            sys.stdout.write("\r\033[K")
+    if process.returncode:
+        fail(f"`{' '.join(command)}` failed. Its output is in {LOG}.")
 
 
 def follow_project_pins(docbuild):
@@ -204,20 +232,22 @@ def build_docs(modules):
     follow_project_pins(docbuild)
     if not (docbuild / "lake-manifest.json").exists():
         # Keeps Mathlib's update hook from fetching its cache again.
-        run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"})
+        run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"}, step="docs")
     if not (docbuild / ".lake/build/doc").exists():
         uses_mathlib = '"mathlib"' in Path("lake-manifest.json").read_text(encoding="utf-8") if Path("lake-manifest.json").exists() else False
         print("lean-vouch: first docs build. doc-gen4 documents everything the project imports" +
               (", including Mathlib: expect about half an hour and 2 GB. It doesn't recompile Mathlib."
                if uses_mathlib else ": expect several minutes."), flush=True)
+    report("building", step="docs")
     run(["lake", "build", QUIET, *[f"+{module}:docs" for module in modules]], docbuild,
-        {"DOCGEN_SRC": os.environ.get("DOCGEN_SRC", "file")})
+        {"DOCGEN_SRC": os.environ.get("DOCGEN_SRC", "file")}, step="docs")
 
 
 def build_graph(modules):
     """Build the graph beside the current one, and return it. It goes to a file, since a project's
     initializers can print to stdout, where Lean also puts compile errors: show those on failure."""
     new = HOME / "graph.json.new"
+    report("building", step="graph")
     done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules],
                           stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
                           env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())})
@@ -279,17 +309,22 @@ def clean_docs(docs, root, modules):
               (", ..." if len(stale) > 8 else ""), flush=True)
 
 
+# What carries from one report to the next: when the last good build finished, and started, as
+# the pages still show it after a failure, and what the latest run reviewed, for the pages' rebuild button.
+KEPT = ("built", "since", "names")
+
+
 def report(state, **details):
-    """Say how a build is going, for a server and the pages open on it. The time of the last good
-    build carries over a failure, since those pages still show it."""
+    """Say how a build is going, for a server and the pages open on it."""
     status = HOME / "build.json"
     try:
-        built = json.loads(status.read_text(encoding="utf-8")).get("built")
-    except (OSError, ValueError, AttributeError):
-        built = None
+        before = json.loads(status.read_text(encoding="utf-8"))
+        kept = {key: before[key] for key in KEPT if key in before}
+    except (OSError, ValueError, TypeError, AttributeError):
+        kept = {"built": None}
     # Swapped in whole, since the server reads it while this runs.
     temporary = status.with_name(status.name + ".tmp")
-    temporary.write_text(json.dumps({"built": built, **details, "state": state, "pid": os.getpid()}), encoding="utf-8")
+    temporary.write_text(json.dumps({**kept, **details, "state": state, "pid": os.getpid()}), encoding="utf-8")
     os.replace(temporary, status)
 
 
@@ -334,11 +369,13 @@ def main():
     if serving:
         print(f"lean-vouch: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
     set_up_folders(tag, package)
-    report("building")
+    started = time.time()
+    LOG.write_text("", encoding="utf-8")
+    report("building", step="project", names=args.names)
     try:
         modules = modules_of(args.names)
         print(f"lean-vouch: reviewing {len(modules)} modules.", flush=True)
-        run(["lake", "build", QUIET, *[f"+{module}" for module in modules]])
+        run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
         built = build_graph(modules)
         build_docs(tops(built["modules"]))
         if args.clean:
@@ -353,7 +390,7 @@ def main():
     except (SystemExit, Exception) as error:
         report("failed", message=reason(error))
         raise
-    report("done", built=datetime.now().isoformat(timespec="seconds"))
+    report("done", built=datetime.now().isoformat(timespec="seconds"), since=started)
     if args.rebuild or serving:
         return
     command = [sys.executable, str(HERE / "server.py"), "--docs", str(HOME / "docbuild/.lake/build/doc"),

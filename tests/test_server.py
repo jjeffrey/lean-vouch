@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 from argparse import Namespace
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -124,6 +125,69 @@ class ServerTest(unittest.TestCase):
         dead.wait()
         server.args.build.write_text(json.dumps({"state": "building", "pid": dead.pid}))
         self.assertEqual(self.status()["state"], "failed")
+
+    def test_status_says_how_far_a_build_has_got(self):
+        server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid(), "step": "docs", "done": 3, "total": 10}))
+        self.assertEqual({key: self.status()[key] for key in ("step", "done", "total")}, {"step": "docs", "done": 3, "total": 10})
+        server.args.build.write_text(json.dumps({"state": "done", "step": "docs", "done": 3, "total": 10}))
+        self.assertNotIn("step", self.status())
+
+    def test_code_changed_since_the_last_good_build_is_stale(self):
+        (self.root / "src" / "A").mkdir(parents=True)
+        (self.root / "src" / ".lake").mkdir()
+        file = self.root / "src" / "A" / "M.lean"
+        file.write_text("")
+        (self.root / "src" / ".lake" / "Hidden.lean").write_text("")
+        os.utime(file, (1_000, 1_000))
+        os.utime(self.root / "src" / ".lake" / "Hidden.lean", (9_000, 9_000))   # Lake's own files don't count
+        server.args.source = [self.root / "src"]
+        for since, stale in ((None, False), (2_000, False), (500, True)):
+            server.newest["checked"] = 0
+            server.args.build.write_text(json.dumps({"state": "done", **({"since": since} if since else {})}))
+            self.assertEqual(self.status()["stale"], stale, since)
+        server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid(), "since": 500}))
+        self.assertFalse(self.status()["stale"], "a build is already on its way")
+
+    def test_a_server_not_started_by_lean_vouch_cant_rebuild(self):
+        self.assertFalse(self.status()["can_rebuild"])
+        self.assertEqual(self.post("/review/rebuild", {})[0], 409)
+
+    def test_a_page_can_start_one_rebuild_at_a_time(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        server.args.build.write_text(json.dumps({"state": "done", "names": ["Lib", "My.Module"]}))
+        started = []
+
+        class Running:
+            def __init__(self, command, **options):
+                started.append((command, options["cwd"]))
+
+            def poll(self):
+                return None
+
+        self.addCleanup(setattr, server, "rebuilding", None)
+        with unittest.mock.patch.object(server.subprocess, "Popen", Running):
+            self.assertTrue(self.status()["can_rebuild"])
+            self.assertEqual(self.post("/review/rebuild", {}), (200, {"started": True}))
+            self.assertEqual(self.status()["state"], "building", "before the build has said so itself")
+            self.assertEqual(self.post("/review/rebuild", {})[0], 409)
+        command, cwd = started[0]
+        self.assertEqual(command[-3:], ["--rebuild", "Lib", "My.Module"])
+        self.assertEqual(cwd, self.root.resolve())
+        self.assertEqual(len(started), 1)
+
+    def test_a_build_from_the_terminal_blocks_one_from_a_page(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid()}))
+        self.assertEqual(self.post("/review/rebuild", {}), (409, {"error": "A build is already running."}))
+
+    def test_the_build_log_is_served(self):
+        self.assertIn(b"No build", self.get("/review/log"))
+        server.args.build.with_name("build.log").write_text("error: it broke\n")
+        self.assertEqual(self.get("/review/log"), b"error: it broke\n")
 
     def test_status_names_the_marks_folder_and_who_this_is(self):
         self.assertEqual(self.status()["marks_folder"], str(self.folder_marks.resolve()))

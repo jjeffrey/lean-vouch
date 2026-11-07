@@ -15,8 +15,10 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -375,19 +377,89 @@ def alive(pid):
         return False
 
 
-def status():
-    """What open pages poll: when anyone's marks last changed, and how the latest build went, which
-    a build reports in a file. A build that died can't say so itself. `marks_folder` tells
-    lean-vouch which project this server is for, and `me` shows who's reviewing."""
-    files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
+def project():
+    """The Lake project this server is for, when lean-vouch started it: then pages can rebuild it."""
+    home = args.marks.resolve().parent
+    return home.parent if home.name == ".lean-vouch" else None
+
+
+rebuilding = None   # a rebuild started from a page, while it runs
+
+
+def building():
+    """Whether a build is running, whoever started it, and what its file says."""
+    global rebuilding
     build = load_json(args.build, {})
     build = build if isinstance(build, dict) else {}
+    if rebuilding and rebuilding.poll() is not None:
+        rebuilding = None
+    return bool(rebuilding) or (build.get("state") == "building" and alive(build.get("pid"))), build
+
+
+newest = {"checked": 0, "time": 0}
+
+
+def newest_change():
+    """When the project's code last changed: its modules, its Lake configuration and its pins. At most
+    every ten seconds, since a large project has thousands of files. By the time, so saving a file
+    unchanged counts too, but a rebuild that changes nothing takes seconds."""
+    if time.monotonic() - newest["checked"] < 10:
+        return newest["time"]
+    times = []
+    def walk(folder):
+        try:
+            for entry in os.scandir(folder):
+                if entry.is_dir(follow_symlinks=False) and not entry.name.startswith("."):
+                    walk(entry.path)
+                elif entry.name.endswith(".lean") and entry.is_file():
+                    times.append(entry.stat().st_mtime)
+        except OSError:
+            pass
+    for folder in args.source or []:
+        walk(folder)
+    if root := project():
+        for name in ("lakefile.lean", "lakefile.toml", "lake-manifest.json", "lean-toolchain"):
+            if (root / name).exists():
+                times.append((root / name).stat().st_mtime)
+    newest.update(checked=time.monotonic(), time=max(times, default=0))
+    return newest["time"]
+
+
+def status():
+    """What open pages poll: when anyone's marks last changed, and how the latest build went, which
+    a build reports in a file. A build that died can't say so itself. `stale` is whether the code
+    changed after the last good build started. `marks_folder` tells lean-vouch which project this
+    server is for, and `me` shows who's reviewing."""
+    files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
+    running, build = building()
     state, message = build.get("state"), build.get("message")
-    if state == "building" and not alive(build.get("pid")):
+    if running:
+        state = "building"
+    elif state == "building":
         state, message = "failed", "The build stopped before it finished."
+    since = build.get("since")
+    stale = state != "building" and isinstance(since, (int, float)) and newest_change() > since
+    progress = {key: build.get(key) for key in ("step", "done", "total")} if state == "building" else {}
     return {"marks": ",".join(f"{path.stem}:{path.stat().st_mtime_ns}" for path in files), "state": state,
-            "message": message, "built": build.get("built"), "marks_folder": str(args.marks.resolve()),
+            "message": message, "built": build.get("built"), "stale": stale, "can_rebuild": project() is not None,
+            **progress, "marks_folder": str(args.marks.resolve()),
             "me": {"id": args.id, "name": args.name or args.id}, "unreadable": unreadable}
+
+
+def rebuild():
+    """Start `lean-vouch --rebuild` for the project, as the last run reviewed it. Its output goes where
+    this server's does, and to the build log."""
+    global rebuilding
+    running, build = building()
+    if running:
+        return "A build is already running."
+    names = build.get("names", [])
+    names = names if isinstance(names, list) and all(isinstance(n, str) and not n.startswith("-") for n in names) else []
+    package = Path(__file__).resolve().parent.parent   # where lean_vouch is, installed or not
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(package), os.environ.get("PYTHONPATH")]))}
+    rebuilding = subprocess.Popen([sys.executable, "-c", "from lean_vouch.cli import main; main()", "--rebuild", *names],
+                                  cwd=project(), env=env, stdin=subprocess.DEVNULL)
+    return None
 
 
 def last_built():
@@ -470,6 +542,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(graph.slice(query.get("module", []), query.get("name", []), marks))
         if path == "/review/links":
             return self.send_json(load_json(args.links, {}))
+        if path == "/review/log":
+            log = args.build.with_name("build.log")
+            text = log.read_bytes()[-500_000:] if log.exists() else b"No build has been logged yet."
+            return self.send_body(text, "text/plain; charset=utf-8")
         if path == "/review/source":
             name = parse_qs(urlparse(self.path).query).get("name", [""])[0]
             return self.send_json(source_of(name))
@@ -502,6 +578,12 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/review/reach":   # a POST, since a folder can hold thousands of modules
             with lock:
                 return self.send_json(graph.reach(body.get("modules", []), body.get("names", []), body.get("shown", [])))
+        if self.path == "/review/rebuild":
+            if project() is None:
+                return self.send_json({"error": "This server can't rebuild: run lean-vouch from the project."}, 409)
+            with lock:
+                refused = rebuild()
+            return self.send_json({"error": refused}, 409) if refused else self.send_json({"started": True})
         with lock:
             try:
                 return self.change(body)

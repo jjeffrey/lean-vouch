@@ -594,20 +594,31 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(self.click_through(self.marked(), script, people={"bo": ("Bo", bo)}), ["Bo disagrees with you"])
         self.assertEqual(self.click_through({}, script, people={"bo": ("Bo", bo), "cy": ("Cy", cy)}), ["others disagree"])
 
-    def test_a_running_build_is_announced(self):
+    def test_a_running_build_says_how_far_it_has_got(self):
         results = self.click_through({}, """
             await ready("#review-build:not([hidden])");
-            results.push(doc.getElementById("review-build").textContent);
-        """, build={"state": "building", "pid": os.getpid()})
-        self.assertEqual(results, ["Rebuilding…"])
+            const banner = doc.getElementById("review-build");
+            results.push(banner.firstChild.textContent, banner.querySelector("a").getAttribute("href"));
+        """, build={"state": "building", "pid": os.getpid(), "step": "docs", "done": 3, "total": 10})
+        self.assertEqual(results, ["Rebuilding: building the docs, 3 of 10 so far…", "/review/log"])
 
     def test_a_failed_build_is_announced_and_the_page_still_works(self):
         results = self.click_through({}, """
             await ready("#review-build:not([hidden])");
-            results.push(doc.getElementById("review-build").textContent, doc.getElementById("review-build").title);
+            const banner = doc.getElementById("review-build");
+            results.push(banner.firstChild.textContent, banner.title, !!banner.querySelector("a[href='/review/log']"));
             results.push(doc.querySelectorAll(".decl .review-row").length > 0);
         """, build={"state": "failed", "message": "It broke.", "pid": 1})
-        self.assertEqual(results, ["Build failed; changes are tracked from the last good build.", "It broke.", True])
+        self.assertEqual(results, ["Build failed; changes are tracked from the last good build.", "It broke.", True, True])
+
+    def test_code_changed_since_the_build_is_announced(self):
+        results = self.click_through({}, """
+            await ready("#review-build:not([hidden])");
+            const banner = doc.getElementById("review-build");
+            results.push(banner.textContent, banner.querySelector("button"));
+        """, build={"state": "done", "since": 1})
+        # A server lean-vouch didn't start can't rebuild, so the page says how to.
+        self.assertEqual(results, ["The code has changed since the last build. Run lean-vouch to rebuild.", None])
 
     def test_an_unreadable_file_is_announced(self):
         results = self.click_through({}, """

@@ -193,6 +193,27 @@ class ReportTest(unittest.TestCase):
         review.report("failed", message="It broke.")
         self.assertEqual((self.status()["built"], self.status()["message"]), ("then", "It broke."))
 
+    def test_a_build_reports_lakes_progress_and_keeps_a_log(self):
+        review.run(["sh", "-c", "echo 'warning: ignored'; echo '✔ [3/10] Built M'"], step="docs")
+        self.assertEqual({key: self.status()[key] for key in ("state", "step", "done", "total")},
+                         {"state": "building", "step": "docs", "done": 3, "total": 10})
+        self.assertIn("✔ [3/10] Built M", review.LOG.read_text())
+
+    def test_a_failed_command_points_to_the_log(self):
+        with self.assertRaises(SystemExit) as stopped:
+            review.run(["sh", "-c", "echo 'error: it broke'; exit 1"])
+        self.assertIn("build.log", str(stopped.exception))
+        self.assertIn("error: it broke", review.LOG.read_text())
+
+    def test_what_the_run_reviewed_carries_over(self):
+        review.report("building", names=["Lib"])
+        review.report("done", built="now", since=5.0)
+        review.report("building", step="project")
+        review.report("failed", message="It broke.")
+        self.assertEqual({key: self.status()[key] for key in ("names", "built", "since")},
+                         {"names": ["Lib"], "built": "now", "since": 5.0})
+        self.assertNotIn("step", self.status())
+
     def test_a_garbled_status_file_doesnt_stop_a_build(self):
         (review.HOME / "build.json").write_text("{ partial")
         review.report("building")
@@ -342,6 +363,17 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(len(builds), 2, "the project, then its docs")
         for build in builds:
             self.assertIn("--log-level=error", build)
+
+    def test_a_good_build_says_when_it_started_and_what_it_reviewed(self):
+        self.stub_graph('case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
+                        "echo '✔ [1/1] Built M'\nmkdir -p .lake/build/doc\n")
+        before = time.time()
+        result = self.run_review("v4.35.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("✔ [1/1] Built M", result.stdout, "every line, when the output isn't a terminal")
+        status = json.loads((self.root / ".lean-vouch" / "build.json").read_text())
+        self.assertEqual((status["state"], status["names"]), ("done", ["MyProject"]))
+        self.assertGreaterEqual(status["since"], before - 1)
 
     def test_an_unreadable_new_graph_leaves_the_old_one(self):
         self.stub_graph('case "$*" in env*) echo garbage > "$LEAN_VOUCH_GRAPH" ;; esac\n')

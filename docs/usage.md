@@ -64,9 +64,9 @@ def Prime (n : Nat) : Prop :=
   2 ≤ n ∧ ∀ d, Divides d n → d = 1 ∨ d = n
 ```
 
-Lean then shows which proofs needed 1 to count, and those get fixed too. With the server still
-running, run `lean-vouch` again in another terminal, or `lean-vouch --rebuild`. Open pages say a
-rebuild is running and offer to reload when it's done.
+Lean then shows which proofs needed 1 to count, and those get fixed too. Open pages then say the code
+has changed since the last build. Click **Rebuild** there, or run `lean-vouch` again in another
+terminal. Pages show how far it has got, and offer to reload when it's done.
 
 ## 5. Re-checking what changed
 

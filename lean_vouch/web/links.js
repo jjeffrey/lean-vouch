@@ -67,6 +67,8 @@ window.reviewHue = name => [...name].reduce((hue, c) => (hue * 31 + c.codePointA
 
 // Notices what changes while a page is open: anyone's marks, handed to `onMarks`, which updates the
 // page in place, and rebuilds, which only offer a reload, so as not to lose a note being written.
+// It says how far a rebuild has got, and when the code has changed since the last one, with a
+// button to start one when the server can.
 window.reviewWatch = onMarks => {
   const banner = document.createElement("div");
   banner.id = "review-build";
@@ -78,6 +80,24 @@ window.reviewWatch = onMarks => {
   reload.textContent = "Reload";
   reload.style.marginLeft = "0.6em";
   reload.onclick = () => reviewReload();
+  const button = (text, title, onclick) => {
+    const b = document.createElement("button");
+    b.textContent = text;
+    b.title = title;
+    b.style.marginLeft = "0.6em";
+    b.onclick = onclick;
+    return b;
+  };
+  const rebuild = button("Rebuild", "Run lean-vouch --rebuild for this project, as it was last run. Open pages offer to reload when it's done.",
+    async () => { rebuild.disabled = true; await reviewPost("/review/rebuild", {}).finally(() => { rebuild.disabled = false; }); tick(); });
+  const log = document.createElement("a");
+  log.textContent = "log";
+  log.href = "/review/log";
+  log.target = "_blank";
+  log.style.marginLeft = "0.6em";
+  // Lake finds more to build as it goes, so its total can grow.
+  const STEPS = { project: "building the project", graph: "building the declaration graph", docs: "building the docs" };
+  const progress = now => `Rebuilding: ${STEPS[now.step] ?? "starting"}${now.total ? `, ${now.done} of ${now.total} so far` : ""}…`;
   const say = (text, title, ...extra) => {
     banner.hidden = !text;
     banner.title = title ?? "";
@@ -97,9 +117,12 @@ window.reviewWatch = onMarks => {
     first = false;
     marks = now.marks;
     if (changed) await onMarks();
-    if (now.state === "building") say("Rebuilding…");
-    else if (now.state === "failed") say("Build failed; changes are tracked from the last good build.", now.message);
+    if (now.state === "building") say(progress(now), "Lake finds more to build as it goes, so its total can grow.", log);
+    else if (now.state === "failed") say("Build failed; changes are tracked from the last good build.", now.message, log,
+      ...(now.can_rebuild ? [rebuild] : []));
     else if (now.built !== (window.reviewBuilt ?? null)) say("Docs updated.", null, reload);
+    else if (now.stale) say("The code has changed since the last build.", "Marks still work, against what was last built.",
+      now.can_rebuild ? rebuild : " Run lean-vouch to rebuild.");
     else if (now.unreadable.length) say(`Left out marks that can't be read: ${now.unreadable.join(", ")}.`);
     else say(null);
   };

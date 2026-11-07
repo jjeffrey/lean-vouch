@@ -56,8 +56,9 @@ With others, and with assistants ([how to share marks](setup.md#working-with-oth
   The diagram shows your marks, or anyone's, or everyone's, with disagreements in purple.
 - **Needs your attention:** a `!` where someone is waiting on you, because they asked a question or
   answered yours. Listed at the bottom of the page, and counted in the diagram's folders.
-- **Live updates:** marks and notes appear on open pages by themselves, and pages say when a
-  [rebuild](setup.md#rebuilding) is running and offer to reload when it's done.
+- **Live updates:** marks and notes appear on open pages by themselves. Pages say when the code has
+  changed since the last build, with a button to [rebuild](setup.md#rebuilding), show how far a
+  rebuild has got, and offer to reload when it's done.
 
 ## Screenshots
 

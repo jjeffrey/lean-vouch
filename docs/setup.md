@@ -51,12 +51,21 @@ docs, adding `?page=N` if the link text ends in `(p. N)` or `(page N)`.
 
 ## Rebuilding
 
-Leave the server running. After changing the code, run `lean-vouch` again, or `lean-vouch --rebuild`,
-in another terminal. An agent can do the same when it has finished its changes. It builds once, when
-you ask, and never on every save. Open pages say when a rebuild is running, and offer to reload when
-it's done, so a note you're writing isn't lost, and asks first if reloading would lose one. A page from
-before a rebuild can't be used to mark until it's reloaded, since it may not show what's there now, though
-notes still save. If a build fails, changes are still tracked from the last good build, though a failure during the docs step can leave some pages newer than that.
+Leave the server running. When the code has changed since the last build, open pages say so, with
+a **Rebuild** button, which reviews the same libraries and modules as the last run. Or run
+`lean-vouch` again, or `lean-vouch --rebuild`, in another terminal. An agent can do either when it
+has finished its changes, the button by:
+
+```bash
+curl -X POST http://127.0.0.1:8797/review/rebuild -H "Content-Type: application/json" -d '{}'
+```
+
+It builds once, when asked, and never on every save. Open pages say how far a rebuild has got, and
+offer to reload when it's done, so a note you're writing isn't lost, and ask first if reloading would
+lose one. A page from before a rebuild can't be used to mark until it's reloaded, since it may not
+show what's there now, though notes still save. A build's output also goes to
+`.lean-vouch/build.log`, which pages link to. If a build fails, changes are still tracked from the
+last good build, though a failure during the docs step can leave some pages newer than that.
 
 Marks and notes need no rebuild. They appear on open pages by themselves, from anyone, within a few seconds.
 
