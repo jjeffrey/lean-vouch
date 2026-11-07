@@ -33,6 +33,7 @@ Across the project:
   optionally the library definitions they use), colored by your marks. Clicking a node highlights
   what it depends on and what depends on it, and opens a sidebar with its mark and notes (editable
   there), its code (a theorem's proof collapsed), and its direct dependencies and dependents.
+  "hide folders" and "hide details" hide the panels on either side, for a larger diagram.
 - **What a `sorry` reaches,** on by default if the project has one. A declaration that contains
   `sorry` gets a red border, and whatever relies on it a dashed one, even if only through a proof,
   with dashed red arrows leading to it step by step. Folders count both, and the pages name the `sorry`s each declaration depends on. A mark is about the

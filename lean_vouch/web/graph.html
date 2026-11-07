@@ -24,6 +24,8 @@
   .note summary { cursor: pointer; color: #1a5fb4; }
   .note p { margin: 0.4em 0 0; }
   body > .layout { flex: 1; min-height: 0; display: flex; gap: 1em; align-items: stretch; }
+  /* Either side panel can be hidden, for a larger diagram. */
+  body.hide-tree #tree, body.hide-sidebar #sidebar { display: none; }
   #tree { width: 17em; flex: none; display: flex; flex-direction: column; border: 1px solid #ddd;
     border-radius: 6px; font-size: 0.88em; min-height: 0; }
   #tree input[type=search] { margin: 0.5em; font: inherit; }
@@ -127,6 +129,8 @@ arrows between them. A red border means a declaration contains <code>sorry</code
 that it relies on one, even if only through a proof; dashed red arrows lead to the <code>sorry</code>
 step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></details>
 <div class="controls">
+  <button type="button" id="toggle-tree" title="Hide or show the list of folders and modules">hide folders</button>
+  <button type="button" id="toggle-sidebar" title="Hide or show the panel with a declaration's code and notes">hide details</button>
   <button type="button" id="close-all">close all</button>
   <button type="button" id="open-all" hidden>open all</button>
   <button type="button" id="clear-pins" hidden>show everything</button>
@@ -1159,6 +1163,22 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return new Promise(resolve =>
       d3.select(target).graphviz({ useWorker: false }).zoom(true).fit(true)
         .width(target.clientWidth).height(target.clientHeight).renderDot(dot, resolve));
+  }
+
+  // The side panels, hidden or shown for a larger diagram; remembered per browser. Hiding one
+  // resizes the diagram, which redraws to fit.
+  for (const [panel, name] of [["tree", "folders"], ["sidebar", "details"]]) {
+    const button = document.getElementById(`toggle-${panel}`), key = `lean-vouch.hide-${panel}`;
+    const show = hidden => {
+      document.body.classList.toggle(`hide-${panel}`, hidden);
+      button.textContent = `${hidden ? "show" : "hide"} ${name}`;
+    };
+    try { show(localStorage.getItem(key) === "1"); } catch {}
+    button.onclick = () => {
+      const hidden = !document.body.classList.contains(`hide-${panel}`);
+      show(hidden);
+      try { localStorage.setItem(key, hidden ? "1" : "0"); } catch {}
+    };
   }
 
   // Refit when the panel changes size (opening the notes, resizing the window).

@@ -199,6 +199,22 @@ class PagesTest(unittest.TestCase):
         """, frame=f"review/diagram#{GCD}")
         self.assertEqual(results, ["agree", "reject", "", "question", True])
 
+    def test_the_side_panels_can_be_hidden_for_a_larger_diagram(self):
+        results = self.click_through({}, """
+            await ready("#diagram svg g.node");
+            const width = () => doc.querySelector("#diagram svg").getBoundingClientRect().width;
+            const before = width();
+            doc.getElementById("toggle-tree").click();
+            doc.getElementById("toggle-sidebar").click();
+            await until(() => width() > before + 100);
+            const shown = id => view.getComputedStyle(doc.getElementById(id)).display !== "none";
+            results.push(shown("tree"), shown("sidebar"), doc.getElementById("toggle-tree").textContent,
+                         view.localStorage.getItem("lean-vouch.hide-sidebar"));
+            doc.getElementById("toggle-sidebar").click();
+            results.push(shown("sidebar"), doc.getElementById("toggle-sidebar").textContent);
+        """, frame=f"review/diagram#{GCD}")
+        self.assertEqual(results, [False, False, "show folders", "1", True, "hide details"])
+
     def test_a_note_answers_the_diagrams_prompt(self):
         results = self.click_through({}, """
             await ready("#sidebar .marks button");
