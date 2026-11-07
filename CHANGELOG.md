@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A run no longer shows the project's own build warnings, which `lake build` shows. A failing build still shows everything.
+- The diagram takes `?open=` with a list of modules, opening only the folders on the way to them.
+- Docs: a walkthrough of finding and fixing a definition that doesn't mean what it should, and sharper screenshots.
+
 ## 0.1.0 (2026-11-06)
 
 First public version. Works with Lean v4.30 to v4.35, with the matching doc-gen4.

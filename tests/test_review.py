@@ -331,6 +331,18 @@ class ReviewTest(unittest.TestCase):
         (self.root / ".lean-vouch").mkdir(exist_ok=True)
         (self.root / ".lean-vouch" / "graph.json").write_text('{"good": true}')
 
+    def test_builds_leave_out_the_projects_warnings(self):
+        calls = self.root / "calls"
+        (self.root / "lake-manifest.json").write_text("{}")
+        self.stub_graph(f'echo "$*" >> "{calls}"\n'
+                        'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
+                        "mkdir -p .lake/build/doc\n")
+        self.run_review("v4.35.0")
+        builds = [line for line in calls.read_text().splitlines() if line.startswith("build")]
+        self.assertEqual(len(builds), 2, "the project, then its docs")
+        for build in builds:
+            self.assertIn("--log-level=error", build)
+
     def test_an_unreadable_new_graph_leaves_the_old_one(self):
         self.stub_graph('case "$*" in env*) echo garbage > "$LEAN_VOUCH_GRAPH" ;; esac\n')
         result = self.run_review("v4.35.0")

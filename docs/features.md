@@ -50,14 +50,14 @@ Across the project:
 - **Shift-click** a declaration, a box or a row in the list to color everything it depends on and
   everything that uses it, all the way down and up, and list how much of each is in each folder.
 
-With others, and with assistants ([how to share marks](usage.md#working-with-others)):
+With others, and with assistants ([how to share marks](setup.md#working-with-others)):
 
 - **Their marks beside yours,** and their notes in the same thread, each person in their own color.
   The diagram shows your marks, or anyone's, or everyone's, with disagreements in purple.
 - **Needs your attention:** a `!` where someone is waiting on you, because they asked a question or
   answered yours. Listed at the bottom of the page, and counted in the diagram's folders.
 - **Live updates:** marks and notes appear on open pages by themselves, and pages say when a
-  [rebuild](usage.md#rebuilding) is running and offer to reload when it's done.
+  [rebuild](setup.md#rebuilding) is running and offer to reload when it's done.
 
 ## Screenshots
 

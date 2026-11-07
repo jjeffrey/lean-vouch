@@ -22,7 +22,8 @@ def below(n, seen=None):
     return seen
 
 
-# Example marks use fixed dates, so the screenshots don't change from day to day.
+# Example marks use fixed dates, so the screenshots don't change from day to day. A thread's notes
+# are a minute apart, so they keep their order.
 def mark(name, status, *notes, changed=()):
     """A mark made now; `changed` lists dependencies to show as changed since it was made."""
     fp = {"own": info(name)["own"] if info(name) else "0", "deps": {}, "lean": graph["lean"]}
@@ -30,8 +31,9 @@ def mark(name, status, *notes, changed=()):
         fp["deps"] = {d: (info(d) or {}).get("own") for d in below(name)}
     for d in changed:
         fp["deps"][d] = "0000000000000000"
-    return {"status": status, "date": "2026-11-02T10:00:00", "fingerprint": fp,
-            "notes": [{"by": by, "date": "2026-11-02T10:00:00", "text": text} for by, text in notes]}
+    # Marked at the end of the thread, after reading it.
+    return {"status": status, "date": f"2026-11-02T10:{max(len(notes) - 1, 0):02}:00", "fingerprint": fp,
+            "notes": [{"by": by, "date": f"2026-11-02T10:{i:02}:00", "text": text} for i, (by, text) in enumerate(notes)]}
 
 
 marks = {
@@ -67,6 +69,13 @@ marks = {
         ("assistant", "Not yet: the proof uses gcd_mul_lcm, which is still a sorry. "
                       "Follow the dashed red arrow to the gap.")),
     P + "lcm": mark(P + "lcm", "agree"),
+    # The walkthrough's mismatch: Ada rejects the definition, and an assistant suggests a fix.
+    P + "Prime": mark(P + "Prime", "reject",
+        ("Ada", "I don't think this works: Prime 1 holds, but 1 is not a prime number. How can we fix this?"),
+        ("assistant", "Add the hypothesis 2 ≤ n: Prime n := 2 ≤ n ∧ ∀ d, Divides d n → d = 1 ∨ d = n. "
+                      "Prime.coprime still holds, and its proof only needs the second half.")),
+    # Agreed before the mistake was noticed: it reads right, but is about the definition above.
+    P + "Prime.coprime": mark(P + "Prime.coprime", "agree"),
 }
 # An assistant raises something: a question after Ada's mark, so it needs her attention.
 raised = dict(mark(P + "lcm", "question", ("assistant",

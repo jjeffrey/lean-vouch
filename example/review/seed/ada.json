@@ -17,7 +17,7 @@
       "status": "agree"
     },
     "ReviewExample.Divides": {
-      "date": "2026-11-02T10:00:00",
+      "date": "2026-11-02T10:03:00",
       "fingerprint": {
         "deps": {
           "Eq": "1faba691dfabc71d",
@@ -34,7 +34,7 @@
           "text": "Why define this as ∃ k, n = d * k rather than n % d = 0?"
         },
         {
-          "date": "2026-11-02T10:00:00",
+          "date": "2026-11-02T10:02:00",
           "text": "So 0 divides only 0, and every number divides 0?"
         }
       ],
@@ -106,6 +106,55 @@
       "notes": [],
       "status": "agree"
     },
+    "ReviewExample.Prime": {
+      "date": "2026-11-02T10:01:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "1faba691dfabc71d",
+          "Exists": "599bc98617a00012",
+          "Nat": "1f5f38990310680d",
+          "Nat.mul": "8fa4cf5efdc70bb7",
+          "Or": "3efee55bd79563c7",
+          "ReviewExample.Divides": "0dfe923a99c9aa54"
+        },
+        "lean": "4.35.0",
+        "own": "4d62eca44d66b024"
+      },
+      "notes": [
+        {
+          "date": "2026-11-02T10:00:00",
+          "text": "I don't think this works: Prime 1 holds, but 1 is not a prime number. How can we fix this?"
+        }
+      ],
+      "status": "reject"
+    },
+    "ReviewExample.Prime.coprime": {
+      "date": "2026-11-02T10:00:00",
+      "fingerprint": {
+        "deps": {
+          "Eq": "1faba691dfabc71d",
+          "Exists": "599bc98617a00012",
+          "InvImage": "cb86e38fe61dc40c",
+          "Nat": "1f5f38990310680d",
+          "Nat.add": "124ccbe1bfb010b5",
+          "Nat.lt": "cb364baf0024a58a",
+          "Nat.mod": "2208cd68abe57490",
+          "Nat.mul": "8fa4cf5efdc70bb7",
+          "Not": "b66767185dc71ad5",
+          "Or": "3efee55bd79563c7",
+          "PSigma": "4b720956974ffe3c",
+          "ReviewExample.Coprime": "ed1db53d3909db03",
+          "ReviewExample.Divides": "0dfe923a99c9aa54",
+          "ReviewExample.Prime": "4d62eca44d66b024",
+          "ReviewExample.gcd": "f2a0d372c12a8ae4",
+          "WellFounded.Nat.fix": "23ef973057d6fd17"
+        },
+        "lean": "4.35.0",
+        "own": "537758fd2a542fa7"
+      },
+      "notes": [],
+      "status": "agree"
+    },
     "ReviewExample.divides_gcd": {
       "date": "2026-11-02T10:00:00",
       "fingerprint": {
@@ -130,7 +179,7 @@
       "status": "agree"
     },
     "ReviewExample.gcd": {
-      "date": "2026-11-02T10:00:00",
+      "date": "2026-11-02T10:01:00",
       "fingerprint": {
         "deps": {
           "InvImage": "cb86e38fe61dc40c",
@@ -153,7 +202,7 @@
       "status": "question"
     },
     "ReviewExample.gcd_divides_mul": {
-      "date": "2026-11-02T10:00:00",
+      "date": "2026-11-02T10:01:00",
       "fingerprint": {
         "deps": {
           "Eq": "1faba691dfabc71d",

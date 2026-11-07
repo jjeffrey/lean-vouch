@@ -9,9 +9,11 @@ To run it from a clone, use `python3 path/to/lean-vouch/review.py`, which takes 
 algorithm in `Divides` (a definition of divisibility and its lemmas), `Zero` (zero divides only
 zero) and `Gcd` (`gcd`, proofs that it divides both numbers and that every common divisor divides it,
 and a deprecated old theorem name), then a `Multiples` folder: `Lcm`, whose key theorem is a `sorry`,
-and `Coprime`, with one theorem that relies on it and one that doesn't. `example/review/seed.py` writes example marks that exercise each feature: a
-conversation, a library definition marked as understood, a rename, a mark to re-check, an
-orphan, and a question from an assistant.
+and `Coprime`, with one theorem that relies on it and one that doesn't. Last, `Prime`, a
+definition that lets 1 count as prime, for the [walkthrough](usage.md). `example/review/seed.py`
+writes example marks that exercise each feature: a conversation, a library definition marked as
+understood, a rename, a mark to re-check, an orphan, a question from an assistant, and a rejected
+definition.
 
 ```bash
 cd example

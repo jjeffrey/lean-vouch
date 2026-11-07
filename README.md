@@ -41,7 +41,7 @@ mostly been used to review small ones.
 
 ## More
 
-[Features](https://github.com/jjeffrey/lean-vouch/blob/main/docs/features.md) · [Usage](https://github.com/jjeffrey/lean-vouch/blob/main/docs/usage.md) · [Quiz mode](https://github.com/jjeffrey/lean-vouch/blob/main/docs/quiz.md) ·
+[Features](https://github.com/jjeffrey/lean-vouch/blob/main/docs/features.md) · [Walkthrough](https://github.com/jjeffrey/lean-vouch/blob/main/docs/usage.md) · [Setup](https://github.com/jjeffrey/lean-vouch/blob/main/docs/setup.md) · [Quiz mode](https://github.com/jjeffrey/lean-vouch/blob/main/docs/quiz.md) ·
 [How it works](https://github.com/jjeffrey/lean-vouch/blob/main/docs/internals.md) · [Developing](https://github.com/jjeffrey/lean-vouch/blob/main/docs/development.md) ·
 [Changelog](https://github.com/jjeffrey/lean-vouch/blob/main/CHANGELOG.md)
 

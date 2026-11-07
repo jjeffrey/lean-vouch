@@ -177,6 +177,11 @@ def source_folders():
             if folder.is_relative_to(root) and ".lake" not in folder.relative_to(root).parts] or [root]
 
 
+# A project's own warnings repeat at every build, twice over, and say nothing about reviewing it. `lake
+# build` still shows them, and a failing build shows its whole log.
+QUIET = "--log-level=error"
+
+
 def run(command, cwd=".", env=None):
     if subprocess.run(command, cwd=cwd, env={**os.environ, **(env or {})}).returncode:
         fail(f"`{' '.join(command)}` failed; see above.")
@@ -205,7 +210,7 @@ def build_docs(modules):
         print("lean-vouch: first docs build. doc-gen4 documents everything the project imports" +
               (", including Mathlib: expect about half an hour and 2 GB. It doesn't recompile Mathlib."
                if uses_mathlib else ": expect several minutes."), flush=True)
-    run(["lake", "build", *[f"+{module}:docs" for module in modules]], docbuild,
+    run(["lake", "build", QUIET, *[f"+{module}:docs" for module in modules]], docbuild,
         {"DOCGEN_SRC": os.environ.get("DOCGEN_SRC", "file")})
 
 
@@ -333,7 +338,7 @@ def main():
     try:
         modules = modules_of(args.names)
         print(f"lean-vouch: reviewing {len(modules)} modules.", flush=True)
-        run(["lake", "build", *[f"+{module}" for module in modules]])
+        run(["lake", "build", QUIET, *[f"+{module}" for module in modules]])
         built = build_graph(modules)
         build_docs(tops(built["modules"]))
         if args.clean:

@@ -1209,6 +1209,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   // Open a declaration directly with diagram#Name.
   const fromHash = decodeURIComponent(location.hash.slice(1));
   if (fromHash && !info(fromHash) && !tree.complete) await load(`name=${encodeURIComponent(fromHash)}`);
+  // diagram?open=A.B,C opens only the boxes on the way to these modules, closing the rest.
+  const openOnly = (new URLSearchParams(location.search).get("open") ?? "").split(",").filter(m => moduleNodes.has(m));
+  if (openOnly.length) { expanded = new Set([treeRoot.path]); openOnly.forEach(openTo); }
   if (fromHash && decls[fromHash]) openTo(decls[fromHash].module);
   await draw();
   if (fromHash && info(fromHash)) select(fromHash);

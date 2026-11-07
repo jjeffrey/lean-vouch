@@ -1,85 +1,101 @@
-# Using lean-vouch
+# Walkthrough: a definition that doesn't say what it should
 
-The first run adds doc-gen4's packages to `.lake/packages`, and a `.lean-vouch` folder:
+Lean checks that a proof proves its statement. It can't check that the statement means what you
+meant. This walkthrough follows one mismatch from noticing it to fixing it, with what lean-vouch
+does at each step. For installing and running it, see [Setup and options](setup.md).
 
-```text
-.lean-vouch/
-├── .gitignore        tracked
-├── marks/            tracked: each person's marks and notes
-│   └── ada-lovelace-3f9a.json
-├── quiz/             ignored: each person's quiz answers
-├── graph.json        ignored
-├── build.json        ignored: how the latest build went, for open pages
-├── links.local.json  ignored, optional
-└── docbuild/         ignored
-    └── .lake/build/doc/   the HTML
+The [example](development.md#example) defines primes in `ReviewExample.Prime`:
+
+```lean
+/-- `n` is prime: its only divisors are 1 and itself. -/
+def Prime (n : Nat) : Prop :=
+  ∀ d, Divides d n → d = 1 ∨ d = n
+
+/-- A prime is coprime to every number it doesn't divide. -/
+theorem Prime.coprime {p n : Nat} (hp : Prime p) (h : ¬ Divides p n) : Coprime p n
 ```
 
-`docbuild` builds the docs with the [doc-gen4](https://github.com/leanprover/doc-gen4) version that
-matches your `lean-toolchain`, so your project gains no dependency. Everything but the marks can be
-rebuilt or is yours alone, so `.lean-vouch/.gitignore` ignores it. To keep marks out of git too, edit
-that file: it's only written on the first run. In a public repository, committed notes are public.
+The docstring reads like the definition, and `Prime.coprime` is proved. But the only divisor of 1 is
+1, so `Prime 1` holds, and every theorem about primes quietly includes 1. The example leaves this
+unfixed, with marks that show it partway through review, so you can follow along.
 
-The first docs build takes time, because doc-gen4 documents everything the project imports:
+## 1. Noticing it
 
-| Project | First run | Disk |
-| --- | --- | --- |
-| No dependencies | about 7 minutes, mostly compiling doc-gen4 | about 1 GB |
-| Using Mathlib | about 35 minutes | 2 GB |
-| All of Mathlib | about 70 minutes | 4 GB, and about 6 GB of memory |
+You might notice it reading `Prime` on its docs page, where lean-vouch adds a review box under
+every declaration, or in the diagram's sidebar. [Quiz mode](quiz.md) helps you notice: it shows
+the statement with its name hidden, you write what you think it says, and then you compare. Writing
+"n has no divisors but 1 and n" and then asking "so is 1 prime?" is often where this turns up.
 
-It doesn't recompile Mathlib. The graph step needs up to about 6 GB of memory for a project on the scale of Mathlib. Lake's `[n/m]` total grows as it finds more to build, so the progress can seem to go backwards.
+An assistant reviewing the project can raise it too, by leaving a `?` with a note on `Prime`. When
+someone else asks a question like that, you see a `!` on the declaration, meaning someone is
+waiting on you.
 
-When the project moves to another Lean version, the next run moves `docbuild/` to the matching doc-gen4 and builds the docs again, which takes about as long as the first run. When the project's dependencies change on the same Lean, the next run's docs follow them.
+## 2. Recording it
 
-| Option | Meaning |
-| --- | --- |
-| `lean-vouch` | Review every library in the project, tests included |
-| `lean-vouch MyLibrary My.Module` | Review only these libraries and modules. Use this to leave out a library that doesn't build, or a project's large test libraries. Libraries are imported together for the graph, so also leave out one whose names clash with another's, such as exercises and their solutions. Reviewing a smaller part of a project than before can flag marks that haven't really changed: see [the limits](internals.md#limits). |
-| `--port N` | Serve on another port, for reviewing two projects at once (default 8797) |
-| `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
-| `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git name or email changes, pass your old id to stay the same person; your marks and quiz answers are under it. |
-| `--rebuild` | Rebuild the docs and graph without starting a server |
-| `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
+Click ✗ on `Prime` and add a note saying why. The note can also ask how to fix it. If you're not
+sure it's wrong, use `?` instead. A `?` with a note asks the others, people or assistants, and
+shows them a `!` until they mark or reply.
 
-Source links open in VS Code, at the declaration's line. Set `DOCGEN_SRC=github` before the first
-run for GitHub links instead.
+In the example, Ada rejected `Prime`, and an assistant answered with a fix:
 
-To open links in docstrings from your own copies, add `.lean-vouch/links.local.json`, as
-`{"https://example.org/paper.pdf": "your copy's URL"}`. The page rewrites them when you view the
-docs, adding `?page=N` if the link text ends in `(p. N)` or `(page N)`.
+![Prime rejected, with an assistant's suggested fix](images/prime.png)
 
-## Rebuilding
+The marks and notes go in each person's file in `.lean-vouch/marks/`, so an assistant asked to fix
+things can read why you rejected something.
 
-Leave the server running. After changing the code, run `lean-vouch` again, or `lean-vouch --rebuild`,
-in another terminal. An agent can do the same when it has finished its changes. It builds once, when
-you ask, and never on every save. Open pages say when a rebuild is running, and offer to reload when
-it's done, so a note you're writing isn't lost, and asks first if reloading would lose one. A page from
-before a rebuild can't be used to mark until it's reloaded, since it may not show what's there now, though
-notes still save. If a build fails, changes are still tracked from the last good build, though a failure during the docs step can leave some pages newer than that.
+## 3. Seeing what it affects
 
-Marks and notes need no rebuild. They appear on open pages by themselves, from anyone, within a few seconds.
+Open the diagram and Shift-click `Prime`. Everything that depends on it and everything it depends
+on are colored, with how much of each is in each folder. Each theorem in that upper set is about
+this definition of `Prime`, so each may say something other than what was meant, though all of them
+still compile. In the example, Ada agreed with `Prime.coprime` before she noticed: it reads right,
+but it's about this definition. Clicking `Prime` instead shows only what it directly depends on
+and what directly uses it:
 
-## Working with others
+![the diagram with Prime selected](images/prime-diagram.png)
 
-Each person's marks are their own, and the diagram shows yours unless you choose someone else's or
-everyone's. Commit `.lean-vouch/marks/` to share them. A mark that's out of date is flagged for its
-owner alone, and differing current marks show as a disagreement.
+## 4. Fixing it
 
-A `?` alone is your own reminder. With a note, it asks the others. A declaration needs your attention,
-shown by a `!`, when someone is waiting on you: they asked, wrote more under their `?`, or answered
-yours. It clears when you mark the declaration or reply.
+Make the change, or ask the assistant to. Here it's the hypothesis the assistant suggested:
 
-Marks are shared with plain git, and lean-vouch never commits or pushes for you. Commit your file
-with your work, and pull to get everyone else's, which appear on open pages by themselves. Each person writes
-only their own file, so marks don't conflict. If someone else's file can't be read, such as during a
-merge conflict, pages say so and carry on without it.
-
-An assistant, human or not, is another person with its own file. By convention it leaves notes and `?`s,
-and doesn't mark ✓ or ✗: the record says what a person has checked. While the server runs, it can write
-as itself:
-
-```bash
-curl -X POST http://127.0.0.1:8797/review/data -H "Content-Type: application/json" \
-  -d '{"id": "claude", "author": "Claude", "name": "MyProject.foo", "status": "question", "note": "Is 0 meant to be included?"}'
+```lean
+/-- `n` is prime: it is at least 2, and its only divisors are 1 and itself. -/
+def Prime (n : Nat) : Prop :=
+  2 ≤ n ∧ ∀ d, Divides d n → d = 1 ∨ d = n
 ```
+
+Lean then shows which proofs needed 1 to count, and those get fixed too. With the server still
+running, run `lean-vouch` again in another terminal, or `lean-vouch --rebuild`. Open pages say a
+rebuild is running and offer to reload when it's done.
+
+## 5. Re-checking what changed
+
+After the rebuild, lean-vouch flags every mark the change could affect:
+
+- Your ✗ on `Prime` says "changed since you marked it".
+- Every mark you made on something that uses `Prime`, however far up, says it "depends on
+  `Prime`, which changed since you marked it".
+- **what changed** lists each change, with how many of your marks rely on it. In the diagram, `Prime`
+  has a solid orange border, and what relies on it a dashed one. Selecting a flagged declaration
+  lights the way down to the change.
+
+With the fix, in a copy of the example:
+
+![Prime and Prime.coprime flagged after the fix](images/prime-fixed.png)
+
+`Prime.coprime` now also depends on `And` and `≤` (`Nat.le`), which are new, and so are listed with
+`Prime`.
+
+For a theorem, only its statement counts, since Lean checks the proof. So a theorem whose proof
+alone changed isn't flagged.
+
+Start with `Prime`. Read the new definition and click ✓. The note thread stays, as a record of why
+it changed. Then go up through what was flagged. For each, read the statement again with the new
+definition in mind. If it still says what it should, click **Accept change**, which keeps that one
+mark for the current version and accepts nothing above it. If it doesn't, mark it ✗ or `?` and
+repeat.
+
+## 6. Keeping the record
+
+Commit your marks file with the fix. It records what you checked, and against which version, so
+anyone who pulls it sees your marks beside theirs: see [working with others](setup.md#working-with-others).

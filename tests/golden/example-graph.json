@@ -151,6 +151,41 @@
     "Nat"
    ]
   },
+  "ReviewExample.Prime": {
+   "deps": [
+    "ReviewExample.Divides"
+   ],
+   "kind": "def",
+   "lines": [
+    14,
+    16
+   ],
+   "module": "ReviewExample.Prime",
+   "own": "4d62eca44d66b024",
+   "uses": [
+    "Eq",
+    "Nat",
+    "Or"
+   ]
+  },
+  "ReviewExample.Prime.coprime": {
+   "deps": [
+    "ReviewExample.Coprime",
+    "ReviewExample.Divides",
+    "ReviewExample.Prime"
+   ],
+   "kind": "theorem",
+   "lines": [
+    18,
+    24
+   ],
+   "module": "ReviewExample.Prime",
+   "own": "537758fd2a542fa7",
+   "uses": [
+    "Nat",
+    "Not"
+   ]
+  },
   "ReviewExample.Steps": {
    "deps": [],
    "kind": "inductive",
@@ -410,6 +445,18 @@
    "module": "Init.Prelude",
    "own": "8fa4cf5efdc70bb7"
   },
+  "Not": {
+   "group": null,
+   "kind": "def",
+   "module": "Init.Prelude",
+   "own": "b66767185dc71ad5"
+  },
+  "Or": {
+   "group": null,
+   "kind": "inductive",
+   "module": "Init.Prelude",
+   "own": "3efee55bd79563c7"
+  },
   "PProd": {
    "group": "compiler",
    "kind": "structure",
@@ -453,6 +500,7 @@
   "ReviewExample.Gcd": "c5c2a58d71130c11",
   "ReviewExample.Multiples.Coprime": "e629bedf8ff1f629",
   "ReviewExample.Multiples.Lcm": "82046260bbc992b4",
+  "ReviewExample.Prime": "c0cc8810a03fa303",
   "ReviewExample.Steps": "d505de83c93a5eeb",
   "ReviewExample.Zero": "c5011ab6f842a683"
  },
@@ -462,6 +510,7 @@
    "ReviewExample.Gcd",
    "ReviewExample.Multiples.Coprime",
    "ReviewExample.Multiples.Lcm",
+   "ReviewExample.Prime",
    "ReviewExample.Steps",
    "ReviewExample.Zero"
   ],
@@ -474,6 +523,9 @@
   ],
   "ReviewExample.Multiples.Lcm": [
    "ReviewExample.Gcd"
+  ],
+  "ReviewExample.Prime": [
+   "ReviewExample.Multiples.Coprime"
   ],
   "ReviewExample.Steps": [],
   "ReviewExample.Zero": [
