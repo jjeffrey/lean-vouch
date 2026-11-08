@@ -203,6 +203,56 @@ def write(graph, folders, targets, out):
     return names, warnings
 
 
+WRITTEN_BY = "written by lean-vouch"
+TOML_LIBRARY = re.compile(r'\[\[lean_lib\]\][^\[]*?\bname\s*=\s*"Challenge"')
+LEAN_LIBRARY = re.compile(r"^\s*lean_lib\s+(«Challenge»|Challenge)\b", re.M)
+
+
+def source_root(root):
+    """Where the package's modules go: its `srcDir`, if the lakefile sets one."""
+    for name, pattern in (("lakefile.toml", r'^srcDir\s*=\s*"([^"]+)"'), ("lakefile.lean", r'^\s*srcDir\s*:=\s*"([^"]+)"')):
+        if (root / name).exists():
+            found = re.search(pattern, (root / name).read_text(encoding="utf-8"), re.M)
+            return root / found[1] if found else root
+    return root
+
+
+def install(out, root=Path(".")):
+    """Put the challenge where `lake comparator` and a CI job look for it: `Challenge.lean` among the
+    project's modules, `comparator.json` at its root, and a `Challenge` library in its lakefile. A
+    `Challenge.lean` lean-vouch didn't write is left alone, and what's added to `comparator.json`,
+    such as more permitted axioms, is kept. Returns what changed, to say so."""
+    changed = []
+    lean = source_root(root) / "Challenge.lean"
+    text = (out / "Challenge.lean").read_text(encoding="utf-8")
+    if lean.exists() and WRITTEN_BY not in lean.read_text(encoding="utf-8")[:300]:
+        raise ChallengeError(f"{lean} wasn't written by lean-vouch, so it's left as it is. Move it, then write the challenge again")
+    if not lean.exists() or lean.read_text(encoding="utf-8") != text:
+        lean.parent.mkdir(parents=True, exist_ok=True)
+        lean.write_text(text, encoding="utf-8")
+        changed.append(f"wrote {lean}")
+    config = root / "comparator.json"
+    fresh = json.loads((out / "comparator.json").read_text(encoding="utf-8"))
+    try:
+        kept = json.loads(config.read_text(encoding="utf-8")) if config.exists() else {}
+    except ValueError as error:
+        raise ChallengeError(f"{config} can't be read ({error}); fix or remove it, then write the challenge again") from None
+    merged = {**fresh, **kept, **{key: fresh[key] for key in ("challenge_module", "solution_module", "theorem_names")}}
+    if merged != kept:
+        config.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+        changed.append(f"wrote {config}")
+    for name, pattern, addition in (("lakefile.toml", TOML_LIBRARY, '\n[[lean_lib]]\nname = "Challenge"\n'),
+                                    ("lakefile.lean", LEAN_LIBRARY, "\nlean_lib Challenge\n")):
+        lakefile = root / name
+        if lakefile.exists():
+            current = lakefile.read_text(encoding="utf-8")
+            if not pattern.search(current):
+                lakefile.write_text(current.rstrip("\n") + "\n" + addition, encoding="utf-8")
+                changed.append(f"added a Challenge library to {lakefile}")
+            break
+    return changed
+
+
 def check(graph, out, program, lake="lake"):
     """Compile the challenge and fingerprint it as the project was. Return the declarations that differ
     from the project's, or are missing from the challenge."""

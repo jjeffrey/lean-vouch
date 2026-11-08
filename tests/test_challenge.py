@@ -94,6 +94,41 @@ class ChallengeTest(unittest.TestCase):
         with self.assertRaisesRegex(challenge.ChallengeError, "private"):
             self.write(["P.Sub.uses"])
 
+    def install(self, lakefile=("lakefile.toml", 'name = "p"\n\n[[lean_lib]]\nname = "P"\n')):
+        self.write(["P.Sub.uses"])
+        (self.root / lakefile[0]).write_text(lakefile[1])
+        return challenge.install(self.root / "out", self.root)
+
+    def test_installing_puts_the_challenge_where_comparator_looks(self):
+        changed = self.install()
+        self.assertEqual(len(changed), 3, changed)
+        self.assertIn("written by lean-vouch", (self.root / "Challenge.lean").read_text())
+        self.assertEqual(json.loads((self.root / "comparator.json").read_text())["theorem_names"], ["P.Sub.uses"])
+        self.assertEqual((self.root / "lakefile.toml").read_text().count('name = "Challenge"'), 1)
+        self.assertEqual(challenge.install(self.root / "out", self.root), [], "a second time changes nothing")
+
+    def test_installing_keeps_what_was_added_to_comparator_json(self):
+        (self.root / "comparator.json").write_text(json.dumps({"challenge_module": "Challenge", "solution_module": "Old",
+            "theorem_names": [], "permitted_axioms": ["propext", "Quot.sound", "Classical.choice", "Lean.ofReduceBool"],
+            "external_kernels": {"nanoda": ["nanoda_bin"]}}))
+        self.install()
+        config = json.loads((self.root / "comparator.json").read_text())
+        self.assertEqual((config["solution_module"], config["theorem_names"]), ("P", ["P.Sub.uses"]))
+        self.assertIn("Lean.ofReduceBool", config["permitted_axioms"])
+        self.assertEqual(config["external_kernels"], {"nanoda": ["nanoda_bin"]})
+
+    def test_a_challenge_lean_vouch_didnt_write_is_left_alone(self):
+        (self.root / "Challenge.lean").write_text("-- someone's own\n")
+        with self.assertRaisesRegex(challenge.ChallengeError, "wasn't written by lean-vouch"):
+            self.install()
+        self.assertEqual((self.root / "Challenge.lean").read_text(), "-- someone's own\n")
+
+    def test_a_lean_lakefile_and_a_source_folder(self):
+        self.install(("lakefile.lean", 'package p where\n  srcDir := "src"\n\nlean_lib P\n'))
+        self.assertTrue((self.root / "src" / "Challenge.lean").exists(), "beside the package's modules")
+        self.assertFalse((self.root / "Challenge.lean").exists())
+        self.assertIn("lean_lib Challenge", (self.root / "lakefile.lean").read_text())
+
     def test_where_a_proof_starts(self):
         self.assertEqual(challenge.proof_start("theorem t (h : a := b) : c := by"), 27)
         self.assertEqual(challenge.proof_start("theorem t : c -- := not this\n  := rfl"), 31)

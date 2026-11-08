@@ -382,6 +382,22 @@ class ReviewTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(REVIEW), "--challenge", *names], cwd=self.root, env=env,
                               capture_output=True, text=True)
 
+    def test_a_challenge_builds_first_when_theres_no_build(self):
+        calls = self.root / "calls"
+        (self.root / "lakefile.toml").write_text('name = "my-project"\n\n[[lean_lib]]\nname = "M"\n')
+        self.stub_graph(f'echo "$*" >> "{calls}"\n'
+                        'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"], "declarations": {}}\' > "$LEAN_VOUCH_GRAPH" ;;\n'
+                        '  query*) echo M ;; esac\n')
+        (self.root / ".lean-vouch" / "graph.json").unlink()
+        (self.root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
+        result = subprocess.run([sys.executable, str(REVIEW), "--challenge", "M.t"], cwd=self.root, env=env,
+                                capture_output=True, text=True)
+        self.assertIn("there's no build yet, so building first", result.stdout, result.stdout + result.stderr)
+        self.assertTrue(any(line.startswith("build") for line in calls.read_text().splitlines()))
+        self.assertNotIn(":docs", calls.read_text(), "a challenge doesn't need the docs")
+        self.assertIn("not in the project's graph: M.t", result.stderr, "then on to the challenge, from the new graph")
+
     def test_naming_theorems_chooses_them_for_the_project(self):
         result = self.challenge_run("M.t")
         self.assertIn("chose 1 theorem", result.stdout)

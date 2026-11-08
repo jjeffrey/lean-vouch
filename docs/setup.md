@@ -14,7 +14,7 @@ The first run adds a `.lean-vouch` folder, and with `--docs`, doc-gen4's package
 ├── build.json        ignored: how the latest build went, for open pages
 ├── build.log         ignored: the latest build's output
 ├── graph-tool/       ignored: the graph program, compiled for the project's Lean
-├── challenge/        ignored: the latest challenge, from --challenge
+├── challenge/        ignored: where a challenge is built and checked, before it goes into the project
 ├── links.local.json  ignored, optional
 └── docbuild/         ignored
     └── .lake/build/doc/   the HTML
@@ -61,7 +61,7 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 | `--docs` | Build doc pages too, from now on in this project. They take most of a first run's time. |
 | `--no-docs` | Stop building doc pages, from now on in this project. Those already built are kept, but not shown, since they'd be older than the graph. |
 | `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
-| `--challenge [THEOREM ...]` | Write the project's [challenge for `lake comparator`](challenge.md), from the theorems chosen in the pages, or make the theorems named here the chosen ones first |
+| `--challenge [THEOREM ...]` | Write the project's [challenge for `lake comparator`](challenge.md) into the project, from the theorems chosen in the pages, or make the theorems named here the chosen ones first. Builds first if the code has changed. |
 
 Source links open in VS Code, at the declaration's line. Set `DOCGEN_SRC=github` before the first
 run for GitHub links instead.

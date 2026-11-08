@@ -20,33 +20,44 @@ lean-vouch helps build one. A project has one challenge, shared by everyone revi
 lean-vouch --challenge
 ```
 
+4. **Check the project against it** with comparator, which is Lean's checker and so yours to run:
+
+```bash
+lake comparator
+```
+
 To choose theorems from the terminal instead, name them: `lean-vouch --challenge MyProject.main_theorem
 MyProject.other_theorem` makes those the chosen theorems, then writes the challenge.
 
 In a project set up before lean-vouch 0.1.1, git ignores `.lean-vouch/challenge.json` until you add the
 line `!challenge.json` to `.lean-vouch/.gitignore`. lean-vouch says so when you choose from the terminal.
 
-It uses the last build, and writes `.lean-vouch/challenge/Challenge.lean` and its `comparator.json`:
+Writing the challenge does everything comparator needs:
 
+- **It builds first** if the code has changed since the last build: the project and the graph, not
+  the docs.
 - **What goes in:** each theorem's statement, with `sorry` for its proof, and every project
   declaration those statements use, recursively, copied whole from the source, doc comments
   included. Library imports carry over; the project's own modules don't, since the challenge
   replaces them.
 - **The check:** a declaration copied out of its file can mean something else, through an `open`
   or a `variable` it relied on. So lean-vouch compiles the challenge and fingerprints it as it does
-  the project, and stops if any declaration differs.
-- **Your review:** it lists the declarations in the challenge you haven't marked ✓ as they are
-  now. The challenge is only as good as that review.
+  the project, and stops, leaving the project alone, if any declaration differs.
+- **Into the project:** `Challenge.lean` beside the project's modules, `comparator.json` at its root,
+  and a `Challenge` library in its lakefile, if it isn't there. A `Challenge.lean` lean-vouch didn't
+  write is left alone, and anything you add to `comparator.json`, such as more permitted axioms or
+  external kernels, is kept. Commit all three, so anyone, and CI, can run `lake comparator`.
+- **Your review:** it lists the declarations in the challenge you haven't marked ✓ as they are now.
+  The challenge is only as good as that review.
 
-To use it, copy both files to the project's root, and add the challenge as a library in the
-lakefile, such as `[[lean_lib]] name = "Challenge"` in `lakefile.toml`. Then run `lake comparator`,
-which needs Lean v4.35 or newer. The challenge repeats the project's names, so lean-vouch leaves out
-the library that `comparator.json` names as the challenge, unless you name it.
+The challenge repeats the project's names, so lean-vouch leaves out the library that
+`comparator.json` names as the challenge, unless you name it.
 
-Comparator builds the project inside a `bwrap` sandbox, which needs Linux. On macOS, checking your own
-project needs `lake comparator --inadvisably-no-sandbox`: the sandbox protects you from a solution you
-don't trust, and your own project's build already runs with your permissions. Check anyone else's
-work on Linux, such as in CI, where every push can be checked against the challenge.
+`lake comparator` needs Lean v4.35 or newer. It builds the project inside a `bwrap` sandbox, which
+needs Linux. On macOS, checking your own project needs `lake comparator --inadvisably-no-sandbox`,
+and lean-vouch says so: the sandbox protects you from a solution you don't trust, and your own
+project's build already runs with your permissions. Check anyone else's work on Linux, such as in CI,
+where every push can be checked against the challenge.
 
 Not yet supported: private declarations, mutually recursive ones, and projects that use the module
 system (`module`).

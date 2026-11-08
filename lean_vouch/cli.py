@@ -599,36 +599,41 @@ def write_challenge(targets, who):
         if not targets:
             fail("no theorems are chosen for the challenge yet. Choose them in the pages, or name them: "
                  "lean-vouch --challenge My.theorem Other.theorem")
-    built = graph_file.stat().st_mtime
-    # The reviewed modules' files only: a challenge copied into the project, say, isn't one.
-    reviewed = [Path(module.replace(".", "/") + ".lean") for module in
-                json.loads(graph_file.read_text(encoding="utf-8")).get("modules", {})]
-    edited = [folder / path for folder in source_folders() for path in reviewed
-              if (folder / path).exists() and (folder / path).stat().st_mtime > built]
-    if edited:
-        fail(f"{edited[0]} has changed since the last build, and a challenge is copied from the code that was built. "
-             "Run lean-vouch --rebuild first.")
     graph = json.loads(graph_file.read_text(encoding="utf-8"))
     try:
         names, warnings = challenge.write(graph, source_folders(), targets, out)
         for warning in warnings:
             print(f"lean-vouch: note: {warning}.", flush=True)
         plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"
-        print(f"lean-vouch: wrote {out / 'Challenge.lean'}: {plural(len(targets), 'theorem')}, and "
+        print(f"lean-vouch: the challenge has {plural(len(targets), 'theorem')}, and "
               f"{plural(len(names) - len(targets), 'declaration')} their statements rest on. Checking that it says what "
               "the project says...", flush=True)
         differ = challenge.check(graph, out, graph_program())
     except challenge.ChallengeError as error:
         fail(str(error))
     if differ:
-        fail(f"the challenge doesn't say what the project says, in {', '.join(differ)}. Copied out of its file, a "
-             "declaration can mean something else, through an `open` or `variable` it relied on. "
-             f"Edit {out / 'Challenge.lean'} and rerun, or choose other theorems.")
+        fail(f"the challenge doesn't say what the project says, in {', '.join(differ)}, so it's left out of the "
+             "project. Copied out of its file, a declaration can mean something else, through an `open` or "
+             f"`variable` it relied on. It's in {out / 'Challenge.lean'} to look at; choose other theorems, or "
+             "please open an issue.")
     print("lean-vouch: it matches the project, declaration by declaration.", flush=True)
+    # Only now, so the project never holds a challenge that says something else.
+    try:
+        for change in challenge.install(out):
+            print(f"lean-vouch: {change}.", flush=True)
+    except challenge.ChallengeError as error:
+        fail(str(error))
     waiting = unagreed(graph_file, names, who)
     if waiting:
         print(f"lean-vouch: you haven't agreed with {len(waiting)} of them as they are now: {', '.join(waiting)}.", flush=True)
-    print(f"lean-vouch: {out / 'comparator.json'} is its configuration for `lake comparator`.", flush=True)
+    # comparator itself stays the user's to run: it's the checker, and runs the project's code.
+    command = "lake comparator"
+    if sys.platform != "linux":
+        command += " --inadvisably-no-sandbox"
+    print(f"lean-vouch: next, check the project against it: `{command}`.", flush=True)
+    if sys.platform != "linux":
+        print("lean-vouch: comparator's sandbox needs Linux. It guards against code you don't trust, which your own "
+              "project, already built here, isn't; check other people's work on Linux, as in CI.", flush=True)
 
 
 def docs_wanted(chosen):
@@ -679,6 +684,70 @@ def running_server(port):
     return found.get("marks_folder") if isinstance(found, dict) else None
 
 
+def last_run():
+    try:
+        last = json.loads((HOME / "build.json").read_text(encoding="utf-8"))
+        return last if isinstance(last, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def code_changed():
+    """Why a challenge needs a build first, if it does: no build yet, or a reviewed module's file
+    saved since the last good one."""
+    graph_file = HOME / "graph.json"
+    if not graph_file.exists():
+        return "there's no build yet"
+    built = graph_file.stat().st_mtime
+    # The reviewed modules' files only: a challenge copied into the project, say, isn't one.
+    reviewed = [Path(module.replace(".", "/") + ".lean") for module in
+                json.loads(graph_file.read_text(encoding="utf-8")).get("modules", {})]
+    edited = [folder / path for folder in source_folders() for path in reviewed
+              if (folder / path).exists() and (folder / path).stat().st_mtime > built]
+    return f"{edited[0]} has changed since the last build" if edited else None
+
+
+def build(tag, package, names, docs_chosen, make_docs, clean=False):
+    """Build the project and its graph and, if asked, its docs, reporting to open pages as it goes.
+    `docs_chosen` is the project's choice, which this records; `make_docs` whether this build makes
+    them. Returns the modules reviewed."""
+    set_up_folders(tag, package)
+    started = time.time()
+    LOG.write_text("", encoding="utf-8")
+    report("building", step="project", names=names, docs=docs_chosen)
+    try:
+        modules = modules_of(names)
+        print(f"lean-vouch: reviewing {len(modules)} module{'' if len(modules) == 1 else 's'}.", flush=True)
+        run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
+        built, inputs = build_graph(modules)
+        if make_docs:
+            build_docs(tops(built["modules"]))
+        elif docs_chosen:
+            print("lean-vouch: left the doc pages as they were. `lean-vouch --rebuild` updates them.", flush=True)
+        else:
+            print("lean-vouch: no doc pages: everything else works without them. `lean-vouch --docs` adds them, "
+                  "and this project remembers it.", flush=True)
+        if clean and make_docs:
+            for root in built["roots"]:
+                clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
+        # Last, so a failure leaves the graph that matches the docs.
+        if (HOME / "graph.json.new").exists():   # only ever this run's: build_graph clears an old one
+            (HOME / "graph.json.new").replace(HOME / "graph.json")
+        if inputs:
+            GRAPH_KEY.write_text(inputs, encoding="utf-8")
+        else:
+            GRAPH_KEY.unlink(missing_ok=True)
+    except KeyboardInterrupt as error:
+        report("failed", message=reason(error))
+        print("\nlean-vouch: stopped.", file=sys.stderr)
+        sys.exit(130)
+    except (SystemExit, Exception) as error:
+        report("failed", message=reason(error))
+        raise
+    report("done", built=datetime.now().isoformat(timespec="seconds"), since=started)
+    return modules
+
+
 def main():
     parser = argparse.ArgumentParser(prog="lean-vouch", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version=f"lean-vouch {VERSION}")
@@ -707,6 +776,12 @@ def main():
     if pid := build_running():
         fail(f"a build is already running (process {pid}). Wait for it, or stop it, and try again.")
     if args.challenge is not None:
+        # From the code as it is, so it builds first if the code has changed: the project and the
+        # graph, as the last run reviewed them, not the docs, which a challenge doesn't need.
+        if stale := code_changed():
+            print(f"lean-vouch: {stale}, so building first.", flush=True)
+            last = last_run()
+            build(tag, package, last.get("names") or [], docs_wanted(None), False)
         return write_challenge(args.challenge, who)
     others = sorted(path.stem for path in (HOME / "marks").glob("*.json") if path.stem != who)
     if others and not (HOME / "marks" / f"{who}.json").exists():
@@ -721,38 +796,7 @@ def main():
         # Before building, which can take minutes, rather than after.
         fail(f"can't use port {args.port} ({busy}). Choose another with --port.")
     with_docs = docs_wanted(args.docs)
-    set_up_folders(tag, package)
-    started = time.time()
-    LOG.write_text("", encoding="utf-8")
-    report("building", step="project", names=args.names, docs=with_docs)
-    try:
-        modules = modules_of(args.names)
-        print(f"lean-vouch: reviewing {len(modules)} module{'' if len(modules) == 1 else 's'}.", flush=True)
-        run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
-        built, inputs = build_graph(modules)
-        if with_docs:
-            build_docs(tops(built["modules"]))
-        else:
-            print("lean-vouch: no doc pages: everything else works without them. `lean-vouch --docs` adds them, "
-                  "and this project remembers it.", flush=True)
-        if args.clean and with_docs:
-            for root in built["roots"]:
-                clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
-        # Last, so a failure leaves the graph that matches the docs.
-        if (HOME / "graph.json.new").exists():   # only ever this run's: build_graph clears an old one
-            (HOME / "graph.json.new").replace(HOME / "graph.json")
-        if inputs:
-            GRAPH_KEY.write_text(inputs, encoding="utf-8")
-        else:
-            GRAPH_KEY.unlink(missing_ok=True)
-    except KeyboardInterrupt as error:
-        report("failed", message=reason(error))
-        print("\nlean-vouch: stopped.", file=sys.stderr)
-        sys.exit(130)
-    except (SystemExit, Exception) as error:
-        report("failed", message=reason(error))
-        raise
-    report("done", built=datetime.now().isoformat(timespec="seconds"), since=started)
+    modules = build(tag, package, args.names, with_docs, with_docs, args.clean)
     if args.rebuild or serving:
         return
     command = [sys.executable, str(HERE / "server.py"), "--docs", str(HOME / "docbuild/.lake/build/doc"),
