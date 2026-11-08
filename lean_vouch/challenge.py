@@ -212,7 +212,8 @@ def check(graph, out, program, lake="lake"):
                            str(build.resolve()), *program], capture_output=True, text=True,
                           env={**os.environ, "LEAN_VOUCH_GRAPH": str(fingerprints.resolve())})
     if done.returncode:
-        raise ChallengeError("fingerprinting the challenge failed:\n" + (done.stdout + done.stderr)[-4000:])
+        said = "\n".join(line for line in (done.stdout + done.stderr).splitlines() if not line.startswith("lean-vouch-progress"))
+        raise ChallengeError("fingerprinting the challenge failed:\n" + said[-4000:])
     theirs = json.loads(fingerprints.read_text(encoding="utf-8"))["declarations"]
     ours = graph["declarations"]
     names = json.loads((out / "comparator.json").read_text(encoding="utf-8"))["theorem_names"]

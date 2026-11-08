@@ -4,6 +4,7 @@
 
 - Challenges for `lake comparator`: choose theorems in the pages, shared through `.lean-vouch/challenge.json`, and write their statements with the project's definitions beneath them, checked by fingerprint to say what the project says. From the page or with `lean-vouch --challenge`. An existing project's `.lean-vouch/.gitignore` needs the line `!challenge.json` to share the choice.
 - Pages say when the code has changed since the last build, with a button to rebuild, and show how far a rebuild has got and how long each step has taken. A build's output also goes to `.lean-vouch/build.log`.
+- Building the declaration graph shows a progress bar through its phases, in the terminal and on open pages.
 - The graph program is compiled once for each Lean version, so a rebuild with nothing new takes a couple of seconds instead of about ten. Each step says what it's doing and counts up while it runs.
 - A run no longer shows the project's own build warnings, which `lake build` shows. A failing build still shows everything.
 - The diagram's side panels can be hidden, for a larger diagram.

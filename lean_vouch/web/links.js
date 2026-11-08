@@ -102,7 +102,11 @@ window.reviewWatch = onMarks => {
     const seconds = Math.max(0, Math.floor(Date.now() / 1000 - since));
     return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
   };
-  const progress = now => `Rebuilding: ${STEPS[now.step] ?? "starting"}${now.total ? `, ${now.done} of ${now.total} so far` : ""}` +
+  const PHASES = { loading: "loading the project", fingerprinting: "fingerprinting declarations",
+    library: "following library definitions", proofs: "tracing sorry through proofs", statements: "printing statements",
+    writing: "writing the graph" };
+  const progress = now => `Rebuilding: ${STEPS[now.step] ?? "starting"}${now.phase ? `: ${PHASES[now.phase] ?? now.phase}` : ""}` +
+    `${now.total ? `, ${now.done} of ${now.total}${now.phase ? "" : " so far"}` : ""}` +
     `${typeof now.step_since === "number" ? `, ${elapsed(now.step_since)}` : ""}…`;
   const say = (text, title, ...extra) => {
     banner.hidden = !text;

@@ -127,10 +127,10 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.status()["state"], "failed")
 
     def test_status_says_how_far_a_build_has_got(self):
-        server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid(), "step": "docs", "step_since": 5.0,
-                                                 "done": 3, "total": 10}))
-        self.assertEqual({key: self.status()[key] for key in ("step", "step_since", "done", "total")},
-                         {"step": "docs", "step_since": 5.0, "done": 3, "total": 10})
+        server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid(), "step": "graph", "step_since": 5.0,
+                                                 "phase": "proofs", "done": 3, "total": 10}))
+        self.assertEqual({key: self.status()[key] for key in ("step", "step_since", "phase", "done", "total")},
+                         {"step": "graph", "step_since": 5.0, "phase": "proofs", "done": 3, "total": 10})
         server.args.build.write_text(json.dumps({"state": "done", "step": "docs", "done": 3, "total": 10}))
         self.assertNotIn("step", self.status())
 

@@ -658,6 +658,13 @@ class PagesTest(unittest.TestCase):
         self.assertRegex(results[0], r"^Rebuilding: building the docs, 3 of 10 so far, 2m 3\ds…$")
         self.assertEqual(results[1], "/review/log")
 
+    def test_the_graph_steps_phase_is_named(self):
+        results = self.click_through({}, """
+            await ready("#review-build:not([hidden])");
+            results.push(doc.getElementById("review-build").firstChild.textContent);
+        """, build={"state": "building", "pid": os.getpid(), "step": "graph", "phase": "proofs", "done": 3, "total": 10})
+        self.assertEqual(results, ["Rebuilding: building the declaration graph: tracing sorry through proofs, 3 of 10…"])
+
     def test_a_failed_build_is_announced_and_the_page_still_works(self):
         results = self.click_through({}, """
             await ready("#review-build:not([hidden])");

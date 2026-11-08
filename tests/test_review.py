@@ -424,6 +424,25 @@ class ReviewTest(unittest.TestCase):
         for build in builds:
             self.assertIn("--log-level=error", build)
 
+    def test_the_graph_programs_progress_is_shown_and_reported(self):
+        status = self.root / "status-during"
+        self.stub_graph('case "$*" in env*)\n'
+                        '  echo "lean-vouch-progress loading 0 0" >&2\n'
+                        '  echo "lean-vouch-progress fingerprinting 1 2" >&2\n'
+                        '  echo "lean-vouch-progress fingerprinting 2 2" >&2\n'
+                        f'  cp .lean-vouch/build.json "{status}"\n'
+                        '  echo "a warning of its own" >&2\n'
+                        '  echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;;\n'
+                        "esac\n")
+        result = self.run_review("v4.35.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("loading the project.", result.stdout)
+        self.assertEqual(result.stdout.count("fingerprinting declarations"), 1, "once a phase, when not a terminal")
+        self.assertIn("a warning of its own", result.stdout)
+        self.assertNotIn("lean-vouch-progress", result.stdout + result.stderr)
+        during = json.loads(status.read_text())
+        self.assertEqual((during["step"], during["phase"], during["done"], during["total"]), ("graph", "fingerprinting", 2, 2))
+
     def test_an_unchanged_graph_isnt_built_again(self):
         calls = self.root / "calls"
         self.stub_graph(f'echo "$*" >> "{calls}"\n'

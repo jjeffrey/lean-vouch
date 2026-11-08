@@ -89,14 +89,23 @@ def isDetail (env : Environment) (n : Name) : Bool :=
     s.startsWith "_"
   | _ => false
 
+/-- How far along the graph is, for lean-vouch to show: `phase`, and `done` of `total`, about two hundred
+times a phase at most. On stderr, since the graph goes to a file and a project's own output to stdout. -/
+def progress (phase : String) (done total : Nat) : IO Unit := do
+  if total == 0 || done == total || done % (max 1 (total / 200)) == 0 then
+    IO.eprintln s!"lean-vouch-progress {phase} {done} {total}"
+
 /-- What each constant's proof rests on beyond Lean's three standard axioms: other axioms, and the
 `sorry`s it depends on, named by where they were written. It looks through proofs, unlike
 everything else here, since that's where a `sorry` usually is. It keeps its own stack, since chains
 of proofs are too deep to recurse along. -/
-def collectGaps (env : Environment) (roots : Array Name) : Std.HashMap Name NameSet := Id.run do
+def collectGaps (env : Environment) (roots : Array Name) : IO (Std.HashMap Name NameSet) := do
   let standard : NameSet := NameSet.empty |>.insert ``propext |>.insert ``Classical.choice |>.insert ``Quot.sound
   let mut done : Std.HashMap Name NameSet := {}
+  let mut count := 0
   for root in roots do
+    count := count + 1
+    progress "proofs" count roots.size
     if done.contains root then continue
     -- Each frame: a constant, what it uses, how far along that we are, and what's been found.
     let mut stack : Array (Name × Array Name × Nat × NameSet) := #[]
@@ -260,10 +269,13 @@ def libraryBelow (g : Graph) (n : Name) : NameSet :=
 to something a used definition is built on is seen. Each is a sum over the set of what's reachable,
 which depends on that set alone: not on the order of the walk, or on how many paths lead to a
 constant, which vary between Lean versions. `flat` is a constant's fingerprint by itself. -/
-def libraryDepths (g : Graph) (roots : Array Name) (flat : Name → UInt64) : Std.HashMap Name UInt64 := Id.run do
+def libraryDepths (g : Graph) (roots : Array Name) (flat : Name → UInt64) : IO (Std.HashMap Name UInt64) := do
   let mut done : Std.HashMap Name UInt64 := {}
   let mut known : Std.HashMap Name (UInt64 × NameSet) := {}
+  let mut count := 0
   for root in roots do
+    count := count + 1
+    progress "library" count roots.size
     let mut seen : NameSet := {}
     let mut todo := #[root]
     let mut sum : UInt64 := 0
@@ -411,6 +423,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let roots := (root :: extra).map String.toName
   initSearchPath (← findSysroot)
   enableInitializersExecution
+  progress "loading" 0 0
   -- More than one module, for a project whose root module doesn't import everything, or whose
   -- libraries don't share a prefix. Each is reviewed, with the modules under it.
   let env ← importModules ((root :: extra).toArray.map fun m => { module := m.toName }) {} (loadExts := true) (level := .private)
@@ -426,7 +439,10 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut deps : Std.HashMap Name NameSet := {}
   let mut uses : Std.HashMap Name NameSet := {}
   let mut library : NameSet := {}
+  let mut count := 0
   for n in names do
+    count := count + 1
+    progress "fingerprinting" count names.size
     let exprs := g.reviewedExprs n
     let (d, l, inner, _) := g.collect n exprs
     own := own.insert n (mixHash (hash n) ((exprs.map g.contentHash ++ inner).foldl mixHash 7))
@@ -437,7 +453,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let libraryFlat (n : Name) : UInt64 :=
     mixHash (hash n) ((g.reviewedExprs n).map g.contentHash |>.foldl mixHash 7)
   -- And with everything it rests on, down through the library.
-  let depths := g.libraryDepths library.toArray libraryFlat
+  let depths ← g.libraryDepths library.toArray libraryFlat
   let libraryOwn (n : Name) : UInt64 := (depths.get? n).getD 0
   let kind (n : Name) : String :=
     match env.find? n with
@@ -456,7 +472,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     match sourceRange? env n with
     | some r => toJson #[r.range.pos.line, r.range.endPos.line]
     | none => Json.null
-  let gaps := collectGaps env names
+  let gaps ← collectGaps env names
   -- Written only where there's something to say, so a clean project's graph is unchanged.
   let gapFields (n : Name) : List (String × Json) :=
     let found := ((gaps.get? n).getD {}).toArray.qsort Name.lt
@@ -474,11 +490,15 @@ unsafe def main (args : List String) : IO UInt32 := do
     (if axioms.isEmpty then [] else [("axioms", toJson (axioms.map shown).toList.eraseDups.toArray)])
   -- What a reviewer reads without the docs: the signature as Lean understood it, and the docstring.
   let mut readable : Std.HashMap Name (List (String × Json)) := {}
+  count := 0
   for n in names do
+    count := count + 1
+    progress "statements" count names.size
     let sig ← signature env n
     let doc ← findDocString? env n
     readable := readable.insert n <|
       (if sig.isEmpty then [] else [("signature", Json.str sig)]) ++ (doc.map fun d => [("doc", Json.str d)]).getD []
+  progress "writing" 0 0
   let decls := (names.qsort Name.lt).map fun n =>
     (n.toString, Json.mkObj <| List.append (gapFields n) <| List.append ((readable.get? n).getD []) <| [
       ("kind", kind n),

@@ -15,6 +15,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import tomllib
@@ -195,6 +196,16 @@ JOB = re.compile(r"^\S+ \[(\d+)/(\d+)\] ")   # Lake's line for each job it finis
 
 STEPS = {"project": "building the project", "graph": "building the declaration graph", "docs": "building the docs"}
 DONE = {"project": "built the project", "graph": "built the declaration graph", "docs": "built the docs"}
+# The graph program's phases, as it reports them.
+PHASES = {"loading": "loading the project", "fingerprinting": "fingerprinting declarations",
+          "library": "following library definitions", "proofs": "tracing sorry through proofs",
+          "statements": "printing statements", "writing": "writing the graph"}
+PROGRESS = re.compile(r"^lean-vouch-progress (\S+) (\d+) (\d+)$")
+
+
+def bar(done, total, width=12):
+    filled = round(width * done / total) if total else 0
+    return "█" * filled + "░" * (width - filled)
 
 
 def elapsed(seconds):
@@ -215,6 +226,7 @@ class Terminal:
         self.label = label or STEPS.get(step, "building")
         self.finished = done or DONE.get(step, "done")
         self.began, self.heard, self.shown, self.ok = time.monotonic(), None, False, True
+        self.status = None   # a phase and how far along it is, when the step reports one
         self.lock, self.done = threading.Lock(), threading.Event()
 
     def __enter__(self):
@@ -241,7 +253,9 @@ class Terminal:
 
     def tick(self):
         so_far = elapsed(time.monotonic() - self.began)
-        if self.heard is None:
+        if self.status:   # what matters most first, since a narrow terminal cuts the end
+            text = self.status.replace("{time}", so_far)
+        elif self.heard is None:
             text = f"lean-vouch: {self.label}... {so_far}"
         elif time.monotonic() - self.heard >= 10:
             text = f"lean-vouch: still {self.label}, {so_far} so far"
@@ -257,6 +271,19 @@ class Terminal:
             with self.lock:
                 if not self.done.is_set():
                     self.tick()
+
+    def progress(self, phase, done, total):
+        """A step's phase and how far along it is: a bar in a terminal, the phase once elsewhere."""
+        name = PHASES.get(phase, phase)
+        with self.lock:
+            if not self.live:
+                if self.status != name:
+                    print(f"lean-vouch: {self.label}: {name}.", flush=True)
+                self.status = name
+                return
+            self.status = (f"lean-vouch: {bar(done, total)} {done:,}/{total:,} {{time}} {name}" if total
+                           else f"lean-vouch: {name}... {{time}}")
+            self.tick()
 
     def line(self, line, passing=False):
         """Show a line of output; `passing` lines are replaced by the next."""
@@ -386,14 +413,28 @@ def build_graph(modules):
         except (OSError, ValueError):
             pass
     program = graph_program()
-    with Terminal("graph") as terminal:
-        done = subprocess.run(["lake", "env", *program, *modules],
-                              stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-                              env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())})
-        terminal.ok = done.returncode == 0
-    if done.returncode:
+    # The graph program reports its progress on stderr, and anything the project prints goes to
+    # stdout, kept for when it fails.
+    reported = 0
+    with Terminal("graph") as terminal, tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as printed:
+        with subprocess.Popen(["lake", "env", *program, *modules], stdout=printed, stderr=subprocess.PIPE, text=True,
+                              encoding="utf-8", errors="replace",
+                              env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())}) as process:
+            for line in process.stderr:
+                if found := PROGRESS.match(line.strip()):
+                    phase, count, total = found[1], int(found[2]), int(found[3])
+                    terminal.progress(phase, count, total)
+                    if time.monotonic() - reported > 0.5 or count == total:
+                        reported = time.monotonic()
+                        report("building", step="graph", phase=phase, done=count, total=total)
+                else:
+                    terminal.line(line)
+        terminal.ok = process.returncode == 0
+        printed.seek(0)
+        output = printed.read()
+    if process.returncode:
         new.unlink(missing_ok=True)
-        fail(f"building the declaration graph failed:\n{done.stdout[-4000:]}\n"
+        fail(f"building the declaration graph failed:\n{output[-4000:]}\n"
              "If two libraries define the same name, they can't be imported together: review one at a "
              "time, as in `lean-vouch MyLibrary`.\n"
              "If this is about Lean itself, not your project, please open an issue.")
