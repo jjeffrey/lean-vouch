@@ -200,6 +200,10 @@ DONE = {"project": "built the project", "graph": "built the declaration graph", 
 PHASES = {"loading": "loading the project", "fingerprinting": "fingerprinting declarations",
           "library": "following library definitions", "proofs": "tracing sorry through proofs",
           "statements": "printing statements", "writing": "writing the graph"}
+# And what each says once it's done, to leave a breakdown of the step's time.
+PHASES_DONE = {"loading": "loaded the project", "fingerprinting": "fingerprinted {n} declarations",
+               "library": "followed {n} library definitions", "proofs": "traced sorry through {n} declarations' proofs",
+               "statements": "printed {n} statements", "writing": "wrote the graph"}
 PROGRESS = re.compile(r"^lean-vouch-progress (\S+) (\d+) (\d+)$")
 
 
@@ -227,6 +231,7 @@ class Terminal:
         self.finished = done or DONE.get(step, "done")
         self.began, self.heard, self.shown, self.ok = time.monotonic(), None, False, True
         self.status = None   # a phase and how far along it is, when the step reports one
+        self.phase = None    # the phase under way: its name, when it began, and how many it has
         self.lock, self.done = threading.Lock(), threading.Event()
 
     def __enter__(self):
@@ -241,6 +246,8 @@ class Terminal:
     def __exit__(self, error, *_):
         self.done.set()
         with self.lock:
+            if self.ok and error is None:
+                self.finish_phase()
             self.clear()
             if self.live and self.ok and error is None:
                 print(f"lean-vouch: {self.finished} in {elapsed(time.monotonic() - self.began)}.", flush=True)
@@ -273,17 +280,27 @@ class Terminal:
                     self.tick()
 
     def progress(self, phase, done, total):
-        """A step's phase and how far along it is: a bar in a terminal, the phase once elsewhere."""
+        """A step's phase and how far along it is: a bar in a terminal. Each phase leaves a line saying
+        how long it took, in a terminal or not."""
         name = PHASES.get(phase, phase)
         with self.lock:
-            if not self.live:
-                if self.status != name:
-                    print(f"lean-vouch: {self.label}: {name}.", flush=True)
-                self.status = name
-                return
-            self.status = (f"lean-vouch: {bar(done, total)} {done:,}/{total:,} {{time}} {name}" if total
-                           else f"lean-vouch: {name}... {{time}}")
-            self.tick()
+            if self.phase is None or self.phase[0] != phase:
+                self.finish_phase()
+                self.phase = (phase, time.monotonic(), total)
+            if self.live:
+                self.status = (f"lean-vouch: {bar(done, total)} {done:,}/{total:,} {{time}} {name}" if total
+                               else f"lean-vouch: {name}... {{time}}")
+                self.tick()
+
+    def finish_phase(self):
+        """The line a finished phase leaves. Called holding the lock."""
+        if self.phase is None:
+            return
+        phase, began, total = self.phase
+        self.clear()
+        said = PHASES_DONE.get(phase, phase).replace("{n}", f"{total:,}")
+        print(f"lean-vouch:   {said} in {elapsed(time.monotonic() - began)}.", flush=True)
+        self.phase = self.status = None
 
     def line(self, line, passing=False):
         """Show a line of output; `passing` lines are replaced by the next."""
