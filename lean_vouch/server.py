@@ -484,7 +484,25 @@ def challenge_state():
         modules[decls[n]["module"]] = modules.get(decls[n]["module"], 0) + 1
     return {"theorems": present, "missing": [n for n in names if n not in present], "closure": closure,
             "modules": modules, "agreed": [n for n in closure if agreed_now(mine.get(n), graph.fingerprint(n))],
-            "can_write": project() is not None, "problem": problem}
+            "can_write": project() is not None, "problem": problem, "file": challenge_file(names)}
+
+
+def challenge_file(names):
+    """The challenge as it is in the project, for pages to show: what comparator checks the project
+    against. Out of date when the theorems it was written for aren't the ones chosen now."""
+    root = project()
+    if root is None:
+        return None
+    lean = challenges.source_root(root) / "Challenge.lean"
+    if not lean.exists():
+        return {"exists": False}
+    try:
+        written_for = json.loads((root / "comparator.json").read_text(encoding="utf-8")).get("theorem_names", [])
+    except (OSError, ValueError, AttributeError):
+        written_for = []
+    return {"exists": True, "path": str(lean.relative_to(root)), "absolute": str(lean.resolve()),
+            "text": lean.read_text(encoding="utf-8", errors="replace"),
+            "current": sorted(written_for) == sorted(names)}
 
 
 writing = threading.Lock()   # one challenge written at a time

@@ -320,6 +320,21 @@ class ServerTest(unittest.TestCase):
         self.assertIn("depends on itself", state["problem"])
         self.assertEqual(json.loads(self.get("/review/challenge"))["theorems"], ["M.t"])
 
+    def test_the_challenge_in_the_project_is_shown_and_known_to_be_out_of_date(self):
+        self.challenge_graph()
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        self.post("/review/challenge", {"name": "M.t", "chosen": True})
+        self.assertEqual(json.loads(self.get("/review/challenge"))["file"], {"exists": False})
+        (self.root / "Challenge.lean").write_text("-- written by lean-vouch\ntheorem t : True := sorry\n")
+        (self.root / "comparator.json").write_text(json.dumps({"theorem_names": ["M.t"]}))
+        shown = json.loads(self.get("/review/challenge"))["file"]
+        self.assertEqual((shown["path"], shown["current"]), ("Challenge.lean", True))
+        self.assertIn("theorem t", shown["text"])
+        self.post("/review/challenge", {"name": "M.other", "chosen": True})
+        self.assertFalse(json.loads(self.get("/review/challenge"))["file"]["current"], "written for other theorems")
+
     def test_a_server_not_started_by_lean_vouch_cant_write_the_challenge(self):
         self.assertFalse(json.loads(self.get("/review/challenge"))["can_write"])
         self.assertEqual(self.post("/review/challenge/write", {})[0], 409)

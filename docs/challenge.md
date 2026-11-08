@@ -50,6 +50,9 @@ Writing the challenge does everything comparator needs:
 - **Your review:** it lists the declarations in the challenge you haven't marked ✓ as they are now.
   The challenge is only as good as that review.
 
+The challenge panel also shows `Challenge.lean` as it is in the project, with its names linked, and
+says when it's out of date: written for other theorems than those chosen now.
+
 The challenge repeats the project's names, so lean-vouch leaves out the library that
 `comparator.json` names as the challenge, unless you name it.
 

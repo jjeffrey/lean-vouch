@@ -108,6 +108,7 @@
   #sidebar .challenge-actions { display: flex; gap: 0.6em; margin: 0.6em 0; }
   #sidebar .challenge-list li button { margin-left: 0.5em; font-size: 0.85em; }
   #sidebar pre.challenge-output { white-space: pre-wrap; }
+  #sidebar pre.challenge-file { max-height: 30em; overflow: auto; }
   #sidebar .reach-row { display: flex; justify-content: space-between; gap: 1em; }
   #sidebar .reach-row a { cursor: pointer; color: #1a5fb4; }
   #sidebar .reach-row span { color: #666; }
@@ -851,7 +852,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     if (sidebar.dataset.panel === "challenge") renderChallenge();
   }
   async function renderChallenge(written) {
-    if (!written) await loadChallenge();
+    await loadChallenge();   // after a write too: the file in the project has changed
     keepDraft();
     const parts = [el("h2", null, "Challenge"), el("p", "muted",
       "The project's theorems, as statements, with everything they rest on: what lake comparator checks the project " +
@@ -906,6 +907,23 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       parts.push(el("p", "stale", "No longer theorems in the project, so left out of the challenge:"), gone);
     }
     if (challenge.problem) parts.push(el("p", "stale", `It can't be written yet: ${challenge.problem}.`));
+    // The challenge as it is in the project: what comparator checks it against.
+    const file = challenge.file;
+    if (file?.exists) {
+      const heading = el("h3", null, "Challenge.lean ");
+      const open = el("a", "muted", "open in VS Code");
+      open.href = `vscode://file${file.absolute}`;
+      open.style.fontWeight = "normal";
+      heading.append(open);
+      const code = el("pre", "challenge-file");
+      code.append(reviewLean.highlight(file.text, codeLink(`${root}.challenge`)));
+      parts.push(heading, el("p", "muted", file.path));
+      if (!file.current)
+        parts.push(el("p", "stale", "Out of date: it was written for other theorems than those chosen now. Write challenge updates it."));
+      parts.push(code);
+    } else if (file && challenge.theorems.length) {
+      parts.push(el("p", "muted", "Not written into the project yet."));
+    }
     if (written) {
       parts.push(el("h3", null, written.ok ? "Written" : "Not written"), el("pre", "challenge-output", written.output));
     }
