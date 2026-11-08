@@ -75,6 +75,7 @@ Three things are versioned separately:
 - **Marks files** are the review record, so their format changes only with a migration. `marks/ID.json` is
   `{"format": 3, "name": "...", "marks": {declaration: entry}}`, where the filename is the person's id and the
   name is only for display. Quiz answers are in `quiz/ID.json`, as `{"format": 3, "answers": {...}}`.
+  The theorems chosen for the challenge are in `challenge.json`, as `{"format": 1, "theorems": [...]}`.
   The graph stores `format` and the Lean version that made it; regenerate it freely. The server refuses a format
   it doesn't read rather than guessing.
 

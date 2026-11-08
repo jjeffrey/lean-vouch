@@ -6,11 +6,25 @@ with no proofs. `lake comparator`, built into Lake, then checks that a project p
 statements, using only the axioms you allow, so the rest of the project, its proofs and helper lemmas,
 can change without anyone reviewing it again.
 
-lean-vouch helps build one. Review the theorems' statements and what's beneath them, then:
+lean-vouch helps build one. A project has one challenge, shared by everyone reviewing it:
+
+1. **Choose its theorems.** Tick "in the challenge" under a theorem on its docs page, or in its sidebar
+   in the diagram. The choice is saved in `.lean-vouch/challenge.json`, which git tracks, so it's the
+   project's, not one person's.
+2. **Review what's beneath them.** The diagram's **challenge** button lists the chosen theorems, how
+   many declarations their statements rest on, and which of those you haven't marked ✓ as they are
+   now. "Show in diagram" colors them all.
+3. **Write it**, with "Write challenge" there, or from the terminal:
 
 ```bash
-lean-vouch --challenge MyProject.main_theorem --challenge MyProject.other_theorem
+lean-vouch --challenge
 ```
+
+To choose theorems from the terminal instead, name them: `lean-vouch --challenge MyProject.main_theorem
+MyProject.other_theorem` makes those the chosen theorems, then writes the challenge.
+
+In a project set up before lean-vouch 0.1.1, git ignores `.lean-vouch/challenge.json` until you add the
+line `!challenge.json` to `.lean-vouch/.gitignore`. lean-vouch says so when you choose from the terminal.
 
 It uses the last build, and writes `.lean-vouch/challenge/Challenge.lean` and its `comparator.json`:
 

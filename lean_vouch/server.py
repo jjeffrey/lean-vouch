@@ -24,6 +24,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+# Run as a script, this file's folder is on the path but the package's isn't.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from lean_vouch import challenge as challenges  # noqa: E402
+
 VERSION = "0.1.0"
 # Bump a format when old readers would misread the new one; see docs/internals.md.
 # A person's file is {"format": 3, "name": display name, "marks": {declaration: entry}}, and their
@@ -431,6 +435,7 @@ def status():
     changed after the last good build started. `marks_folder` tells lean-vouch which project this
     server is for, and `me` shows who's reviewing."""
     files = [path for folder in (args.marks, args.quiz) for path in sorted(folder.glob("*.json"))]
+    files += [targets_file()] if targets_file().exists() else []
     running, build = building()
     state, message = build.get("state"), build.get("message")
     if running:
@@ -444,6 +449,56 @@ def status():
             "message": message, "built": build.get("built"), "stale": stale, "can_rebuild": project() is not None,
             **progress, "marks_folder": str(args.marks.resolve()),
             "me": {"id": args.id, "name": args.name or args.id}, "unreadable": unreadable}
+
+
+def agreed_now(entry, fingerprint):
+    """Whether a mark is ✓ for the declaration as it is now: its fingerprint matches, Lean's version aside."""
+    if not entry or entry.get("status") != "agree" or not fingerprint:
+        return False
+    recorded = entry.get("fingerprint") or {}
+    return all(recorded.get(key) == fingerprint.get(key) for key in ("own", "deps"))
+
+
+def targets_file():
+    return args.marks.parent / "challenge.json"
+
+
+def challenge_state():
+    """The project's challenge: the chosen theorems, everything their statements rest on, and how
+    much of that you've agreed with as it is now."""
+    current = graph.current()
+    decls = current.get("declarations", {})
+    names = challenges.chosen(targets_file())
+    present = [n for n in names if decls.get(n, {}).get("kind") == "theorem"]
+    closure = challenges.ordered(current, challenges.closure(current, present)) if present else []
+    mine = view()
+    modules = {}
+    for n in closure:
+        modules[decls[n]["module"]] = modules.get(decls[n]["module"], 0) + 1
+    return {"theorems": present, "missing": [n for n in names if n not in present], "closure": closure,
+            "modules": modules, "agreed": [n for n in closure if agreed_now(mine.get(n), graph.fingerprint(n))],
+            "can_write": project() is not None}
+
+
+writing = threading.Lock()   # one challenge written at a time
+
+
+def write_challenge():
+    """Run `lean-vouch --challenge`, as from the terminal, and return what it said."""
+    if not writing.acquire(blocking=False):
+        return {"ok": False, "output": "A challenge is already being written."}
+    try:
+        package = Path(__file__).resolve().parent.parent
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(package), os.environ.get("PYTHONPATH")]))}
+        who = ["--id", args.id, *(["--name", args.name] if args.name else [])]
+        done = subprocess.run([sys.executable, "-c", "from lean_vouch.cli import main; main()", "--challenge", *who],
+                              cwd=project(), env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=900)
+        return {"ok": done.returncode == 0, "output": (done.stdout + done.stderr).strip()}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "output": "Writing the challenge took more than 15 minutes, so it was stopped."}
+    finally:
+        writing.release()
 
 
 def rebuild():
@@ -542,6 +597,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(graph.slice(query.get("module", []), query.get("name", []), marks))
         if path == "/review/links":
             return self.send_json(load_json(args.links, {}))
+        if path == "/review/challenge":
+            with lock:
+                try:
+                    return self.send_json(challenge_state())
+                except MarksError as error:
+                    return self.send_json({"error": str(error)}, 500)
         if path == "/review/log":
             log = args.build.with_name("build.log")
             text = log.read_bytes()[-500_000:] if log.exists() else b"No build has been logged yet."
@@ -578,6 +639,24 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/review/reach":   # a POST, since a folder can hold thousands of modules
             with lock:
                 return self.send_json(graph.reach(body.get("modules", []), body.get("names", []), body.get("shown", [])))
+        if self.path == "/review/challenge":
+            names = body.get("names", [])
+            with lock:
+                decls = graph.current().get("declarations", {})
+                wrong = [n for n in names if decls.get(n, {}).get("kind") != "theorem"]
+                if wrong:
+                    return self.send_json({"error": f"only the project's theorems can be chosen: {', '.join(wrong)}"}, 400)
+                challenges.choose(targets_file(), names)
+                try:
+                    return self.send_json(challenge_state())
+                except MarksError as error:
+                    return self.send_json({"error": str(error)}, 500)
+        if self.path == "/review/challenge/write":
+            if project() is None:
+                return self.send_json({"error": "This server can't write the challenge: run lean-vouch from the project."}, 409)
+            if building()[0]:
+                return self.send_json({"error": "A build is running. Write the challenge once it's done."}, 409)
+            return self.send_json(write_challenge())
         if self.path == "/review/rebuild":
             if project() is None:
                 return self.send_json({"error": "This server can't rebuild: run lean-vouch from the project."}, 409)

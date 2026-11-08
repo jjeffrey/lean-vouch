@@ -75,7 +75,7 @@ SCRIPT
 
 @unittest.skipUnless(DOCS.exists() and GRAPH.exists() and Path(CHROME).exists(), "needs example docs and Chrome")
 class PagesTest(unittest.TestCase):
-    def serve(self, marks, graph, docs=DOCS, people={}, build=None):
+    def serve(self, marks, graph, docs=DOCS, people={}, build=None, challenge=None):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         marks_folder, graph_file = Path(folder.name, "marks"), Path(folder.name, "graph.json")
@@ -85,6 +85,8 @@ class PagesTest(unittest.TestCase):
         graph_file.write_text(json.dumps(graph))
         if build:
             Path(folder.name, "build.json").write_text(json.dumps(build))
+        if challenge:
+            Path(folder.name, "challenge.json").write_text(json.dumps({"format": 1, "theorems": challenge}))
         for who, (name, entries) in people.items():
             text = entries if isinstance(entries, str) else json.dumps({"format": 3, "name": name, "marks": entries})
             (marks_folder / f"{who}.json").write_text(text)
@@ -124,7 +126,7 @@ class PagesTest(unittest.TestCase):
         return docs
 
     def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None, graph=None,
-                      allow_errors=False):
+                      challenge=None, allow_errors=False):
         """Run `script` in a real page, which can't be clicked from outside headless Chrome, and return
         what it adds to `results`. It sees `doc`, the page's document, and any uncaught error fails."""
         driver = DRIVER.replace("SCRIPT", script)
@@ -135,7 +137,7 @@ class PagesTest(unittest.TestCase):
         else:
             docs = self.docs_with(page, (DOCS / page).read_text().replace("</body>", driver + "</body>", 1))
             path = page
-        self.serve(marks, graph or self.graph, docs, people, build)
+        self.serve(marks, graph or self.graph, docs, people, build, challenge)
         found = re.search(r'<pre id="driven">(.*?)</pre>', self.page(path, 30000), re.S)
         self.assertIsNotNone(found, "the page's script didn't finish")
         done = json.loads(html.unescape(found[1]))
@@ -321,6 +323,32 @@ class PagesTest(unittest.TestCase):
             results.push(lit, doc.querySelectorAll("#diagram g.edge.hl-change").length > 0);
         """, frame="review/diagram#ReviewExample.gcd_divides", graph=graph)
         self.assertEqual(results, [["gcd", "gcd_divides"], True])
+
+    def test_a_theorem_is_chosen_for_the_challenge_from_its_docs_page(self):
+        results = self.click_through({}, """
+            const box = await ready(".review-challenge input[data-name='ReviewExample.divides_gcd']");
+            results.push(doc.querySelectorAll(".review-challenge input").length, box.checked);
+            box.click();
+            const link = await ready(".review-challenge-link:not([hidden])");
+            results.push(link.textContent, link.getAttribute("href"));
+        """)
+        self.assertEqual(results, [2, False, "challenge (1)", "/review/diagram?challenge"])
+        chosen = json.loads(urlopen(f"http://127.0.0.1:{self.port}/review/challenge").read())
+        self.assertEqual(chosen["theorems"], ["ReviewExample.divides_gcd"])
+
+    def test_the_diagram_shows_the_challenge_and_everything_beneath_it(self):
+        results = self.click_through({}, """
+            await ready("#sidebar .challenge-list li");
+            const sidebar = doc.getElementById("sidebar");
+            results.push(doc.getElementById("challenge-button").textContent,
+                         [...sidebar.querySelectorAll(".challenge-list li a")].map(a => a.textContent),
+                         sidebar.querySelector("h3 + ul + p").textContent);
+            [...sidebar.querySelectorAll("button")].find(b => b.textContent === "show in diagram").click();
+            await until(() => doc.querySelector("#diagram g.node.hl-selected"));
+            results.push(doc.querySelectorAll("#diagram g.node.hl-selected").length,
+                         doc.querySelectorAll("#diagram g.node.hl-down").length);
+        """, frame="review/diagram?challenge", challenge=["ReviewExample.divides_gcd"])
+        self.assertEqual(results, ["challenge (1)", ["divides_gcd"], "3 declarations in all; you agree with 0 of them as they are now.", 1, 2])
 
     def test_a_project_of_one_module_lists_it(self):
         names = {f"Solo.x{k}": {"kind": "def", "module": "Solo", "lines": [1, 1], "own": "1", "deps": [], "uses": []}

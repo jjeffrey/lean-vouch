@@ -21,6 +21,8 @@
   const short = name => name.replace(/^[^.]*\./, "");
 
   let marks = {}, graph = { declarations: {}, library: {}, renames: {} };
+  // The theorems chosen for the project's challenge, shared by everyone reviewing it.
+  let chosen = [];
   const info = name => name.startsWith("module ")
     ? { module: name.slice(7), own: graph.moduleDocs?.[name.slice(7)] } : graph.declarations[name] ?? graph.library[name];
 
@@ -187,6 +189,7 @@
     row.append(stale);
     const others = el("div", "review-others");
     box.append(row, others);
+    if (decl?.kind === "theorem") box.append(challengeToggle(name));
     const notes = el("ul", "review-notes");
     const input = el("textarea");
     input.placeholder = "Add a note…";
@@ -332,6 +335,34 @@
     document.body.append(panel);
   }
 
+  // A theorem in or out of the challenge: what `lake comparator` holds the project to.
+  function challengeToggle(name) {
+    const label = el("label", "review-challenge");
+    const box = el("input");
+    box.type = "checkbox";
+    box.dataset.name = name;
+    box.checked = chosen.includes(name);
+    box.onchange = async () => {
+      const next = box.checked ? [...chosen, name] : chosen.filter(n => n !== name);
+      try { showChallenge((await post("/review/challenge", { names: next })).theorems); }
+      catch { box.checked = !box.checked; }
+    };
+    label.title = "The challenge is the project's: its theorems' statements, and everything they rest on, " +
+      "for lake comparator to check the project against. Everyone reviewing sees the same one.";
+    label.append(box, " in the challenge");
+    return label;
+  }
+  function showChallenge(theorems) {
+    chosen = theorems;
+    for (const box of document.querySelectorAll(".review-challenge input")) box.checked = chosen.includes(box.dataset.name);
+    const link = document.querySelector("#review-summary .review-challenge-link");
+    if (link) {
+      link.textContent = `challenge (${chosen.length})`;
+      link.hidden = !chosen.length;
+    }
+  }
+  const loadChallenge = () => fetch("/review/challenge").then(checked).then(s => showChallenge(s.theorems)).catch(() => {});
+
   function summarize() {
     const decls = [...document.querySelectorAll("[data-review-status]")]
       .filter(d => !d.classList.contains("review-generated"));
@@ -359,14 +390,20 @@
     quizLink.href = "/review/quiz";
     quizLink.title = "Describe unmarked declarations from their statement alone";
     bar.append(quizLink);
+    const challengeLink = el("a", "review-challenge-link");
+    challengeLink.href = "/review/diagram?challenge";
+    challengeLink.title = "The project's challenge, in the diagram";
+    challengeLink.hidden = true;
+    bar.append(challengeLink);
     document.body.append(bar);
     for (const decl of document.querySelectorAll("main .decl")) decl.append(el("div", "review-loading", "loading review…"));
-    [marks, graph] = await Promise.all([
+    [marks, graph, { theorems: chosen }] = await Promise.all([
       fetch("/review/data").then(checked),
       // A large project sends what this page needs, which for a page of no module is little;
       // a small one sends everything.
       fetch(typeof MODULE_NAME === "undefined" ? "/review/graph?marked"
         : `/review/graph?marked&module=${encodeURIComponent(MODULE_NAME)}`).then(r => r.json()),
+      fetch("/review/challenge").then(checked).catch(() => ({ theorems: [] })),
     ]);
     graph.declarations ??= {};
     graph.library ??= {};
@@ -451,7 +488,9 @@
       else if (graph.library[decl.id]) controls(decl.id, decl, true);
     }
     summarize();
+    showChallenge(chosen);
     reviewWatch(async () => {
+      loadChallenge();
       const fresh = await fetch("/review/data").then(checked);
       const missing = graph.complete ? [] : reviewMissing(Object.keys(fresh), fresh, d => info(d));
       if (missing.length) {

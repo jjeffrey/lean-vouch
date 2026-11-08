@@ -21,6 +21,7 @@
 .review-loading { opacity: 0.6; font-size: 0.9em; font-style: italic; padding: 0.2em 0.6em; }
 .review-prompt { color: #b08800; font-size: 0.9em; margin: 0.2em 0; }
 .review-others { font-size: 0.9em; margin: 0.3em 0; }
+.review-challenge { display: inline-block; font-size: 0.9em; margin: 0.1em 0 0.3em; cursor: pointer; opacity: 0.85; }
 .review-me { opacity: 0.7; font-size: 0.9em; margin-right: 0.8em; }
 .review-others span { margin-right: 0.8em; }
 .review-others .old { opacity: 0.6; }

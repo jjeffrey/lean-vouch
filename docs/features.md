@@ -26,6 +26,9 @@ Across the project:
   and selecting a flagged declaration lights the way down to the change.
 - **Library definitions can be marked too,** on their own doc pages, meaning "I understand this",
   so you record what `%` on `Nat` means to you once, for every use.
+- **A challenge for comparator:** choose the theorems that matter, and lean-vouch writes their
+  statements and everything beneath them as a challenge for `lake comparator`, checked to say what
+  the project says. See [challenges](challenge.md).
 - **Refactors:** renames recorded as deprecated aliases (`@[deprecated] alias Old := New`) move
   marks automatically. Marks whose declaration isn't in the last build are listed as orphaned notes, to
   move or delete; none disappear silently.

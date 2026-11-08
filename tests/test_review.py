@@ -334,16 +334,52 @@ class ReviewTest(unittest.TestCase):
         self.run_review("v4.35.0")
         self.assertTrue(manifest.exists())
 
-    def test_git_keeps_only_the_marks(self):
+    def test_git_keeps_only_the_marks_and_the_challenges_theorems(self):
         self.run_review("v4.35.0")
         home = self.root / ".lean-vouch"
-        for name in ("marks/ada.json", "quiz/ada.json", "graph.json", "docbuild/.lake/build/doc/index.html", "links.local.json"):
+        for name in ("marks/ada.json", "quiz/ada.json", "graph.json", "docbuild/.lake/build/doc/index.html", "links.local.json",
+                     "challenge.json", "challenge/Challenge.lean"):
             (home / name).parent.mkdir(parents=True, exist_ok=True)
             (home / name).write_text("{}")
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
         listed = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", ".lean-vouch"], cwd=self.root,
                                 capture_output=True, text=True, check=True).stdout.split()
-        self.assertEqual(sorted(listed), [".lean-vouch/.gitignore", ".lean-vouch/marks/ada.json"])
+        self.assertEqual(sorted(listed), [".lean-vouch/.gitignore", ".lean-vouch/challenge.json", ".lean-vouch/marks/ada.json"])
+
+    def challenge_run(self, *names):
+        """`lean-vouch --challenge` with these names, on a project whose graph has a theorem and a definition."""
+        (self.root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+        home = self.root / ".lean-vouch"
+        home.mkdir(exist_ok=True)
+        decl = lambda kind, deps=(): {"kind": kind, "module": "M", "lines": [1, 1], "own": "1", "deps": list(deps), "uses": []}
+        (home / "graph.json").write_text(json.dumps({"modules": {"M": []}, "library": {}, "declarations": {
+            "M.d": decl("def"), "M.t": decl("theorem", ["M.d"])}}))
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
+        return subprocess.run([sys.executable, str(REVIEW), "--challenge", *names], cwd=self.root, env=env,
+                              capture_output=True, text=True)
+
+    def test_naming_theorems_chooses_them_for_the_project(self):
+        result = self.challenge_run("M.t")
+        self.assertIn("chose 1 theorem", result.stdout)
+        self.assertEqual(json.loads((self.root / ".lean-vouch" / "challenge.json").read_text())["theorems"], ["M.t"])
+
+    def test_only_theorems_are_chosen(self):
+        result = self.challenge_run("M.d")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("aren't: M.d", result.stderr)
+        self.assertFalse((self.root / ".lean-vouch" / "challenge.json").exists())
+
+    def test_with_nothing_chosen_it_says_how_to_choose(self):
+        result = self.challenge_run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no theorems are chosen", result.stderr)
+
+    def test_with_none_named_it_uses_the_chosen_ones(self):
+        (self.root / ".lean-vouch").mkdir()
+        (self.root / ".lean-vouch" / "challenge.json").write_text('{"format": 1, "theorems": ["M.t"]}')
+        result = self.challenge_run()
+        self.assertNotIn("no theorems are chosen", result.stderr)
+        self.assertNotIn("chose", result.stdout, "nothing new was chosen")
 
     def test_a_failed_build_says_so_for_open_pages(self):
         self.run_review("v4.35.0")

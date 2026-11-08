@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from lean_vouch import challenge
-from lean_vouch.server import ID, VERSION, Graph
+from lean_vouch.server import ID, VERSION, Graph, agreed_now
 
 HERE = Path(__file__).resolve().parent
 MINIMUM = (4, 30)  # the oldest Lean this has been run on, end to end; see docs/internals.md
@@ -48,12 +48,14 @@ name = "{package}"
 path = "../../"
 """
 
-# Everything here can be rebuilt but the marks, and quiz answers stay with the person.
+# Everything here can be rebuilt but the marks and the theorems chosen for the challenge, and quiz
+# answers stay with the person.
 GITIGNORE = """\
 *
 !.gitignore
 !marks/
 !marks/**
+!challenge.json
 """
 
 
@@ -455,16 +457,35 @@ def unagreed(graph_file, names, who):
     except (OSError, ValueError, AttributeError):
         marks = {}
     graph = Graph(graph_file)
-    current = lambda mark, now: {k: mark.get(k) for k in ("own", "deps")} == {k: now.get(k) for k in ("own", "deps")}
-    return [name for name in names if not (marks.get(name, {}).get("status") == "agree" and
-                                           current(marks[name].get("fingerprint") or {}, graph.fingerprint(name) or {}))]
+    return [name for name in names if not agreed_now(marks.get(name), graph.fingerprint(name))]
+
+
+TARGETS = HOME / "challenge.json"
 
 
 def write_challenge(targets, who):
-    """Write a challenge for `lake comparator` from the last build, and check it says what the project does."""
+    """Write the project's challenge for `lake comparator` from the last build, and check it says what
+    the project does. Theorems named here become the project's chosen ones; otherwise the chosen ones
+    are used."""
     graph_file, out = HOME / "graph.json", HOME / "challenge"
     if not graph_file.exists():
         fail("there's no graph yet: run lean-vouch once first.")
+    if targets:
+        try:
+            challenge.closure(json.loads(graph_file.read_text(encoding="utf-8")), targets)
+        except challenge.ChallengeError as error:
+            fail(str(error))
+        targets = challenge.choose(TARGETS, targets)
+        print(f"lean-vouch: chose {len(targets)} theorem{'' if len(targets) == 1 else 's'} for the challenge, in {TARGETS}.",
+              flush=True)
+        ignore = HOME / ".gitignore"
+        if ignore.exists() and "!challenge.json" not in ignore.read_text(encoding="utf-8"):
+            print(f"lean-vouch: to share them, add the line `!challenge.json` to {ignore}.", flush=True)
+    else:
+        targets = challenge.chosen(TARGETS)
+        if not targets:
+            fail("no theorems are chosen for the challenge yet. Choose them in the pages, or name them: "
+                 "lean-vouch --challenge My.theorem Other.theorem")
     built = graph_file.stat().st_mtime
     edited = [path for folder in source_folders() for path in folder.rglob("*.lean")
               if ".lake" not in path.parts and ".lean-vouch" not in path.parts and path.stat().st_mtime > built]
@@ -476,8 +497,10 @@ def write_challenge(targets, who):
         names, warnings = challenge.write(graph, source_folders(), targets, out)
         for warning in warnings:
             print(f"lean-vouch: note: {warning}.", flush=True)
-        print(f"lean-vouch: wrote {out / 'Challenge.lean'}: {len(targets)} theorems, and {len(names) - len(targets)} "
-              "declarations their statements rest on. Checking that it says what the project says...", flush=True)
+        plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"
+        print(f"lean-vouch: wrote {out / 'Challenge.lean'}: {plural(len(targets), 'theorem')}, and "
+              f"{plural(len(names) - len(targets), 'declaration')} their statements rest on. Checking that it says what "
+              "the project says...", flush=True)
         differ = challenge.check(graph, out, graph_program())
     except challenge.ChallengeError as error:
         fail(str(error))
@@ -511,8 +534,9 @@ def main():
     parser.add_argument("--id", help="who you are, as the name of your marks file (default: from your git name and email)")
     parser.add_argument("--rebuild", action="store_true", help="rebuild the docs and graph, without starting a server")
     parser.add_argument("--clean", action="store_true", help="delete docs pages left by renamed or removed modules")
-    parser.add_argument("--challenge", action="append", metavar="THEOREM",
-                        help="write a challenge for lake comparator with this theorem, from the last build; can be repeated")
+    parser.add_argument("--challenge", nargs="*", metavar="THEOREM",
+                        help="write the project's challenge for lake comparator, from the last build; theorems named "
+                             "here become the chosen ones")
     args = parser.parse_args()
     package = package_name()
     tag, version = toolchain()
@@ -520,7 +544,7 @@ def main():
     if not shutil.which("lake"):
         fail("Lake isn't on your PATH. Install Lean through elan: https://github.com/leanprover/elan")
     who, name = identity(args.id, args.name)
-    if args.challenge:
+    if args.challenge is not None:
         return write_challenge(args.challenge, who)
     others = sorted(path.stem for path in (HOME / "marks").glob("*.json") if path.stem != who)
     if others and not (HOME / "marks" / f"{who}.json").exists():

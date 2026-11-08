@@ -191,6 +191,72 @@ class ServerTest(unittest.TestCase):
         server.args.build.with_name("build.log").write_text("error: it broke\n")
         self.assertEqual(self.get("/review/log"), b"error: it broke\n")
 
+    def challenge_graph(self):
+        decl = lambda kind, deps=(): {"kind": kind, "module": "M", "lines": [1, 1], "own": kind[0], "deps": list(deps), "uses": []}
+        self.graph.write_text(json.dumps({"declarations": {
+            "M.d": decl("def"), "M.t": decl("theorem", ["M.d"]), "M.other": decl("theorem")}, "library": {}}))
+
+    def test_theorems_are_chosen_for_the_challenge(self):
+        self.challenge_graph()
+        state = self.post("/review/challenge", {"names": ["M.t"]})[1]
+        self.assertEqual((state["theorems"], state["closure"], state["modules"]), (["M.t"], ["M.d", "M.t"], {"M": 2}))
+        stored = json.loads((self.root / "challenge.json").read_text())
+        self.assertEqual(stored, {"format": 1, "theorems": ["M.t"]})
+        self.assertEqual(json.loads(self.get("/review/challenge"))["theorems"], ["M.t"])
+
+    def test_only_theorems_can_be_chosen(self):
+        self.challenge_graph()
+        self.assertEqual(self.post("/review/challenge", {"names": ["M.d"]})[0], 400)
+        self.assertEqual(self.post("/review/challenge", {"names": ["M.nope"]})[0], 400)
+        self.assertFalse((self.root / "challenge.json").exists())
+
+    def test_the_challenge_says_what_youve_agreed_with_as_it_is_now(self):
+        self.challenge_graph()
+        self.post("/review/challenge", {"names": ["M.t"]})
+        self.post("/review/data", {"name": "M.d", "status": "agree"})
+        self.post("/review/data", {"name": "M.t", "status": "question"})
+        self.assertEqual(json.loads(self.get("/review/challenge"))["agreed"], ["M.d"])
+        decls = json.loads(self.graph.read_text())
+        decls["declarations"]["M.d"]["own"] = "changed"
+        self.graph.write_text(json.dumps(decls))
+        self.assertEqual(json.loads(self.get("/review/challenge"))["agreed"], [], "a change below undoes the agreement")
+
+    def test_a_removed_theorem_is_listed_as_missing(self):
+        self.challenge_graph()
+        self.post("/review/challenge", {"names": ["M.t", "M.other"]})
+        decls = json.loads(self.graph.read_text())
+        del decls["declarations"]["M.other"]
+        self.graph.write_text(json.dumps(decls))
+        state = json.loads(self.get("/review/challenge"))
+        self.assertEqual((state["theorems"], state["missing"]), (["M.t"], ["M.other"]))
+
+    def test_choosing_changes_the_status_for_open_pages(self):
+        self.challenge_graph()
+        before = self.status()["marks"]
+        self.post("/review/challenge", {"names": ["M.t"]})
+        self.assertNotEqual(before, self.status()["marks"])
+
+    def test_a_server_not_started_by_lean_vouch_cant_write_the_challenge(self):
+        self.assertFalse(json.loads(self.get("/review/challenge"))["can_write"])
+        self.assertEqual(self.post("/review/challenge/write", {})[0], 409)
+
+    def test_writing_the_challenge_runs_the_command(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        ran = []
+
+        def run(command, **options):
+            ran.append((command, options["cwd"]))
+            return subprocess.CompletedProcess(command, 0, stdout="lean-vouch: it matches the project.\n", stderr="")
+
+        with unittest.mock.patch.object(server.subprocess, "run", run):
+            self.assertEqual(self.post("/review/challenge/write", {}),
+                             (200, {"ok": True, "output": "lean-vouch: it matches the project."}))
+        command, cwd = ran[0]
+        self.assertEqual(command[-5:], ["--challenge", "--id", "ada", "--name", "Ada"])
+        self.assertEqual(cwd, self.root.resolve())
+
     def test_status_names_the_marks_folder_and_who_this_is(self):
         self.assertEqual(self.status()["marks_folder"], str(self.folder_marks.resolve()))
         self.assertEqual(self.status()["me"], {"id": "ada", "name": "Ada"})

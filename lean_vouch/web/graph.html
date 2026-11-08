@@ -102,6 +102,10 @@
   g.cluster.hl-up > polygon, g.cluster.hl-up > path { stroke: #8e44ad !important; stroke-width: 2px !important; }
   g.cluster.hl-both > polygon, g.cluster.hl-both > path { stroke: #0a8f7a !important; stroke-width: 2px !important; }
   g.cluster.hl-selected > polygon, g.cluster.hl-selected > path { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
+  #sidebar .challenge-toggle { display: block; margin: 0.5em 0; cursor: pointer; }
+  #sidebar .challenge-actions { display: flex; gap: 0.6em; margin: 0.6em 0; }
+  #sidebar .challenge-list li button { margin-left: 0.5em; font-size: 0.85em; }
+  #sidebar pre.challenge-output { white-space: pre-wrap; }
   #sidebar .reach-row { display: flex; justify-content: space-between; gap: 1em; }
   #sidebar .reach-row a { cursor: pointer; color: #1a5fb4; }
   #sidebar .reach-row span { color: #666; }
@@ -135,6 +139,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   <button type="button" id="open-all" hidden>open all</button>
   <button type="button" id="clear-pins" hidden>show everything</button>
   <button type="button" id="what-changed" hidden></button>
+  <button type="button" id="challenge-button" hidden title="The project's challenge: the theorems chosen, and everything they rest on"></button>
   <label><input type="checkbox" id="clusters" checked> group by module</label>
   <label><input type="checkbox" id="across"> arrows across folders</label>
   <label><input type="checkbox" id="library"> show library definitions</label>
@@ -566,15 +571,16 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   };
   async function focusOn(what) { focus = what; selected = null; await showFocus(); renderTree(); }
   async function showFocus() {
-    const { group, name } = focus;
-    // POST, since a folder can hold thousands of modules.
-    const reach = await post("/review/reach", { modules: group?.modules ?? [], names: name ? [name] : [],
-      shown: [...opened].filter(n => n.module).map(n => n.module) });
-    if (focus?.group !== group || focus?.name !== name) return;   // superseded by another click
+    const { group, name, challenge: wanted } = focus;
+    // POST, since a folder can hold thousands of modules. The challenge's reach is known already.
+    const reach = wanted ? { below: { names: challenge.closure, modules: challenge.modules }, above: { names: [], modules: {} } }
+      : await post("/review/reach", { modules: group?.modules ?? [], names: name ? [name] : [],
+        shown: [...opened].filter(n => n.module).map(n => n.module) });
+    if (focus?.group !== group || focus?.name !== name || focus?.challenge !== wanted) return;   // superseded by another click
     focus.reach = reach;
     const below = new Set(reach.below.names), above = new Set(reach.above.names);
     const members = new Set(group?.modules);
-    const inner = n => group ? members.has(decls[n]?.module) : n === name;
+    const inner = n => wanted ? challenge.theorems.includes(n) : group ? members.has(decls[n]?.module) : n === name;
     const paint = (el, down, up, self) => {
       el.classList.remove("hl-dim", "hl-selected", "hl-down", "hl-up", "hl-both");
       el.classList.add(self ? "hl-selected" : down && up ? "hl-both" : down ? "hl-down" : up ? "hl-up" : "hl-dim");
@@ -600,7 +606,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       if (node === group) el.classList.add("hl-selected");
       else if (down || up) el.classList.add(down && up ? "hl-both" : down ? "hl-down" : "hl-up");
     }
-    if (group) renderGroup(group, reach);
+    if (wanted) await renderChallenge();
+    else if (group) renderGroup(group, reach);
     else { await renderSidebar(name); sidebar.append(reachList(reach)); }
   }
   // How much lies in each top-level folder, nearest the top of the tree first.
@@ -638,6 +645,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const quiz = el("a", null, "Quiz this");
     quiz.href = `/review/quiz?scope=${encodeURIComponent(scope)}`;
     keepDraft();
+    delete sidebar.dataset.panel;
     sidebar.replaceChildren(el("h2", null, group.name),
       el("p", "muted", `${group.module ? "module" : "folder"}, ${group.count} declarations, ${marked} marked`),
       quiz, reachList(reach));
@@ -810,8 +818,85 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       list.append(item);
     }
     keepDraft();
+    delete sidebar.dataset.panel;
     sidebar.replaceChildren(el("h2", null, "What changed"),
       el("p", "muted", "Lowest first, since what a change means depends on what's beneath it."), list);
+  };
+
+  // The project's challenge: the theorems chosen for `lake comparator`, and everything their
+  // statements rest on. Shared by everyone reviewing, through .lean-vouch/challenge.json.
+  const challengeButton = document.getElementById("challenge-button");
+  let challenge = { theorems: [], missing: [], closure: [], modules: {}, agreed: [], can_write: false };
+  const showChallengeButton = () => {
+    challengeButton.textContent = `challenge (${challenge.theorems.length})`;
+    challengeButton.hidden = !challenge.theorems.length && !challenge.missing.length;
+  };
+  async function loadChallenge() {
+    challenge = await fetch("/review/challenge").then(reviewChecked);
+    showChallengeButton();
+  }
+  // Theorems no longer in the project drop out the next time the choice changes.
+  async function chooseTheorem(name, on) {
+    const names = on ? [...challenge.theorems, name] : challenge.theorems.filter(n => n !== name);
+    challenge = await post("/review/challenge", { names });
+    showChallengeButton();
+    if (sidebar.dataset.panel === "challenge") renderChallenge();
+  }
+  async function renderChallenge(written) {
+    if (!written) await loadChallenge();
+    keepDraft();
+    const parts = [el("h2", null, "Challenge"), el("p", "muted",
+      "The project's theorems, as statements, with everything they rest on: what lake comparator checks the project " +
+      "against. Everyone reviewing shares it, in .lean-vouch/challenge.json.")];
+    if (!challenge.theorems.length) {
+      parts.push(el("p", "muted", "No theorems are chosen yet. Tick \"in the challenge\" in a theorem's sidebar, or under it in the docs."));
+    } else {
+      const list = el("ul", "challenge-list");
+      for (const n of challenge.theorems) {
+        const item = el("li"), remove = el("button", null, "remove");
+        remove.onclick = () => chooseTheorem(n, false);
+        item.append(ref(n), remove);
+        list.append(item);
+      }
+      const waiting = challenge.closure.filter(n => !challenge.agreed.includes(n));
+      parts.push(el("h3", null, `Theorems (${challenge.theorems.length})`), list,
+        el("p", null, `${challenge.closure.length} declarations in all; you agree with ${challenge.agreed.length} of them as they are now.`));
+      if (waiting.length) {
+        const more = el("details");
+        more.append(el("summary", null, `Not yet agreed (${waiting.length})`), refList([...waiting]));
+        parts.push(more);
+      }
+      const actions = el("div", "challenge-actions"), show = el("button", null, "show in diagram");
+      show.title = "Color everything in the challenge";
+      show.onclick = () => focusOn({ challenge: true });
+      actions.append(show);
+      if (challenge.can_write) {
+        const write = el("button", null, "Write challenge");
+        write.title = "Write .lean-vouch/challenge/Challenge.lean and comparator.json, and check they say what the project says";
+        write.onclick = async () => {
+          write.disabled = true;
+          write.textContent = "Writing…";
+          try { await renderChallenge(await post("/review/challenge/write", {})); }
+          finally { write.disabled = false; write.textContent = "Write challenge"; }
+        };
+        actions.append(write);
+      }
+      parts.push(actions);
+      if (!challenge.can_write) parts.push(el("p", "muted", "To write it, run lean-vouch --challenge in the project."));
+    }
+    if (challenge.missing.length)
+      parts.push(el("p", "stale", `No longer in the project: ${challenge.missing.join(", ")}. They drop out the next time the challenge changes.`));
+    if (written) {
+      parts.push(el("h3", null, written.ok ? "Written" : "Not written"), el("pre", "challenge-output", written.output));
+    }
+    sidebar.replaceChildren(...parts);
+    sidebar.dataset.panel = "challenge";
+  }
+  challengeButton.onclick = () => {
+    if (focus) clearFocus();
+    selected = null;
+    highlight(null);
+    renderChallenge();
   };
 
   // Update one node's colors after its mark changes, without redrawing (which would reset zoom).
@@ -881,6 +966,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     keepDraft();
     draftFor = name;
     sidebar.replaceChildren();
+    delete sidebar.dataset.panel;
     if (!name) { sidebar.append(el("p", "muted", "Click a node to see its code, notes and dependencies.")); return; }
     const i = info(name), isLibrary = !decls[name];
     sidebar.append(el("h2", null, name), el("p", "muted", `${i?.kind ?? ""} in ${i?.module ?? "?"}`));
@@ -932,6 +1018,18 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       markRow.append(" ", accept);
     }
     sidebar.append(el("h3", null, "Review"), markRow);
+    if (decls[name]?.kind === "theorem") {
+      const label = el("label", "challenge-toggle"), box = el("input");
+      box.type = "checkbox";
+      box.checked = challenge.theorems.includes(name);
+      box.onchange = async () => {
+        try { await chooseTheorem(name, box.checked); } catch { box.checked = !box.checked; }
+      };
+      label.title = "The challenge is the project's: its theorems' statements, and everything they rest on, " +
+        "for lake comparator to check the project against. Everyone reviewing sees the same one.";
+      label.append(box, " in the challenge");
+      sidebar.append(label);
+    }
     const others = marks[name]?.others ?? [];
     if (others.length) {
       const line = el("p", "others");
@@ -1207,6 +1305,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     }
     document.getElementById("viewer-label").hidden = !people.size;
     recolorAll();
+    await loadChallenge().catch(() => {});
+    if (sidebar.dataset.panel === "challenge" && !sidebar.querySelector("pre.challenge-output")) renderChallenge();
     showAskedKey();
     // Redraw the sidebar's thread, unless that would lose a note being written.
     const input = sidebar.querySelector("textarea");
@@ -1234,8 +1334,11 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const openOnly = (new URLSearchParams(location.search).get("open") ?? "").split(",").filter(m => moduleNodes.has(m));
   if (openOnly.length) { expanded = new Set([treeRoot.path]); openOnly.forEach(openTo); }
   if (fromHash && decls[fromHash]) openTo(decls[fromHash].module);
+  await loadChallenge().catch(() => {});
   await draw();
   if (fromHash && info(fromHash)) select(fromHash);
+  // diagram?challenge opens the challenge, as the docs pages link to it.
+  else if (new URLSearchParams(location.search).has("challenge")) renderChallenge();
 })();
 </script>
 </body>

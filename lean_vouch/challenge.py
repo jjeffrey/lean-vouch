@@ -22,8 +22,33 @@ IMPORT = re.compile(r"^(?:public\s+)?(?:meta\s+)?import\s+(\S+)", re.M)
 STANDARD_AXIOMS = ["propext", "Quot.sound", "Classical.choice"]
 
 
+# The chosen theorems are the project's, not one person's, so they're kept in one file that git
+# tracks: {"format": 1, "theorems": [name]}.
+TARGETS_FORMAT = 1
+
+
 class ChallengeError(Exception):
     pass
+
+
+def chosen(path):
+    """The theorems chosen for the challenge, in the order they were chosen."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    names = data.get("theorems") if isinstance(data, dict) and data.get("format") == TARGETS_FORMAT else None
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+
+
+def choose(path, names):
+    """Save the chosen theorems, swapping the file in whole."""
+    unique = list(dict.fromkeys(names))
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(json.dumps({"format": TARGETS_FORMAT, "theorems": unique}, indent=2, ensure_ascii=False) + "\n",
+                         encoding="utf-8")
+    os.replace(temporary, path)
+    return unique
 
 
 def closure(graph, targets):
@@ -48,7 +73,7 @@ def closure(graph, targets):
 
 def ordered(graph, names):
     """Dependencies first, and otherwise in the order of the project's modules and lines."""
-    decls, modules = graph["declarations"], list(graph["modules"])
+    decls, modules = graph["declarations"], list(graph.get("modules", {}))
     place = lambda name: (modules.index(decls[name]["module"]) if decls[name]["module"] in modules else len(modules),
                           (decls[name].get("lines") or [0])[0], name)
     done, out = set(), []
