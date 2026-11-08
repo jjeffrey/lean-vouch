@@ -1,6 +1,7 @@
 # Features
 
-Under every declaration:
+For every declaration, in the diagram's sidebar, and under it on its doc page if you build them
+(`--docs`):
 
 - **A mark:** ✓ agree, ? question, ✗ reject how it's defined. Click it again to clear it.
 - **A note thread,** for questions and answers, from everyone reviewing.
@@ -14,18 +15,22 @@ Under every declaration:
 - **Accept change** keeps a flagged mark for the current version. It covers that one mark: accepting a
   change below doesn't accept what's built on it.
 - **The library definitions it uses** ("Uses from libraries: `Nat`, `Nat.mod`").
-- **Its equations, open.** doc-gen4 folds a definition's equations; for review they are what you
-  check, so project declarations show them open, on the pages and in the diagram's sidebar.
-  "open equations" at the bottom of the page switches this off (remembered per browser). Library
-  pages keep doc-gen4's folding.
+- **What it says.** The sidebar shows its docstring, its statement as Lean understood it, with every
+  argument, including those a `variable` adds that its source text doesn't show, and its code as
+  written, colored, with names linked to their own entries and a theorem's proof folded. With doc
+  pages, the sidebar shows doc-gen4's rendering instead.
+- **Its equations, open,** on doc pages. doc-gen4 folds a definition's equations; for review they are
+  what you check, so project declarations show them open. "open equations" at the bottom of the page
+  switches this off (remembered per browser). Library pages keep doc-gen4's folding.
 
 Across the project:
 
 - **What changed,** on the pages and in the diagram: every change, lowest first, with how many marks
   rely on it. In the diagram a solid orange border is what changed and a dashed one what relies on it,
   and selecting a flagged declaration lights the way down to the change.
-- **Library definitions can be marked too,** on their own doc pages, meaning "I understand this",
-  so you record what `%` on `Nat` means to you once, for every use.
+- **Library definitions can be marked too,** meaning "I understand this", so you record what `%` on
+  `Nat` means to you once, for every use: in the diagram, with "show library definitions" on, or on
+  their own doc pages.
 - **A challenge for comparator:** choose the theorems that matter, and lean-vouch writes their
   statements and everything beneath them as a challenge for `lake comparator`, checked to say what
   the project says. See [challenges](challenge.md).
@@ -34,9 +39,9 @@ Across the project:
   move or delete; none disappear silently.
 - **A dependency diagram,** on its own page: a Hasse diagram of the project's declarations (and
   optionally the library definitions they use), colored by your marks. Clicking a node highlights
-  what it depends on and what depends on it, and opens a sidebar with its mark and notes (editable
-  there), its code (a theorem's proof collapsed), and its direct dependencies and dependents.
-  "hide folders" and "hide details" hide the panels on either side, for a larger diagram.
+  what it depends on and what depends on it, and opens a sidebar with what it says, its mark and
+  notes, and its direct dependencies and dependents. "hide folders" and "hide details" hide the
+  panels on either side, for a larger diagram.
 - **What a `sorry` reaches,** on by default if the project has one. A declaration that contains
   `sorry` gets a red border, and whatever relies on it a dashed one, even if only through a proof,
   with dashed red arrows leading to it step by step. Folders count both, and the pages name the `sorry`s each declaration depends on. A mark is about the
@@ -63,10 +68,24 @@ With others, and with assistants ([how to share marks](setup.md#working-with-oth
 - **Live updates:** marks and notes appear on open pages by themselves. Pages say when the code has
   changed since the last build, with a button to [rebuild](setup.md#rebuilding), show how far a
   rebuild has got, and offer to reload when it's done.
+- **Doc pages,** with `--docs`: every module's doc-gen4 page, with the review controls under each
+  declaration, to read a module from top to bottom.
 
 ## Screenshots
 
 From the [example](development.md#example), with its example marks.
+
+**The dependency diagram:** `gcd` selected, with what depends on it highlighted, modules boxed,
+and the sidebar showing its docstring, statement, review and code.
+
+![the dependency diagram with gcd selected](images/diagram.png)
+
+In the diagram, solid red borders mark a `sorry`, dashed ones what relies on it, and dashed red arrows
+how. Shift-click one to color all it reaches.
+
+![the diagram with a sorry](images/sorry-diagram.png)
+
+The rest are doc pages, from a run with `--docs`.
 
 **A declaration under review:** its mark, the library definitions it uses, and a note thread.
 
@@ -81,20 +100,10 @@ mark flagged because something below it changed.
 
 ![Nat.mod marked as understood](images/library-mark.png)
 
-**The dependency diagram:** `gcd` selected, with what depends on it highlighted, modules boxed,
-and the sidebar showing its documentation, review and code.
-
-![the dependency diagram with gcd selected](images/diagram.png)
-
 **A `sorry` and what relies on it:** `gcd_mul_lcm` isn't proved, so `gcd_divides_mul` holds only if it
 is, which a reviewer has asked about. Its statement never mentions `gcd_mul_lcm`; the proof does.
 
 ![a sorry and a theorem that relies on it](images/sorry.png)
-
-In the diagram, solid red borders mark a `sorry`, dashed ones what relies on it, and dashed red arrows
-how. Shift-click one to color all it reaches.
-
-![the diagram with a sorry](images/sorry-diagram.png)
 
 **Orphaned notes,** left behind when a declaration is removed, or when a run leaves out its library.
 

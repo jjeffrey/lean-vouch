@@ -1,7 +1,8 @@
 # Quiz mode
 
-A mark records what you think you understand; quiz mode checks it. Open "quiz" from the bar at the
-bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaration).
+A mark records what you think you understand; quiz mode checks it. Open "quiz" at the top of the
+diagram, or from the bar at the bottom of a doc page (or `/review/quiz?name=Full.Name` for a
+particular declaration).
 
 ![quiz mode, with a statement to describe and its name hidden](images/quiz.png)
 
@@ -9,10 +10,11 @@ bottom of any page (or `/review/quiz?name=Full.Name` for a particular declaratio
   "Quiz this" on a box in the diagram. By default it picks declarations at the edge of what you have
   marked: unmarked, with at least half of what they use marked, after any changed since you marked
   them. Or choose random order, from everything unmarked or changed. Either way ties are shuffled.
-- **You see the statement only:** its header as doc-gen4 renders it and its code as written (a
-  theorem's statement without the proof), with the name hidden, even in recursive calls, and comments,
-  including the docstring, removed. You write what it says and the name you would give it; the
-  namespace is filled in, and an instance's name isn't asked for.
+- **You see the statement only:** as Lean understood it, with every argument, and its code as
+  written (a theorem's statement without the proof), with the name hidden, even in recursive calls,
+  and comments, including the docstring, removed. With doc pages, the statement is doc-gen4's. You
+  write what it says and the name you would give it; the namespace is filled in, and an instance's
+  name isn't asked for.
 - **Then its real name and docstring are shown next to yours.** Your answer is saved first, in your
   own quiz file, which git ignores by default, and shows under the declaration for you alone. You say
   whether your reading matched, which is recorded apart from your mark: reading a statement right isn't agreeing with it. A mismatch is

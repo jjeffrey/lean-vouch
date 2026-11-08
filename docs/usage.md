@@ -21,8 +21,8 @@ unfixed, with marks that show it partway through review, so you can follow along
 
 ## 1. Noticing it
 
-You might notice it reading `Prime` on its docs page, where lean-vouch adds a review box under
-every declaration, or in the diagram's sidebar. [Quiz mode](quiz.md) helps you notice: it shows
+You might notice it reading `Prime` in the diagram's sidebar, which shows its docstring next to its
+statement, or on its docs page, if you build them. [Quiz mode](quiz.md) helps you notice: it shows
 the statement with its name hidden, you write what you think it says, and then you compare. Writing
 "n has no divisors but 1 and n" and then asking "so is 1 prime?" is often where this turns up.
 
@@ -38,7 +38,7 @@ shows them a `!` until they mark or reply.
 
 In the example, Ada rejected `Prime`, and an assistant answered with a fix:
 
-![Prime rejected, with an assistant's suggested fix](images/prime.png)
+![Prime rejected in the diagram's sidebar, with an assistant's suggested fix](images/prime.png)
 
 The marks and notes go in each person's file in `.lean-vouch/marks/`, so an assistant asked to fix
 things can read why you rejected something.
@@ -49,10 +49,8 @@ Open the diagram and Shift-click `Prime`. Everything that depends on it and ever
 on are colored, with how much of each is in each folder. Each theorem in that upper set is about
 this definition of `Prime`, so each may say something other than what was meant, though all of them
 still compile. In the example, Ada agreed with `Prime.coprime` before she noticed: it reads right,
-but it's about this definition. Clicking `Prime` instead shows only what it directly depends on
-and what directly uses it:
-
-![the diagram with Prime selected](images/prime-diagram.png)
+but it's about this definition. Clicking `Prime` instead, as in the picture above, shows only what it
+directly depends on and what directly uses it.
 
 ## 4. Fixing it
 
@@ -79,7 +77,7 @@ After the rebuild, lean-vouch flags every mark the change could affect:
   has a solid orange border, and what relies on it a dashed one. Selecting a flagged declaration
   lights the way down to the change.
 
-With the fix, in a copy of the example:
+With the fix, in a copy of the example, on its doc page:
 
 ![Prime and Prime.coprime flagged after the fix](images/prime-fixed.png)
 

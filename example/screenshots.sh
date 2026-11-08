@@ -12,13 +12,16 @@ WORK=$(mktemp -d -t lean-vouch-screenshots)
 SERVER=
 trap '[ -n "$SERVER" ] && kill $SERVER; rm -rf "$WORK"' EXIT
 
-serve() {  # serve EXAMPLE: serve that copy of the example, with fresh example marks
+serve() {  # serve EXAMPLE [nodocs]: serve that copy of the example, with fresh example marks, as a run
+           # with doc pages or, with nodocs, without them, as a new project starts
   [ -n "$SERVER" ] && kill $SERVER
   PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   rm -rf "$WORK/marks"
   cp -R review/seed "$WORK/marks"
+  if [ "$2" = nodocs ]; then echo '{"state": "done", "docs": false}'; else echo '{}'; fi > "$WORK/build.json"
   (cd "$1" && exec python3 "$TOOL/server.py" --docs docbuild/.lake/build/doc --marks "$WORK/marks" \
-    --graph review/graph.json --source . --prefix ReviewExample --id ada --name Ada --port $PORT) > /dev/null &
+    --graph review/graph.json --source . --prefix ReviewExample --id ada --name Ada --port $PORT \
+    --build "$WORK/build.json") > /dev/null &
   SERVER=$!
   sleep 1
   kill -0 $SERVER  # stop here if the server didn't start
@@ -31,18 +34,21 @@ shot() {  # shot NAME WIDTH HEIGHT PATH [SCHEME]: SCHEME 1 is light (the default
   echo "docs/images/$1.png"
 }
 
+# What a new project shows: the diagram and quiz mode, without doc pages.
+serve . nodocs
+shot diagram 1600 1000 "review/diagram#ReviewExample.gcd"
+shot sorry-diagram 1400 900 "review/diagram?open=ReviewExample.Multiples.Lcm,ReviewExample.Gcd#ReviewExample.gcd_divides_mul"
+shot quiz 1400 1000 "review/quiz?name=ReviewExample.divides_gcd"
+shot prime 1400 900 "review/diagram?open=ReviewExample.Prime#ReviewExample.Prime"
+
+# Doc pages, from a run with --docs.
 serve .
 shot review-page 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd"
 shot changes 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd_divides,ReviewExample.divides_gcd"
 shot library-mark 1400 1350 "Init/Prelude.html?only&focus=Nat.mod"
 shot orphans 1400 800 "ReviewExample/Gcd.html#review-orphans"
-shot diagram 1600 1000 "review/diagram#ReviewExample.gcd"
 shot sorry 1400 1000 "ReviewExample/Multiples/Lcm.html?only&focus=ReviewExample.gcd_mul_lcm,ReviewExample.gcd_divides_mul"
-shot sorry-diagram 1400 900 "review/diagram?open=ReviewExample.Multiples.Lcm,ReviewExample.Gcd#ReviewExample.gcd_divides_mul"
 shot review-page-dark 1400 1000 "ReviewExample/Gcd.html?only&focus=ReviewExample.gcd" 0
-shot quiz 1400 1000 "review/quiz?name=ReviewExample.divides_gcd"
-shot prime 1400 900 "ReviewExample/Prime.html?only&focus=ReviewExample.Prime"
-shot prime-diagram 1400 900 "review/diagram?open=ReviewExample.Prime#ReviewExample.Prime"
 
 # The walkthrough's fix, applied to a copy of the example (a clone, so it takes no extra disk on
 # APFS), and the same marks flagged against it.

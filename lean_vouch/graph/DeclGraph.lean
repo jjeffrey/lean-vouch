@@ -90,8 +90,10 @@ def isDetail (env : Environment) (n : Name) : Bool :=
   | _ => false
 
 /-- How far along the graph is, for lean-vouch to show: `phase`, and `done` of `total`, about two hundred
-times a phase at most. On stderr, since the graph goes to a file and a project's own output to stdout. -/
+times a phase at most, when `LEAN_VOUCH_PROGRESS` asks for it. On stderr, since the graph goes to a
+file and a project's own output to stdout. -/
 def progress (phase : String) (done total : Nat) : IO Unit := do
+  if (← IO.getEnv "LEAN_VOUCH_PROGRESS").isNone then return
   if total == 0 || done == total || done % (max 1 (total / 200)) == 0 then
     IO.eprintln s!"lean-vouch-progress {phase} {done} {total}"
 

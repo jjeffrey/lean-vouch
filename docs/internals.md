@@ -13,6 +13,9 @@
   inside a definition's body. Each group is hidden by default and can be switched on under "show
   plumbing" in the pages and on the diagram page (remembered per browser). A hidden group is
   neither listed nor counted when deciding whether a mark needs re-checking.
+- **What a reviewer reads:** each project declaration's signature, printed by Lean from inside the
+  declaration's own namespace, so it shows every argument, including those a `variable` adds, and
+  its docstring. Pages without doc-gen4 show these, and quiz mode asks from them.
 - **Gaps:** what a declaration's proof rests on is worked out as `#print axioms` does, through proofs
   and all, and each `sorry` is named by the declaration it's written in. Each step toward a `sorry`
   is kept, and no other proof dependency, so a project with none has nothing extra in its graph. This
@@ -83,10 +86,11 @@ Three things are versioned separately:
 
 | Path | What it does |
 | --- | --- |
-| `lean_vouch/cli.py` | The `lean-vouch` command: sets up `.lean-vouch/`, builds the docs and graph, and starts the server. `review.py` runs it from a clone. |
-| `lean_vouch/graph/DeclGraph.lean` | Run inside a Lake project; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, and each one's fingerprint, `own`. |
-| `lean_vouch/server.py` | Serves the doc-gen4 output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames. Python standard library only. |
-| `lean_vouch/web/review.js`, `review.css` | The controls in the pages. |
-| `lean_vouch/web/links.js`, `math.js` | What the pages share: rewriting links, noticing changes while a page is open, and typesetting math. |
+| `lean_vouch/cli.py` | The `lean-vouch` command: sets up `.lean-vouch/`, builds the graph and, if asked, the docs, writes challenges, and starts the server. `review.py` runs it from a clone. |
+| `lean_vouch/graph/DeclGraph.lean` | Run inside a Lake project, compiled once per Lean version; writes the declaration graph as JSON: the project's modules and their imports, each declaration's dependencies, library uses, signature, docstring and fingerprint, `own`. |
+| `lean_vouch/challenge.py` | Writes a challenge for `lake comparator` from the graph and the source, and checks it by fingerprint. |
+| `lean_vouch/server.py` | Serves the diagram and quiz pages, and doc-gen4's output with the review script added; keeps each person's marks and notes in their own file and gives pages one view of them; applies renames; starts rebuilds and challenges for pages. Python standard library only. |
+| `lean_vouch/web/review.js`, `review.css` | The controls in the doc pages. |
+| `lean_vouch/web/links.js`, `math.js`, `lean.js` | What the pages share: rewriting links, noticing changes and rebuilds while a page is open, typesetting math, and coloring Lean code and rendering docstrings without doc-gen4. |
 | `lean_vouch/web/quiz.html` | Quiz mode: blind descriptions of declarations at the edge of what you have marked. |
 | `lean_vouch/web/graph.html` | The dependency diagram, laid out by Graphviz (via d3-graphviz, as on Lean blueprint pages). It zooms with the scroll wheel and pans by dragging. |

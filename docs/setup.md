@@ -38,7 +38,15 @@ everything the project imports:
 | Using Mathlib | about 35 minutes | 2 GB |
 | All of Mathlib | about 70 minutes | 4 GB, and about 6 GB of memory |
 
-Warnings from the project's own build are left out, since `lake build` shows them, though a failing build shows everything. It doesn't recompile Mathlib. The graph step needs up to about 6 GB of memory for a project on the scale of Mathlib. Lake's `[n/m]` total grows as it finds more to build, so the progress can seem to go backwards.
+Without doc pages, a run is the project's build and the declaration graph. For a project of about
+12,000 declarations on Mathlib, the graph takes one to two minutes the first time, half of it Lean
+loading the project and Mathlib, and shows a progress bar through its phases as it goes. Later runs
+reuse the graph unless something it's made from changed. The graph step needs up to about 6 GB of
+memory for a project on the scale of Mathlib.
+
+Warnings from the project's own build are left out, since `lake build` shows them, though a failing
+build shows everything. It doesn't recompile Mathlib. Lake's `[n/m]` total grows as it finds more to
+build, so the progress can seem to go backwards.
 
 When the project moves to another Lean version, the next run moves `docbuild/` to the matching doc-gen4 and builds the docs again, which takes about as long as the first run. When the project's dependencies change on the same Lean, the next run's docs follow them.
 

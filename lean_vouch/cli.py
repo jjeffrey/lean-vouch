@@ -436,7 +436,8 @@ def build_graph(modules):
     with Terminal("graph") as terminal, tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as printed:
         with subprocess.Popen(["lake", "env", *program, *modules], stdout=printed, stderr=subprocess.PIPE, text=True,
                               encoding="utf-8", errors="replace",
-                              env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())}) as process:
+                              env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve()),
+                                   "LEAN_VOUCH_PROGRESS": "1"}) as process:
             for line in process.stderr:
                 if found := PROGRESS.match(line.strip()):
                     phase, count, total = found[1], int(found[2]), int(found[3])
