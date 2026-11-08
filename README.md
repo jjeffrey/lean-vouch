@@ -17,11 +17,13 @@ lean-vouch
 
 With uv, install it with `uv tool install lean-vouch`.
 
-Then open <http://127.0.0.1:8797/review/diagram>. Once the project itself builds, the first run
-takes a minute or two, a little more with Mathlib. For doc pages as well, with review controls under
-every declaration, run `lean-vouch --docs`: the first time takes about 7 minutes, or about 35 with
-Mathlib, and the project keeps them from then on. Later runs take seconds. Your marks and notes are
-in `.lean-vouch/marks/`, which git tracks unless you opt out; quiz answers stay local.
+Then open <http://127.0.0.1:8797/review/diagram>. Once the project itself builds, the first run takes
+a minute or two, a few with Mathlib, and later runs take seconds. Your marks and notes are in
+`.lean-vouch/marks/`, which git tracks unless you opt out; quiz answers stay local.
+
+Doc pages are optional, and the only slow part: `lean-vouch --docs` adds the project's doc-gen4 pages,
+with the review controls under every declaration. Building them the first time takes about 7
+minutes, or about 35 with Mathlib. The project keeps them from then on.
 
 > [!WARNING]
 > Only run this on code you trust. Building a Lean project runs its macros and build scripts, and the
