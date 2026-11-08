@@ -133,7 +133,7 @@ class CheckTest(unittest.TestCase):
         self.addCleanup(path.write_text, original)
         path.write_text(original.replace("∀ d, Divides d n → d = 1 ∨ d = n", "2 ≤ n ∧ ∀ d, Divides d n → d = 1 ∨ d = n")
                         .replace("(a b : Nat) (ha : Divides d a)", "(a b : Nat) (hb0 : 0 < b) (ha : Divides d a)"))
-        self.assertEqual(self.check(), [P + "Prime", P + "divides_gcd"])
+        self.assertEqual(sorted(self.check()), [P + "Prime", P + "divides_gcd"])
 
 
 if __name__ == "__main__":

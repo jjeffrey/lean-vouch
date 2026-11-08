@@ -833,6 +833,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   // statements rest on. Shared by everyone reviewing, through .lean-vouch/challenge.json.
   const challengeButton = document.getElementById("challenge-button");
   let challenge = { theorems: [], missing: [], closure: [], modules: {}, agreed: [], can_write: false };
+  let writingChallenge = false;   // while it's written, the panel isn't redrawn under the button
   const showChallengeButton = () => {
     challengeButton.textContent = `challenge (${challenge.theorems.length})`;
     challengeButton.hidden = !challenge.theorems.length && !challenge.missing.length;
@@ -841,10 +842,11 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     challenge = await fetch("/review/challenge").then(reviewChecked);
     showChallengeButton();
   }
-  // Theorems no longer in the project drop out the next time the choice changes.
+  // One theorem in or out: the server keeps everyone else's choices as they are.
   async function chooseTheorem(name, on) {
-    const names = on ? [...challenge.theorems, name] : challenge.theorems.filter(n => n !== name);
-    challenge = await post("/review/challenge", { names });
+    const next = await post("/review/challenge", { name, chosen: on });
+    if (!next.theorems) throw new Error(next.error);
+    challenge = next;
     showChallengeButton();
     if (sidebar.dataset.panel === "challenge") renderChallenge();
   }
@@ -882,16 +884,28 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
         write.onclick = async () => {
           write.disabled = true;
           write.textContent = "Writing…";
-          try { await renderChallenge(await post("/review/challenge/write", {})); }
-          finally { write.disabled = false; write.textContent = "Write challenge"; }
+          writingChallenge = true;
+          try {
+            const written = await post("/review/challenge/write", {});
+            if (sidebar.dataset.panel === "challenge") await renderChallenge(written);
+          } finally { writingChallenge = false; write.disabled = false; write.textContent = "Write challenge"; }
         };
         actions.append(write);
       }
       parts.push(actions);
       if (!challenge.can_write) parts.push(el("p", "muted", "To write it, run lean-vouch --challenge in the project."));
     }
-    if (challenge.missing.length)
-      parts.push(el("p", "stale", `No longer in the project: ${challenge.missing.join(", ")}. They drop out the next time the challenge changes.`));
+    if (challenge.missing.length) {
+      const gone = el("ul", "challenge-list");
+      for (const n of challenge.missing) {
+        const item = el("li"), remove = el("button", null, "remove");
+        remove.onclick = () => chooseTheorem(n, false);
+        item.append(n, remove);
+        gone.append(item);
+      }
+      parts.push(el("p", "stale", "No longer theorems in the project, so left out of the challenge:"), gone);
+    }
+    if (challenge.problem) parts.push(el("p", "stale", `It can't be written yet: ${challenge.problem}.`));
     if (written) {
       parts.push(el("h3", null, written.ok ? "Written" : "Not written"), el("pre", "challenge-output", written.output));
     }
@@ -1338,7 +1352,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     document.getElementById("viewer-label").hidden = !people.size;
     recolorAll();
     await loadChallenge().catch(() => {});
-    if (sidebar.dataset.panel === "challenge" && !sidebar.querySelector("pre.challenge-output")) renderChallenge();
+    if (sidebar.dataset.panel === "challenge" && !writingChallenge && !sidebar.querySelector("pre.challenge-output"))
+      renderChallenge();
     showAskedKey();
     // Redraw the sidebar's thread, unless that would lose a note being written.
     const input = sidebar.querySelector("textarea");

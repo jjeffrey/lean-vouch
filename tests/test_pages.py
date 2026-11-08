@@ -103,7 +103,9 @@ class PagesTest(unittest.TestCase):
                 time.sleep(0.1)
         self.fail("server didn't start")
 
-    def page(self, path, budget=8000):
+    def page(self, path, budget=None):
+        # The diagram loads its layout engine from a CDN, which a busy machine can take seconds over.
+        budget = budget or (30000 if path.startswith("review/diagram") else 8000)
         with tempfile.TemporaryDirectory() as profile:
             result = subprocess.run(
                 [CHROME, "--headless=new", "--disable-gpu", f"--user-data-dir={profile}", f"--virtual-time-budget={budget}",
@@ -349,6 +351,22 @@ class PagesTest(unittest.TestCase):
                          doc.querySelectorAll("#diagram g.node.hl-down").length);
         """, frame="review/diagram?challenge", challenge=["ReviewExample.divides_gcd"])
         self.assertEqual(results, ["challenge (1)", ["divides_gcd"], "3 declarations in all; you agree with 0 of them as they are now.", 1, 2])
+
+    def test_docstrings_render_safely(self):
+        results = self.click_through({}, """
+            await ready("#diagram g.node");
+            const lean = frame.contentWindow.reviewLean, math = frame.contentWindow.reviewMath;
+            // An indented heading once looped forever.
+            const rendered = lean.markdown("Intro\\n  # Title\\n  - item\\n<script>bad()<\\/script> $\\\\href{javascript:bad()}{x}$");
+            results.push([...rendered.children].map(c => c.tagName), rendered.querySelectorAll("script").length);
+            rendered.id = "probe";
+            rendered.ownerDocument.body.append(rendered);
+            math.typeset(rendered);
+            await until(() => rendered.querySelector("svg"));
+            const links = [...rendered.querySelectorAll("a")].map(a => a.getAttribute("href") ?? a.getAttribute("xlink:href") ?? "");
+            results.push(links.some(h => h.startsWith("javascript")));
+        """, frame="review/diagram")
+        self.assertEqual(results, [["P", "H4", "UL", "P"], 0, False])
 
     def test_a_project_of_one_module_lists_it(self):
         names = {f"Solo.x{k}": {"kind": "def", "module": "Solo", "lines": [1, 1], "own": "1", "deps": [], "uses": []}

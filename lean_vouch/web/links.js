@@ -89,7 +89,11 @@ window.reviewWatch = onMarks => {
     return b;
   };
   const rebuild = button("Rebuild", "Run lean-vouch --rebuild for this project, as it was last run. Open pages offer to reload when it's done.",
-    async () => { rebuild.disabled = true; await reviewPost("/review/rebuild", {}).finally(() => { rebuild.disabled = false; }); tick(); });
+    async () => {
+      rebuild.disabled = true;
+      try { await reviewPost("/review/rebuild", {}); } catch {} finally { rebuild.disabled = false; }
+      tick();
+    });
   const log = document.createElement("a");
   log.textContent = "log";
   log.href = "/review/log";

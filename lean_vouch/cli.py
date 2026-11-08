@@ -120,6 +120,16 @@ def modules_of(names):
     project's name; then the shortest names, which is what the graph keeps as its roots."""
     libraries = library_names()
     chosen = names or libraries
+    # A challenge copied into the project, as for `lake comparator`, repeats the project's names, so
+    # it can't be imported with the project: unless named, its library is left out.
+    challenge_module = None
+    try:
+        challenge_module = json.loads(Path("comparator.json").read_text(encoding="utf-8")).get("challenge_module")
+    except (OSError, ValueError, AttributeError):
+        pass
+    if not names and challenge_module in libraries:
+        chosen = [name for name in libraries if name != challenge_module]
+        print(f"lean-vouch: leaving out {challenge_module}, the challenge in comparator.json.", flush=True)
     modules = []
     for name in chosen:
         if name in libraries:
@@ -402,31 +412,43 @@ GRAPH_KEY = HOME / "graph.key"
 
 def graph_inputs(modules):
     """Everything the graph is made from: the graph program, Lean, the dependencies' pins, the modules
-    asked for, and the project's compiled files, by size and time, since Lake rewrites one only when
-    it recompiles it. If none of this changed, neither did the graph."""
+    asked for, in order, since the first is the graph's root, and the project's compiled files, by size
+    and time, since Lake rewrites one only when it recompiles it. If none of this changed, neither did
+    the graph. None when the compiled files aren't where Lake usually puts them, as with a custom
+    `buildDir`: then the graph is always built."""
+    compiled = sorted(Path(".lake/build/lib").rglob("*.olean"))
+    if not compiled:
+        return None
     key = hashlib.sha256()
     key.update((HERE / "graph/DeclGraph.lean").read_bytes())
     for name in ("lean-toolchain", "lake-manifest.json"):
         key.update(Path(name).read_bytes() if Path(name).exists() else b"")
-    key.update("\n".join(sorted(modules)).encode())
-    for path in sorted(Path(".lake/build/lib").rglob("*.olean")):
+    key.update("\n".join(modules).encode())
+    for path in compiled:
         stat = path.stat()
         key.update(f"{path}:{stat.st_size}:{stat.st_mtime_ns}\n".encode())
     return key.hexdigest()
 
 
 def build_graph(modules):
-    """Build the graph beside the current one, and return it, unless nothing it's made from has
-    changed since the last good build. It goes to a file, since a project's initializers can print to
-    stdout, where Lean also puts compile errors: show those on failure."""
+    """Build the graph beside the current one, and return it with what it was made from, unless
+    nothing it's made from has changed since the last good build. It goes to a file, since a project's
+    initializers can print to stdout, where Lean also puts compile errors: show those on failure."""
     new = HOME / "graph.json.new"
+    new.unlink(missing_ok=True)   # one left by a run that failed later is no graph of this one's
     report("building", step="graph")
     current = HOME / "graph.json"
-    if current.exists() and GRAPH_KEY.exists() and GRAPH_KEY.read_text(encoding="utf-8") == graph_inputs(modules):
+    # Taken before the graph program runs, so a recompile during the run, or during the docs build
+    # after it, makes the next run build the graph again.
+    inputs = graph_inputs(modules)
+    if inputs and current.exists() and GRAPH_KEY.exists() and GRAPH_KEY.read_text(encoding="utf-8") == inputs:
         try:
             graph = json.loads(current.read_text(encoding="utf-8"))
+            # The graph is as new as this build, though nothing in it changed: a source file saved
+            # unchanged, which Lake doesn't recompile, isn't newer than it.
+            os.utime(current)
             print("lean-vouch: the declaration graph is unchanged since the last build.", flush=True)
-            return graph
+            return graph, inputs
         except (OSError, ValueError):
             pass
     program = graph_program()
@@ -457,7 +479,7 @@ def build_graph(modules):
              "time, as in `lean-vouch MyLibrary`.\n"
              "If this is about Lean itself, not your project, please open an issue.")
     try:
-        return json.loads(new.read_text(encoding="utf-8"))
+        return json.loads(new.read_text(encoding="utf-8")), inputs
     except (OSError, ValueError):
         new.unlink(missing_ok=True)
         fail("the declaration graph came out unreadable. Please open an issue.")
@@ -570,13 +592,19 @@ def write_challenge(targets, who):
         if ignore.exists() and "!challenge.json" not in ignore.read_text(encoding="utf-8"):
             print(f"lean-vouch: to share them, add the line `!challenge.json` to {ignore}.", flush=True)
     else:
-        targets = challenge.chosen(TARGETS)
+        try:
+            targets = challenge.chosen(TARGETS)
+        except challenge.ChallengeError as error:
+            fail(str(error))
         if not targets:
             fail("no theorems are chosen for the challenge yet. Choose them in the pages, or name them: "
                  "lean-vouch --challenge My.theorem Other.theorem")
     built = graph_file.stat().st_mtime
-    edited = [path for folder in source_folders() for path in folder.rglob("*.lean")
-              if ".lake" not in path.parts and ".lean-vouch" not in path.parts and path.stat().st_mtime > built]
+    # The reviewed modules' files only: a challenge copied into the project, say, isn't one.
+    reviewed = [Path(module.replace(".", "/") + ".lean") for module in
+                json.loads(graph_file.read_text(encoding="utf-8")).get("modules", {})]
+    edited = [folder / path for folder in source_folders() for path in reviewed
+              if (folder / path).exists() and (folder / path).stat().st_mtime > built]
     if edited:
         fail(f"{edited[0]} has changed since the last build, and a challenge is copied from the code that was built. "
              "Run lean-vouch --rebuild first.")
@@ -616,6 +644,31 @@ def docs_wanted(chosen):
     return last.get("docs", True) is not False if isinstance(last, dict) else False
 
 
+def port_taken(port):
+    """Why the server couldn't use `port`, or None if it could. As the server binds it: a port whose
+    last server just stopped is still waiting out its old connections, which doesn't stop a new one."""
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError as error:
+            return error.strerror
+    return None
+
+
+def build_running():
+    """The process of a build already under way for this project, from a terminal or a page."""
+    try:
+        build = json.loads((HOME / "build.json").read_text(encoding="utf-8"))
+        pid = build.get("pid") if build.get("state") == "building" else None
+        if isinstance(pid, int) and pid != os.getpid():
+            os.kill(pid, 0)
+            return pid
+    except (OSError, ValueError, AttributeError):
+        pass
+    return None
+
+
 def running_server(port):
     """The marks folder of the lean-vouch server on this port, if there is one."""
     try:
@@ -650,6 +703,9 @@ def main():
     if not shutil.which("lake"):
         fail("Lake isn't on your PATH. Install Lean through elan: https://github.com/leanprover/elan")
     who, name = identity(args.id, args.name)
+    # Two builds at once would compile the same files and write the same graph.
+    if pid := build_running():
+        fail(f"a build is already running (process {pid}). Wait for it, or stop it, and try again.")
     if args.challenge is not None:
         return write_challenge(args.challenge, who)
     others = sorted(path.stem for path in (HOME / "marks").glob("*.json") if path.stem != who)
@@ -661,13 +717,9 @@ def main():
         fail(f"port {args.port} is serving another project. Choose another with --port.")
     if serving:
         print(f"lean-vouch: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
-    elif not args.rebuild and args.challenge is None:
+    elif not args.rebuild and args.challenge is None and (busy := port_taken(args.port)):
         # Before building, which can take minutes, rather than after.
-        with socket.socket() as probe:
-            try:
-                probe.bind(("127.0.0.1", args.port))
-            except OSError as error:
-                fail(f"can't use port {args.port} ({error.strerror}). Choose another with --port.")
+        fail(f"can't use port {args.port} ({busy}). Choose another with --port.")
     with_docs = docs_wanted(args.docs)
     set_up_folders(tag, package)
     started = time.time()
@@ -677,7 +729,7 @@ def main():
         modules = modules_of(args.names)
         print(f"lean-vouch: reviewing {len(modules)} module{'' if len(modules) == 1 else 's'}.", flush=True)
         run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
-        built = build_graph(modules)
+        built, inputs = build_graph(modules)
         if with_docs:
             build_docs(tops(built["modules"]))
         else:
@@ -687,9 +739,12 @@ def main():
             for root in built["roots"]:
                 clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
         # Last, so a failure leaves the graph that matches the docs.
-        if (HOME / "graph.json.new").exists():
+        if (HOME / "graph.json.new").exists():   # only ever this run's: build_graph clears an old one
             (HOME / "graph.json.new").replace(HOME / "graph.json")
-        GRAPH_KEY.write_text(graph_inputs(modules), encoding="utf-8")
+        if inputs:
+            GRAPH_KEY.write_text(inputs, encoding="utf-8")
+        else:
+            GRAPH_KEY.unlink(missing_ok=True)
     except KeyboardInterrupt as error:
         report("failed", message=reason(error))
         print("\nlean-vouch: stopped.", file=sys.stderr)

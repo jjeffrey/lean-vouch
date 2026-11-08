@@ -30,6 +30,7 @@ class ServerTest(unittest.TestCase):
         root = Path(self.folder.name)
         (root / "docs").mkdir()
         (root / "docs" / "Page.html").write_text("<html><body>page</body></html>")
+        (root / "docs" / "index.html").write_text("<html><body>index</body></html>")
         (root / "docs" / "Bär.html").write_text("<html><body>page</body></html>")
         (root / "outside.html").write_text("<html><body>outside</body></html>")
         self.root = root
@@ -224,6 +225,19 @@ class ServerTest(unittest.TestCase):
         response = connection.getresponse()
         return response.status, response.headers
 
+    def test_docs_are_offered_only_once_they_exist(self):
+        self.assertTrue(self.status()["docs"])
+        (self.root / "docs" / "index.html").unlink()   # a first --docs run, still building them
+        self.assertFalse(self.status()["docs"])
+
+    def test_the_build_log_is_never_read_as_a_page(self):
+        connection = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port)
+        self.addCleanup(connection.close)
+        connection.request("GET", "/review/log")
+        response = connection.getresponse()
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertTrue(response.headers["Content-Type"].startswith("text/plain"))
+
     def test_the_build_log_is_served(self):
         self.assertIn(b"No build", self.get("/review/log"))
         server.args.build.with_name("build.log").write_text("error: it broke\n")
@@ -236,7 +250,7 @@ class ServerTest(unittest.TestCase):
 
     def test_theorems_are_chosen_for_the_challenge(self):
         self.challenge_graph()
-        state = self.post("/review/challenge", {"names": ["M.t"]})[1]
+        state = self.post("/review/challenge", {"name": "M.t", "chosen": True})[1]
         self.assertEqual((state["theorems"], state["closure"], state["modules"]), (["M.t"], ["M.d", "M.t"], {"M": 2}))
         stored = json.loads((self.root / "challenge.json").read_text())
         self.assertEqual(stored, {"format": 1, "theorems": ["M.t"]})
@@ -244,13 +258,14 @@ class ServerTest(unittest.TestCase):
 
     def test_only_theorems_can_be_chosen(self):
         self.challenge_graph()
-        self.assertEqual(self.post("/review/challenge", {"names": ["M.d"]})[0], 400)
-        self.assertEqual(self.post("/review/challenge", {"names": ["M.nope"]})[0], 400)
+        self.assertEqual(self.post("/review/challenge", {"name": "M.d", "chosen": True})[0], 400)
+        self.assertEqual(self.post("/review/challenge", {"name": "M.nope", "chosen": True})[0], 400)
+        self.assertEqual(self.post("/review/challenge", {"names": ["M.t"]})[0], 400, "the old form, replacing the list")
         self.assertFalse((self.root / "challenge.json").exists())
 
     def test_the_challenge_says_what_youve_agreed_with_as_it_is_now(self):
         self.challenge_graph()
-        self.post("/review/challenge", {"names": ["M.t"]})
+        self.post("/review/challenge", {"name": "M.t", "chosen": True})
         self.post("/review/data", {"name": "M.d", "status": "agree"})
         self.post("/review/data", {"name": "M.t", "status": "question"})
         self.assertEqual(json.loads(self.get("/review/challenge"))["agreed"], ["M.d"])
@@ -261,7 +276,8 @@ class ServerTest(unittest.TestCase):
 
     def test_a_removed_theorem_is_listed_as_missing(self):
         self.challenge_graph()
-        self.post("/review/challenge", {"names": ["M.t", "M.other"]})
+        self.post("/review/challenge", {"name": "M.t", "chosen": True})
+        self.post("/review/challenge", {"name": "M.other", "chosen": True})
         decls = json.loads(self.graph.read_text())
         del decls["declarations"]["M.other"]
         self.graph.write_text(json.dumps(decls))
@@ -271,8 +287,38 @@ class ServerTest(unittest.TestCase):
     def test_choosing_changes_the_status_for_open_pages(self):
         self.challenge_graph()
         before = self.status()["marks"]
-        self.post("/review/challenge", {"names": ["M.t"]})
+        self.post("/review/challenge", {"name": "M.t", "chosen": True})
         self.assertNotEqual(before, self.status()["marks"])
+
+    def test_choosing_one_theorem_keeps_everyone_elses(self):
+        self.challenge_graph()
+        (self.root / "challenge.json").write_text('{"format": 1, "theorems": ["M.other"]}')   # pulled from git
+        self.post("/review/challenge", {"name": "M.t", "chosen": True})
+        self.assertEqual(json.loads((self.root / "challenge.json").read_text())["theorems"], ["M.other", "M.t"])
+        self.post("/review/challenge", {"name": "M.other", "chosen": False})
+        self.assertEqual(json.loads((self.root / "challenge.json").read_text())["theorems"], ["M.t"])
+
+    def test_an_unreadable_challenge_file_is_left_alone(self):
+        self.challenge_graph()
+        conflicted = '<<<<<<< HEAD\n{"format": 1, "theorems": ["M.t"]}\n=======\n{"format": 1, "theorems": []}\n>>>>>>> theirs\n'
+        (self.root / "challenge.json").write_text(conflicted)
+        status, body = self.post("/review/challenge", {"name": "M.other", "chosen": True})
+        self.assertEqual(status, 500)
+        self.assertIn("can't be read", body["error"])
+        self.assertEqual((self.root / "challenge.json").read_text(), conflicted)
+        with self.assertRaises(HTTPError) as refused:
+            self.get("/review/challenge")
+        self.assertEqual(refused.exception.code, 500)
+
+    def test_mutual_definitions_dont_break_the_challenge(self):
+        decl = lambda kind, deps=(): {"kind": kind, "module": "M", "lines": [1, 1], "own": "1", "deps": list(deps), "uses": []}
+        self.graph.write_text(json.dumps({"library": {}, "declarations": {
+            "M.A": decl("inductive", ["M.B"]), "M.B": decl("inductive", ["M.A"]), "M.t": decl("theorem", ["M.A"])}}))
+        status, state = self.post("/review/challenge", {"name": "M.t", "chosen": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(sorted(state["closure"]), ["M.A", "M.B", "M.t"])
+        self.assertIn("depends on itself", state["problem"])
+        self.assertEqual(json.loads(self.get("/review/challenge"))["theorems"], ["M.t"])
 
     def test_a_server_not_started_by_lean_vouch_cant_write_the_challenge(self):
         self.assertFalse(json.loads(self.get("/review/challenge"))["can_write"])
@@ -284,16 +330,50 @@ class ServerTest(unittest.TestCase):
         home.mkdir()
         ran = []
 
-        def run(command, **options):
-            ran.append((command, options["cwd"]))
-            return subprocess.CompletedProcess(command, 0, stdout="lean-vouch: it matches the project.\n", stderr="")
+        class Writing:
+            def __init__(self, command, **options):
+                ran.append((command, options))
+                self.pid, self.returncode = 12345, 0
 
-        with unittest.mock.patch.object(server.subprocess, "run", run):
+            def communicate(self, timeout=None):
+                return "lean-vouch: it matches the project.\n", None
+
+        with unittest.mock.patch.object(server.subprocess, "Popen", Writing):
             self.assertEqual(self.post("/review/challenge/write", {}),
                              (200, {"ok": True, "output": "lean-vouch: it matches the project."}))
-        command, cwd = ran[0]
+        command, options = ran[0]
         self.assertEqual(command[-5:], ["--challenge", "--id", "ada", "--name", "Ada"])
-        self.assertEqual(cwd, self.root.resolve())
+        self.assertEqual(options["cwd"], self.root.resolve())
+        self.assertTrue(options["start_new_session"], "so a timeout can stop what it started")
+
+    def test_a_challenge_write_that_times_out_stops_everything_it_started(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+
+        class Stuck:
+            def __init__(self, command, **options):
+                self.pid, self.returncode, self.calls = 12345, None, 0
+
+            def communicate(self, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise subprocess.TimeoutExpired("lean-vouch", timeout)
+                return "", None
+
+        with unittest.mock.patch.object(server.subprocess, "Popen", Stuck), \
+                unittest.mock.patch.object(server.os, "killpg") as killpg:
+            status, body = self.post("/review/challenge/write", {})
+        self.assertFalse(body["ok"])
+        killpg.assert_called_once_with(12345, server.signal.SIGTERM)
+
+    def test_no_rebuild_while_a_challenge_is_written(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        server.writing.acquire()
+        self.addCleanup(server.writing.release)
+        self.assertEqual(self.post("/review/rebuild", {})[0], 409)
 
     def test_status_names_the_marks_folder_and_who_this_is(self):
         self.assertEqual(self.status()["marks_folder"], str(self.folder_marks.resolve()))

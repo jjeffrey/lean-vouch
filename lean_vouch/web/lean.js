@@ -72,8 +72,8 @@ window.reviewLean = (() => {
         for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
         i++;
         root.append(Object.assign(document.createElement("pre"), { textContent: code.join("\n") }));
-      } else if (/^#{1,6}\s/.test(line)) {
-        root.append(inline(line.replace(/^#+\s*/, ""), document.createElement("h4")));
+      } else if (/^\s*#{1,6}\s/.test(line)) {
+        root.append(inline(line.replace(/^\s*#+\s*/, ""), document.createElement("h4")));
         i++;
       } else if (/^\s*([-*+]|\d+\.)\s/.test(line)) {
         const list = document.createElement(/^\s*\d/.test(line) ? "ol" : "ul");
@@ -84,6 +84,7 @@ window.reviewLean = (() => {
       else {
         const para = [];
         for (; i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|[-*+]\s|\d+\.\s)/.test(lines[i]); i++) para.push(lines[i]);
+        if (!para.length) para.push(lines[i++]);   // whatever this line is, the loop moves past it
         root.append(inline(para.join(" "), document.createElement("p")));
       }
     }

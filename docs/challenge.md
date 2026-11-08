@@ -40,7 +40,8 @@ It uses the last build, and writes `.lean-vouch/challenge/Challenge.lean` and it
 
 To use it, copy both files to the project's root, and add the challenge as a library in the
 lakefile, such as `[[lean_lib]] name = "Challenge"` in `lakefile.toml`. Then run `lake comparator`,
-which needs Lean v4.35 or newer.
+which needs Lean v4.35 or newer. The challenge repeats the project's names, so lean-vouch leaves out
+the library that `comparator.json` names as the challenge, unless you name it.
 
 Comparator builds the project inside a `bwrap` sandbox, which needs Linux. On macOS, checking your own
 project needs `lake comparator --inadvisably-no-sandbox`: the sandbox protects you from a solution you

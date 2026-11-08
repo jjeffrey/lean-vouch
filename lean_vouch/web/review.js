@@ -343,9 +343,11 @@
     box.dataset.name = name;
     box.checked = chosen.includes(name);
     box.onchange = async () => {
-      const next = box.checked ? [...chosen, name] : chosen.filter(n => n !== name);
-      try { showChallenge((await post("/review/challenge", { names: next })).theorems); }
-      catch { box.checked = !box.checked; }
+      try {
+        const next = await post("/review/challenge", { name, chosen: box.checked });
+        if (!next.theorems) throw new Error(next.error);
+        showChallenge(next.theorems);
+      } catch { box.checked = !box.checked; }
     };
     label.title = "The challenge is the project's: its theorems' statements, and everything they rest on, " +
       "for lake comparator to check the project against. Everyone reviewing sees the same one.";

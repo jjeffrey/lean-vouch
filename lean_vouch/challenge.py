@@ -32,13 +32,19 @@ class ChallengeError(Exception):
 
 
 def chosen(path):
-    """The theorems chosen for the challenge, in the order they were chosen."""
+    """The theorems chosen for the challenge, in the order they were chosen: none if there's no file.
+    A file that can't be read, as in a git merge conflict, is an error rather than none, so that no
+    one's choices are written over."""
+    if not path.exists():
+        return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
+    except (OSError, ValueError) as error:
+        raise ChallengeError(f"{path} can't be read ({error}); fix it, then choose again") from None
     names = data.get("theorems") if isinstance(data, dict) and data.get("format") == TARGETS_FORMAT else None
-    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        raise ChallengeError(f"{path} isn't a list of chosen theorems this lean-vouch reads; fix it, then choose again")
+    return names
 
 
 def choose(path, names):
@@ -73,7 +79,8 @@ def closure(graph, targets):
 
 def ordered(graph, names):
     """Dependencies first, and otherwise in the order of the project's modules and lines."""
-    decls, modules = graph["declarations"], list(graph.get("modules", {}))
+    # By name, not the graph's order of modules, which differs between machines.
+    decls, modules = graph["declarations"], sorted(graph.get("modules", {}))
     place = lambda name: (modules.index(decls[name]["module"]) if decls[name]["module"] in modules else len(modules),
                           (decls[name].get("lines") or [0])[0], name)
     done, out = set(), []

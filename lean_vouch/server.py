@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -472,14 +473,18 @@ def challenge_state():
     decls = current.get("declarations", {})
     names = challenges.chosen(targets_file())
     present = [n for n in names if decls.get(n, {}).get("kind") == "theorem"]
-    closure = challenges.ordered(current, challenges.closure(current, present)) if present else []
+    needed = challenges.closure(current, present) if present else set()
+    try:
+        closure, problem = (challenges.ordered(current, needed) if needed else []), None
+    except challenges.ChallengeError as error:   # mutual definitions, which a challenge can't hold yet
+        closure, problem = sorted(needed), str(error)
     mine = view()
     modules = {}
     for n in closure:
         modules[decls[n]["module"]] = modules.get(decls[n]["module"], 0) + 1
     return {"theorems": present, "missing": [n for n in names if n not in present], "closure": closure,
             "modules": modules, "agreed": [n for n in closure if agreed_now(mine.get(n), graph.fingerprint(n))],
-            "can_write": project() is not None}
+            "can_write": project() is not None, "problem": problem}
 
 
 writing = threading.Lock()   # one challenge written at a time
@@ -493,12 +498,18 @@ def write_challenge():
         package = Path(__file__).resolve().parent.parent
         env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(package), os.environ.get("PYTHONPATH")]))}
         who = ["--id", args.id, *(["--name", args.name] if args.name else [])]
-        done = subprocess.run([sys.executable, "-c", "from lean_vouch.cli import main; main()", "--challenge", *who],
-                              cwd=project(), env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=900)
-        return {"ok": done.returncode == 0, "output": (done.stdout + done.stderr).strip()}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "output": "Writing the challenge took more than 15 minutes, so it was stopped."}
+        # In its own process group, so that stopping it stops the Lake and Lean it started too.
+        process = subprocess.Popen([sys.executable, "-c", "from lean_vouch.cli import main; main()", "--challenge", *who],
+                                   cwd=project(), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+                                   start_new_session=True)
+        try:
+            output, _ = process.communicate(timeout=900)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.communicate()
+            return {"ok": False, "output": "Writing the challenge took more than 15 minutes, so it was stopped."}
+        return {"ok": process.returncode == 0, "output": output.strip()}
     finally:
         writing.release()
 
@@ -510,6 +521,8 @@ def rebuild():
     running, build = building()
     if running:
         return "A build is already running."
+    if writing.locked():
+        return "A challenge is being written. Rebuild once it's done."
     names = build.get("names", [])
     names = names if isinstance(names, list) and all(isinstance(n, str) and not n.startswith("-") for n in names) else []
     package = Path(__file__).resolve().parent.parent   # where lean_vouch is, installed or not
@@ -529,7 +542,8 @@ def has_docs():
     """Whether the latest run built the docs. One with --no-docs says so, and any docs left from an
     earlier run would show code older than the graph, so they aren't offered."""
     build = load_json(args.build, {})
-    return not isinstance(build, dict) or build.get("docs") is not False
+    chosen = not isinstance(build, dict) or build.get("docs") is not False
+    return chosen and (args.docs / "index.html").exists()   # not until a first docs build has made them
 
 
 NO_DOCS = ("<!doctype html><meta charset='utf-8'><title>No docs</title><p>lean-vouch ran with <code>--no-docs</code>, "
@@ -559,9 +573,11 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(args.docs), **kw)
 
-    def send_body(self, body, kind, code=200):
+    def send_body(self, body, kind, code=200, nosniff=False):
         self.send_response(code)
         self.send_header("Content-Type", kind)
+        if nosniff:   # the build log quotes the project's output: never read it as a page
+            self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Security-Policy", "frame-ancestors 'self'")   # no clicks through another site's frame
@@ -617,12 +633,12 @@ class Handler(SimpleHTTPRequestHandler):
             with lock:
                 try:
                     return self.send_json(challenge_state())
-                except MarksError as error:
+                except (MarksError, challenges.ChallengeError) as error:
                     return self.send_json({"error": str(error)}, 500)
         if path == "/review/log":
             log = args.build.with_name("build.log")
             text = log.read_bytes()[-500_000:] if log.exists() else b"No build has been logged yet."
-            return self.send_body(text, "text/plain; charset=utf-8")
+            return self.send_body(text, "text/plain; charset=utf-8", nosniff=True)
         if path == "/review/source":
             name = parse_qs(urlparse(self.path).query).get("name", [""])[0]
             return self.send_json(source_of(name))
@@ -663,16 +679,18 @@ class Handler(SimpleHTTPRequestHandler):
             with lock:
                 return self.send_json(graph.reach(body.get("modules", []), body.get("names", []), body.get("shown", [])))
         if self.path == "/review/challenge":
-            names = body.get("names", [])
+            # One theorem in or out at a time, so a page that's behind can't undo someone else's choice.
+            name, wanted = body.get("name"), body.get("chosen")
+            if not isinstance(name, str) or not isinstance(wanted, bool):
+                return self.send_json({"error": "bad request"}, 400)
             with lock:
-                decls = graph.current().get("declarations", {})
-                wrong = [n for n in names if decls.get(n, {}).get("kind") != "theorem"]
-                if wrong:
-                    return self.send_json({"error": f"only the project's theorems can be chosen: {', '.join(wrong)}"}, 400)
-                challenges.choose(targets_file(), names)
+                if wanted and graph.current().get("declarations", {}).get(name, {}).get("kind") != "theorem":
+                    return self.send_json({"error": f"only the project's theorems can be chosen: {name}"}, 400)
                 try:
+                    names = challenges.chosen(targets_file())
+                    challenges.choose(targets_file(), [*names, name] if wanted else [n for n in names if n != name])
                     return self.send_json(challenge_state())
-                except MarksError as error:
+                except (MarksError, challenges.ChallengeError) as error:
                     return self.send_json({"error": str(error)}, 500)
         if self.path == "/review/challenge/write":
             if project() is None:

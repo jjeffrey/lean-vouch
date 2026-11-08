@@ -76,6 +76,13 @@ class ModulesTest(unittest.TestCase):
         self.assertEqual(review.library_names(), ["Lib", "Tests"])
         self.assertEqual(self.modules([], {"Lib": "Lib.A\nLib\n", "Tests": "Tests.B\n"}), ["Lib", "Lib.A", "Tests.B"])
 
+    def test_a_copied_challenge_is_left_out_unless_named(self):
+        Path("lakefile.toml").write_text('name = "p"\n\n[[lean_lib]]\nname = "Lib"\n\n[[lean_lib]]\nname = "Challenge"\n')
+        Path("comparator.json").write_text('{"challenge_module": "Challenge", "solution_module": "Lib"}')
+        listed = {"Lib": "Lib\n", "Challenge": "Challenge\n"}
+        self.assertEqual(self.modules([], listed), ["Lib"])
+        self.assertEqual(self.modules(["Challenge"], listed), ["Challenge"])
+
     def test_a_lean_lakefile(self):
         Path("lakefile.lean").write_text('package p\n\n@[default_target]\nlean_lib Lib where\n\nlean_lib «Tests»\n')
         self.assertEqual(review.library_names(), ["Lib", "Tests"])
@@ -246,6 +253,23 @@ class ReportTest(unittest.TestCase):
             "M.agreed": mark("agree", "1"), "M.changed": mark("agree", "old"), "M.asked": mark("question", "3")}}))
         self.assertEqual(review.unagreed(graph, ["M.agreed", "M.changed", "M.asked", "M.unmarked"], "ada"),
                          ["M.changed", "M.asked", "M.unmarked"])
+
+    def test_a_port_a_server_just_left_is_free(self):
+        # A connection the server closed first waits out a while on the server's side, as after Ctrl-C.
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            client = socket.create_connection(("127.0.0.1", port))
+            accepted, _ = listener.accept()
+            accepted.close()
+            client.close()
+        self.assertIsNone(review.port_taken(port))
+        with socket.socket() as busy:
+            busy.bind(("127.0.0.1", 0))
+            busy.listen()
+            self.assertIsNotNone(review.port_taken(busy.getsockname()[1]))
 
     def test_no_server_is_none(self):
         with socket.socket() as probe:
@@ -450,16 +474,64 @@ class ReviewTest(unittest.TestCase):
                         'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
                         "mkdir -p .lake/build/doc\n")
         graph_runs = lambda: sum(line.startswith("env") for line in calls.read_text().splitlines())
+        compiled = self.root / ".lake" / "build" / "lib" / "lean" / "MyProject.olean"
+        compiled.parent.mkdir(parents=True)
+        compiled.write_bytes(b"compiled")
         self.assertEqual(self.run_review("v4.35.0").returncode, 0)
         self.assertEqual(graph_runs(), 1)
         result = self.run_review("v4.35.0")
         self.assertIn("unchanged since the last build", result.stdout)
         self.assertEqual(graph_runs(), 1)
-        compiled = self.root / ".lake" / "build" / "lib" / "lean" / "MyProject.olean"
-        compiled.parent.mkdir(parents=True)
         compiled.write_bytes(b"recompiled")
         self.run_review("v4.35.0")
         self.assertEqual(graph_runs(), 2, "a recompiled module means a new graph")
+
+    def compiled_project(self, script=""):
+        """A project with a compiled module, whose graph program counts its runs."""
+        calls = self.root / "calls"
+        compiled = self.root / ".lake" / "build" / "lib" / "lean" / "MyProject.olean"
+        compiled.parent.mkdir(parents=True, exist_ok=True)
+        compiled.write_bytes(b"compiled")
+        self.stub_graph(f'echo "$*" >> "{calls}"\n'
+                        'case "$*" in env*) ' + script + 'echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
+                        "mkdir -p .lake/build/doc\n")
+        return compiled, lambda: sum(line.startswith("env") for line in calls.read_text().splitlines())
+
+    def test_a_graph_left_by_a_failed_run_is_never_used(self):
+        compiled, graph_runs = self.compiled_project()
+        self.assertEqual(self.run_review("v4.35.0").returncode, 0)
+        good = (self.root / ".lean-vouch" / "graph.json").read_text()
+        (self.root / ".lean-vouch" / "graph.json.new").write_text('{"modules": {"Other": []}, "roots": ["Other"]}')
+        result = self.run_review("v4.35.0")
+        self.assertIn("unchanged since the last build", result.stdout)
+        self.assertEqual((self.root / ".lean-vouch" / "graph.json").read_text(), good)
+        self.assertFalse((self.root / ".lean-vouch" / "graph.json.new").exists())
+
+    def test_a_recompile_while_the_graph_builds_is_seen_next_time(self):
+        compiled, graph_runs = self.compiled_project(f'echo "recompiled meanwhile" > "{self.root}/.lake/build/lib/lean/MyProject.olean"; ')
+        self.assertEqual(self.run_review("v4.35.0").returncode, 0)
+        self.run_review("v4.35.0")
+        self.assertEqual(graph_runs(), 2, "the graph was made from what was there before the recompile")
+
+    def test_a_source_saved_unchanged_doesnt_block_a_challenge(self):
+        compiled, graph_runs = self.compiled_project()
+        (self.root / "M.lean").write_text("")
+        self.assertEqual(self.run_review("v4.35.0").returncode, 0)
+        time.sleep(0.05)
+        os.utime(self.root / "M.lean")                      # saved, unchanged: Lake doesn't recompile
+        (self.root / "Challenge.lean").write_text("")    # and a challenge copied in, as the docs say
+        self.run_review("v4.35.0")
+        graph = self.root / ".lean-vouch" / "graph.json"
+        self.assertGreaterEqual(graph.stat().st_mtime, (self.root / "M.lean").stat().st_mtime)
+
+    def test_a_second_build_waits_for_the_first(self):
+        calls = self.root / "calls"
+        self.stub_graph(f'echo "$*" >> "{calls}"\n')
+        (self.root / ".lean-vouch" / "build.json").write_text(json.dumps({"state": "building", "pid": os.getpid()}))
+        result = self.run_review("v4.35.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("a build is already running", result.stderr)
+        self.assertNotIn("build", calls.read_text() if calls.exists() else "")
 
     def test_a_busy_port_stops_the_run_before_it_builds(self):
         calls = self.root / "calls"

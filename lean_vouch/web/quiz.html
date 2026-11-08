@@ -359,7 +359,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   }
   // A signature as the graph has it, `Name binders : type`, split into its binders and its type.
   function signatureParts(signature) {
-    const text = signature.replace(/\s+/g, " ").replace(/^\S+\s?/, "");
+    const text = signature.replace(/\s+/g, " ").replace(/^(?:«[^»]*»|[^\s«])+\s?/, "");
     const args = [];
     let depth = 0, start = -1;
     for (let i = 0; i < text.length; i++) {
@@ -458,7 +458,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     const pre = el("pre", "code statement");
     pre.style.whiteSpace = "pre-wrap";
     pre.append(el("span", "lean-keyword", `${decls[name].kind} `));
-    const rest = signature.replace(/^\S+/, "");
+    const rest = signature.replace(/^(?:«[^»]*»|[^\s«])+/, "");
     if (hidden) pre.append(Object.assign(el("span", "hidden-name", "▢"), { title: "name hidden" }));
     else pre.append(short(name));
     pre.append(reviewLean.highlight(rest, written => {

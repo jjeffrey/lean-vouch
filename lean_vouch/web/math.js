@@ -4,7 +4,10 @@
 window.reviewMath = (() => {
   let started;
   const ready = new Promise(resolve => { started = resolve; });
+  // Docstrings can come from someone else's project, so math can't make links to scripts and the
+  // like: MathJax's safe extension filters what TeX's \href and similar can produce.
   window.MathJax = {
+    loader: { load: ["ui/safe"] },
     tex: { inlineMath: [["$", "$"]], displayMath: [["$$", "$$"]] },
     svg: { fontCache: "none" },
     options: {
