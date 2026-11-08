@@ -21,8 +21,8 @@ Then open <http://127.0.0.1:8797/review/diagram>. Once the project itself builds
 a minute or two, a few with Mathlib, and later runs take seconds. Your marks and notes are in
 `.lean-vouch/marks/`, which git tracks unless you opt out; quiz answers stay local.
 
-Doc pages are optional, and the only slow part: `lean-vouch --docs` adds the project's doc-gen4 pages,
-with the review controls under every declaration. Building them the first time takes about 7
+Doc pages are optional, and much slower to build: `lean-vouch --docs` adds the project's doc-gen4
+pages, with the review controls under every declaration. Building them the first time takes about 7
 minutes, or about 35 with Mathlib. The project keeps them from then on.
 
 > [!WARNING]
