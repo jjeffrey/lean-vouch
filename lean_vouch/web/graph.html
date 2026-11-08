@@ -978,8 +978,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     sidebar.append(el("h2", null, name), el("p", "muted", `${i?.kind ?? ""} in ${i?.module ?? "?"}`));
 
     // Documentation first, as on the docs pages: the declaration as doc-gen4 renders it. Without
-    // the docs, its docstring, its statement as Lean printed it, with what `variable`s add, and its
-    // code as written, before the review: what's being reviewed comes first.
+    // the docs, its docstring and its statement as Lean printed it, with what `variable`s add, just
+    // above the review of it; its code as written comes after.
     if (hasDocs) {
       const docsHeading = el("h3", null, "Documentation ");
       const docs = el("a", "muted", "open in docs");
@@ -999,7 +999,6 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
         statement.title = "As Lean understood it, with every argument, including those a `variable` adds";
         sidebar.append(el("h3", null, "Statement"), statement);
       }
-      await appendCode(name);
     }
 
     // Mark and note thread, editable here.
@@ -1105,7 +1104,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     };
     sidebar.append(input, add);
 
-    if (!isLibrary && hasDocs) await appendCode(name);
+    if (!isLibrary) await appendCode(name);
 
     // Direct neighbours; the diagram highlights everything reachable.
     const deps = isLibrary ? [] : [...decls[name].deps, ...decls[name].uses.filter(visible)];

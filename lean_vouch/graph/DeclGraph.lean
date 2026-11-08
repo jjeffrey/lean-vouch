@@ -540,7 +540,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("moduleDocs", Json.mkObj (moduleDocs.qsort (·.1 < ·.1)).toList),
     ("declarations", Json.mkObj decls.toList),
     ("library", Json.mkObj libraryDecls.toList),
-    ("renames", Json.mkObj renames.toList)]).pretty
+    ("renames", Json.mkObj renames.toList)]).compress
   -- A file if asked for one: a project's initializers can print to stdout.
   match ← IO.getEnv "LEAN_VOUCH_GRAPH" with
   | some path => IO.FS.writeFile path (graph ++ "\n")
