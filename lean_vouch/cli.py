@@ -544,6 +544,19 @@ def write_challenge(targets, who):
     print(f"lean-vouch: {out / 'comparator.json'} is its configuration for `lake comparator`.", flush=True)
 
 
+def docs_wanted(chosen):
+    """Whether this run builds the docs: as asked, or else as this project's last run did. A project
+    first run before the choice was remembered had its docs built, so it keeps them; a new one starts
+    without, since they take most of a first run."""
+    if chosen is not None:
+        return chosen
+    try:
+        last = json.loads((HOME / "build.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return last.get("docs", True) is not False if isinstance(last, dict) else False
+
+
 def running_server(port):
     """The marks folder of the lean-vouch server on this port, if there is one."""
     try:
@@ -563,8 +576,11 @@ def main():
     parser.add_argument("--id", help="who you are, as the name of your marks file (default: from your git name and email)")
     parser.add_argument("--rebuild", action="store_true", help="rebuild the docs and graph, without starting a server")
     parser.add_argument("--clean", action="store_true", help="delete docs pages left by renamed or removed modules")
-    parser.add_argument("--no-docs", action="store_true",
-                        help="skip the docs: the diagram works in minutes, but doc pages and quiz mode need a run without it")
+    docs = parser.add_mutually_exclusive_group()
+    docs.add_argument("--docs", dest="docs", action="store_true", default=None,
+                      help="also build doc pages, which take most of a first run; the project remembers the choice")
+    docs.add_argument("--no-docs", dest="docs", action="store_false",
+                      help="stop building doc pages; the project remembers the choice")
     parser.add_argument("--challenge", nargs="*", metavar="THEOREM",
                         help="write the project's challenge for lake comparator, from the last build; theorems named "
                              "here become the chosen ones")
@@ -593,21 +609,22 @@ def main():
                 probe.bind(("127.0.0.1", args.port))
             except OSError as error:
                 fail(f"can't use port {args.port} ({error.strerror}). Choose another with --port.")
+    with_docs = docs_wanted(args.docs)
     set_up_folders(tag, package)
     started = time.time()
     LOG.write_text("", encoding="utf-8")
-    report("building", step="project", names=args.names, docs=not args.no_docs)
+    report("building", step="project", names=args.names, docs=with_docs)
     try:
         modules = modules_of(args.names)
         print(f"lean-vouch: reviewing {len(modules)} module{'' if len(modules) == 1 else 's'}.", flush=True)
         run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
         built = build_graph(modules)
-        if args.no_docs:
-            print("lean-vouch: skipped the docs (--no-docs). The diagram works without them; doc pages and quiz "
-                  "mode need a run without --no-docs.", flush=True)
-        else:
+        if with_docs:
             build_docs(tops(built["modules"]))
-        if args.clean and not args.no_docs:
+        else:
+            print("lean-vouch: no doc pages: everything else works without them. `lean-vouch --docs` adds them, "
+                  "and this project remembers it.", flush=True)
+        if args.clean and with_docs:
             for root in built["roots"]:
                 clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
         # Last, so a failure leaves the graph that matches the docs.

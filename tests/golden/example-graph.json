@@ -4,6 +4,7 @@
    "deps": [
     "ReviewExample.gcd"
    ],
+   "doc": "Two numbers are coprime when their greatest common divisor is one. ",
    "kind": "def",
    "lines": [
     11,
@@ -11,6 +12,7 @@
    ],
    "module": "ReviewExample.Multiples.Coprime",
    "own": "ed1db53d3909db03",
+   "signature": "ReviewExample.Coprime (a b : Nat) : Prop",
    "uses": [
     "Eq",
     "Nat"
@@ -21,6 +23,7 @@
     "ReviewExample.Coprime",
     "ReviewExample.Divides"
    ],
+   "doc": "A common divisor of coprime numbers divides one. ",
    "kind": "theorem",
    "lines": [
     21,
@@ -28,6 +31,7 @@
    ],
    "module": "ReviewExample.Multiples.Coprime",
    "own": "a5cb1f2e5043c27d",
+   "signature": "ReviewExample.Coprime.divides_one {a b d : Nat} (h : Coprime a b) (ha : Divides d a) (hb : Divides d b) : Divides d 1",
    "uses": [
     "Nat"
    ]
@@ -37,6 +41,7 @@
     "ReviewExample.Coprime",
     "ReviewExample.lcm"
    ],
+   "doc": "The least common multiple of coprime numbers is their product. ",
    "kind": "theorem",
    "lines": [
     15,
@@ -44,6 +49,7 @@
    ],
    "module": "ReviewExample.Multiples.Coprime",
    "own": "91d9499d13cca7d5",
+   "signature": "ReviewExample.Coprime.lcm_eq {a b : Nat} (h : Coprime a b) : lcm a b = a * b",
    "sorryFrom": [
     "ReviewExample.gcd_mul_lcm"
    ],
@@ -58,6 +64,7 @@
   },
   "ReviewExample.Divides": {
    "deps": [],
+   "doc": "`d` divides `n`: `n` is a whole multiple of `d`. ",
    "kind": "def",
    "lines": [
     10,
@@ -65,6 +72,7 @@
    ],
    "module": "ReviewExample.Divides",
    "own": "0dfe923a99c9aa54",
+   "signature": "ReviewExample.Divides (d n : Nat) : Prop",
    "uses": [
     "Eq",
     "Exists",
@@ -76,6 +84,7 @@
    "deps": [
     "ReviewExample.Divides"
    ],
+   "doc": "A common divisor of `m` and `n` divides `m % n`. ",
    "kind": "theorem",
    "lines": [
     34,
@@ -83,6 +92,7 @@
    ],
    "module": "ReviewExample.Divides",
    "own": "71492c4ca5df6679",
+   "signature": "ReviewExample.Divides.mod {d m n : Nat} (hm : Divides d m) (hn : Divides d n) : Divides d (m % n)",
    "uses": [
     "Nat",
     "Nat.mod"
@@ -92,6 +102,7 @@
    "deps": [
     "ReviewExample.Divides"
    ],
+   "doc": "A common divisor of `n` and of `m % n` divides `m`. ",
    "kind": "theorem",
    "lines": [
     22,
@@ -99,6 +110,7 @@
    ],
    "module": "ReviewExample.Divides",
    "own": "e50f985bfa39afb8",
+   "signature": "ReviewExample.Divides.of_mod {d m n : Nat} (hmod : Divides d (m % n)) (hn : Divides d n) : Divides d m",
    "uses": [
     "Nat",
     "Nat.mod"
@@ -108,6 +120,7 @@
    "deps": [
     "ReviewExample.Divides"
    ],
+   "doc": "Every number divides itself. ",
    "kind": "theorem",
    "lines": [
     14,
@@ -115,6 +128,7 @@
    ],
    "module": "ReviewExample.Divides",
    "own": "376db7f92d83c15d",
+   "signature": "ReviewExample.Divides.refl (n : Nat) : Divides n n",
    "uses": [
     "Nat"
    ]
@@ -123,6 +137,7 @@
    "deps": [
     "ReviewExample.Divides"
    ],
+   "doc": "Every number divides zero. ",
    "kind": "theorem",
    "lines": [
     18,
@@ -130,6 +145,7 @@
    ],
    "module": "ReviewExample.Divides",
    "own": "28c5f3ef7322fb11",
+   "signature": "ReviewExample.Divides.zero (d : Nat) : Divides d 0",
    "uses": [
     "Nat"
    ]
@@ -138,6 +154,7 @@
    "deps": [
     "ReviewExample.Divides"
    ],
+   "doc": "Zero divides `n` exactly when `n` is zero. ",
    "kind": "theorem",
    "lines": [
     12,
@@ -145,6 +162,7 @@
    ],
    "module": "ReviewExample.Zero",
    "own": "d38cdde06bbf153e",
+   "signature": "ReviewExample.Divides.zero_left (n : Nat) : Divides 0 n \u2194 n = 0",
    "uses": [
     "Eq",
     "Iff",
@@ -155,6 +173,7 @@
    "deps": [
     "ReviewExample.Divides"
    ],
+   "doc": "`n` is prime: its only divisors are 1 and itself. ",
    "kind": "def",
    "lines": [
     14,
@@ -162,6 +181,7 @@
    ],
    "module": "ReviewExample.Prime",
    "own": "4d62eca44d66b024",
+   "signature": "ReviewExample.Prime (n : Nat) : Prop",
    "uses": [
     "Eq",
     "Nat",
@@ -174,6 +194,7 @@
     "ReviewExample.Divides",
     "ReviewExample.Prime"
    ],
+   "doc": "A prime is coprime to every number it doesn't divide. ",
    "kind": "theorem",
    "lines": [
     18,
@@ -181,6 +202,7 @@
    ],
    "module": "ReviewExample.Prime",
    "own": "537758fd2a542fa7",
+   "signature": "ReviewExample.Prime.coprime {p n : Nat} (hp : Prime p) (h : \u00acDivides p n) : Coprime p n",
    "uses": [
     "Nat",
     "Not"
@@ -188,6 +210,7 @@
   },
   "ReviewExample.Steps": {
    "deps": [],
+   "doc": "Either finished, or one more step and then the rest. ",
    "kind": "inductive",
    "lines": [
     9,
@@ -195,12 +218,14 @@
    ],
    "module": "ReviewExample.Steps",
    "own": "d838235e590fb4f4",
+   "signature": "ReviewExample.Steps : Type",
    "uses": []
   },
   "ReviewExample.Steps.count": {
    "deps": [
     "ReviewExample.Steps"
    ],
+   "doc": "How many steps are in a record. ",
    "kind": "def",
    "lines": [
     14,
@@ -208,6 +233,7 @@
    ],
    "module": "ReviewExample.Steps",
    "own": "6ebb3873c1768f9c",
+   "signature": "ReviewExample.Steps.count : Steps \u2192 Nat",
    "uses": [
     "Nat",
     "PProd",
@@ -222,6 +248,7 @@
     "ReviewExample.Divides",
     "ReviewExample.gcd"
    ],
+   "doc": "**Every common divisor of `a` and `b` divides `gcd a b`**, so it is the greatest. ",
    "kind": "theorem",
    "lines": [
     35,
@@ -229,12 +256,14 @@
    ],
    "module": "ReviewExample.Gcd",
    "own": "9aefa9c1dbe03520",
+   "signature": "ReviewExample.divides_gcd {d : Nat} (a b : Nat) (ha : Divides d a) (hb : Divides d b) : Divides d (gcd a b)",
    "uses": [
     "Nat"
    ]
   },
   "ReviewExample.gcd": {
    "deps": [],
+   "doc": "The greatest common divisor, by Euclid's algorithm: replace `(a, b)` by `(b % a, a)` until\n`a` is zero. ",
    "kind": "def",
    "lines": [
     12,
@@ -242,6 +271,7 @@
    ],
    "module": "ReviewExample.Gcd",
    "own": "f2a0d372c12a8ae4",
+   "signature": "ReviewExample.gcd : Nat \u2192 Nat \u2192 Nat",
    "uses": [
     "InvImage",
     "Nat",
@@ -257,6 +287,7 @@
     "ReviewExample.Divides",
     "ReviewExample.gcd"
    ],
+   "doc": "`gcd a b` divides both `a` and `b`. ",
    "kind": "theorem",
    "lines": [
     20,
@@ -264,6 +295,7 @@
    ],
    "module": "ReviewExample.Gcd",
    "own": "b9aac3338366be19",
+   "signature": "ReviewExample.gcd_divides (a b : Nat) : Divides (gcd a b) a \u2227 Divides (gcd a b) b",
    "uses": [
     "And",
     "Nat"
@@ -274,6 +306,7 @@
     "ReviewExample.Divides",
     "ReviewExample.gcd"
    ],
+   "doc": "The greatest common divisor divides the product. ",
    "kind": "theorem",
    "lines": [
     26,
@@ -281,6 +314,7 @@
    ],
    "module": "ReviewExample.Multiples.Lcm",
    "own": "523ff39db45889a1",
+   "signature": "ReviewExample.gcd_divides_mul (a b : Nat) : Divides (gcd a b) (a * b)",
    "sorryFrom": [
     "ReviewExample.gcd_mul_lcm"
    ],
@@ -297,6 +331,7 @@
     "ReviewExample.Divides",
     "ReviewExample.gcd"
    ],
+   "doc": "The same, with the product the other way around. ",
    "kind": "theorem",
    "lines": [
     30,
@@ -304,6 +339,7 @@
    ],
    "module": "ReviewExample.Multiples.Lcm",
    "own": "7c396db722bbf8ca",
+   "signature": "ReviewExample.gcd_divides_mul_comm (a b : Nat) : Divides (gcd a b) (b * a)",
    "sorryFrom": [
     "ReviewExample.gcd_mul_lcm"
    ],
@@ -320,6 +356,7 @@
     "ReviewExample.gcd",
     "ReviewExample.lcm"
    ],
+   "doc": "The greatest common divisor times the least common multiple is the product. Not proved yet. ",
    "kind": "theorem",
    "lines": [
     17,
@@ -327,6 +364,7 @@
    ],
    "module": "ReviewExample.Multiples.Lcm",
    "own": "bdf52440b3b5130c",
+   "signature": "ReviewExample.gcd_mul_lcm (a b : Nat) : gcd a b * lcm a b = a * b",
    "sorry": true,
    "uses": [
     "Eq",
@@ -338,6 +376,7 @@
    "deps": [
     "ReviewExample.gcd"
    ],
+   "doc": "The least common multiple: the product, divided by what the two numbers share. ",
    "kind": "def",
    "lines": [
     13,
@@ -345,6 +384,7 @@
    ],
    "module": "ReviewExample.Multiples.Lcm",
    "own": "3ad3e0d064f54865",
+   "signature": "ReviewExample.lcm (a b : Nat) : Nat",
    "uses": [
     "Nat",
     "Nat.div",
@@ -356,6 +396,7 @@
     "ReviewExample.gcd",
     "ReviewExample.lcm"
    ],
+   "doc": "`gcd_mul_lcm`, with the factors the other way around. ",
    "kind": "theorem",
    "lines": [
     21,
@@ -363,6 +404,7 @@
    ],
    "module": "ReviewExample.Multiples.Lcm",
    "own": "593469f4c051e208",
+   "signature": "ReviewExample.lcm_mul_gcd (a b : Nat) : lcm a b * gcd a b = a * b",
    "sorryFrom": [
     "ReviewExample.gcd_mul_lcm"
    ],

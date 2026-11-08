@@ -297,6 +297,13 @@ end ReviewExample"""
         self.assertEqual(self.changed(after, "own"), set())
         self.assertTrue(after["declarations"]["ReviewExample.gcd_divides_mul"]["sorry"])
 
+    def test_a_signature_shows_what_variables_add_and_the_docstring_is_kept(self):
+        after = self.edited(GCD, "end ReviewExample", "section\nvariable {α : Type} [Inhabited α]\n\n"
+                            "/-- Every value equals itself. -/\ntheorem same (x : α) : x = x := rfl\nend\n\nend ReviewExample")
+        same = after["declarations"]["ReviewExample.same"]
+        self.assertEqual(same["signature"], "ReviewExample.same {α : Type} [Inhabited α] (x : α) : x = x")
+        self.assertEqual(same["doc"], "Every value equals itself. ")
+
     def test_a_partial_def_says_so(self):
         after = self.edited(GCD, "end ReviewExample", "partial def spin (n : Nat) : Nat := spin n\n\nend ReviewExample")
         self.assertEqual(after["declarations"]["ReviewExample.spin"]["kind"], "partial def")

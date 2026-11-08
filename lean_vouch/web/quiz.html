@@ -77,14 +77,9 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
 </div>
 <script src="/review/links.js"></script>
 <script src="/review/math.js"></script>
+<script src="/review/lean.js"></script>
 <script>
 (async () => {
-  if (window.reviewDocs === false) {
-    document.body.replaceChildren(Object.assign(document.createElement("p"), { innerHTML:
-      "Quiz mode shows each statement from its docs page, and lean-vouch ran with <code>--no-docs</code>. " +
-      "Run it without <code>--no-docs</code> to build them, or go back to the <a href='/review/diagram'>diagram</a>." }));
-    return;
-  }
   let [marks, graph] = await Promise.all([
     fetch("/review/data").then(reviewChecked),
     fetch("/review/graph").then(r => r.json()),
@@ -104,6 +99,9 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   let lastDocs = null;
   try { lastDocs = sessionStorage.getItem("lean-vouch-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
+  // A run with --no-docs: statements and docstrings come from the graph instead.
+  const hasDocs = window.reviewDocs !== false;
+  document.getElementById("docs-link").hidden = !hasDocs;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
   const post = reviewPost;
   const el = (tag, cls, text) => {
@@ -357,7 +355,22 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   function headerHints(header, kind, hints) {
     const args = [...header.querySelectorAll(".decl_args")].map(a => a.textContent.replace(/\s+/g, " ").trim())
       .filter(t => t && t !== ":");
-    const type = header.querySelector(".decl_type")?.textContent.replace(/\s+/g, " ").trim() ?? "";
+    shapeHints(args, header.querySelector(".decl_type")?.textContent.replace(/\s+/g, " ").trim() ?? "", kind, hints);
+  }
+  // A signature as the graph has it, `Name binders : type`, split into its binders and its type.
+  function signatureParts(signature) {
+    const text = signature.replace(/\s+/g, " ").replace(/^\S+\s?/, "");
+    const args = [];
+    let depth = 0, start = -1;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if ("([{⦃".includes(c)) { if (depth++ === 0) start = i; }
+      else if (")]}⦄".includes(c)) { if (--depth === 0) args.push(text.slice(start, i + 1)); }
+      else if (depth === 0 && c === ":" && text[i + 1] !== "=") return { args, type: text.slice(i + 1).trim() };
+    }
+    return { args, type: "" };
+  }
+  function shapeHints(args, type, kind, hints) {
     const list = args.map(a => `\`${a}\``).join(", ");
     if (kind === "theorem")
       hints.add(`shape|Read it as: given ${list || "no arguments"}, the conclusion \`${type}\` holds. Arguments whose type is a claim are hypotheses; the others name the things it talks about.`);
@@ -437,6 +450,36 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     fill();
     book.append(search, ul);
   }
+  // Without docs: a declaration's statement, as Lean printed it, and its docstring, from the graph.
+  // Names in it open in the book, as the docs' links do.
+  function statementFromGraph(name, hidden) {
+    const signature = decls[name]?.signature;
+    if (!signature) return null;
+    const pre = el("pre", "code statement");
+    pre.style.whiteSpace = "pre-wrap";
+    pre.append(el("span", "lean-keyword", `${decls[name].kind} `));
+    const rest = signature.replace(/^\S+/, "");
+    if (hidden) pre.append(Object.assign(el("span", "hidden-name", "▢"), { title: "name hidden" }));
+    else pre.append(short(name));
+    pre.append(reviewLean.highlight(rest, written => {
+      const target = reviewLean.resolve(written, name, n => !!info(n));
+      if (!target) return null;
+      if (hidden && target === name) return Object.assign(el("span", "hidden-name", "▢"), { title: "name hidden" });
+      const a = el("a", "ref", written);
+      a.title = target;
+      a.onclick = () => lookup(target);
+      return a;
+    }));
+    return pre;
+  }
+  function docFromGraph(name) {
+    const doc = decls[name]?.doc;
+    if (!doc?.trim()) return null;
+    const rendered = reviewLean.markdown(doc);
+    reviewMath.typeset(rendered);
+    return rendered;
+  }
+
   async function lookup(name, anyway = false) {
     const back = el("a", "ref", "← all reviewed declarations");
     back.onclick = () => bookIndex();
@@ -457,6 +500,12 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
         show.onclick = () => lookup(name, true);
         book.append(show);
       }
+      return;
+    }
+    if (!hasDocs) {
+      const statement = statementFromGraph(name, false), doc = docFromGraph(name);
+      if (!statement) { book.append(el("p", "muted", "A library definition: its statement is in its own library's docs.")); return; }
+      book.append(statement, ...(doc ? [doc] : []));
       return;
     }
     const entry = await docEntry(name);
@@ -493,8 +542,16 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     // `variable`, and names linked to the open book.
     const hints = new Set();
     const texts = [];
-    const entry = await docEntry(name);
-    if (entry) {
+    const entry = hasDocs ? await docEntry(name) : null;
+    if (!hasDocs) {
+      const statement = statementFromGraph(name, true);
+      if (statement) {
+        const { args, type } = signatureParts(decls[name].signature);
+        shapeHints(args, type, kind, hints);
+        texts.push(statement.textContent);
+        main.append(el("h2", null, "Statement"), statement);
+      }
+    } else if (entry) {
       const header = entry.querySelector(".decl_header");
       header.querySelector(".decl_name").replaceChildren(Object.assign(el("span", "hidden-name", "▢"), { title: "name hidden" }));
       for (const a of header.querySelectorAll("a[href]"))
@@ -584,11 +641,13 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     const rn = el("p"); rn.append(code(short(name)));
     real.append(rn);
     // The docstring: the entry without its header, equations, fields or constructors.
-    const entry = await docEntry(name);
+    const entry = hasDocs ? await docEntry(name) : null;
     for (const x of entry?.querySelectorAll(".decl_header, details, .structure_fields, .constructors") ?? []) x.remove();
     const doc = el("div");
     doc.append(...(entry?.firstElementChild?.childNodes ?? []));
-    if (doc.textContent.trim()) real.append(await shadowed(doc));
+    const fromGraph = hasDocs ? null : docFromGraph(name);
+    if (fromGraph) real.append(fromGraph);
+    else if (doc.textContent.trim()) real.append(await shadowed(doc));
     else real.append(el("p", "muted", "No docstring, so only the name to compare with. Your answer could become one."));
     compare.append(yours, real);
     main.append(el("h2", null, "Compare"), compare,

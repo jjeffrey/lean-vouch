@@ -275,10 +275,10 @@ class ReviewTest(unittest.TestCase):
         lake.write_text(LAKE)
         lake.chmod(lake.stat().st_mode | stat.S_IEXEC)
 
-    def run_review(self, toolchain):
+    def run_review(self, toolchain, *options):
         (self.root / "lean-toolchain").write_text(f"leanprover/lean4:{toolchain}\n")
         env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
-        return subprocess.run([sys.executable, str(REVIEW), "MyProject", "--rebuild"], cwd=self.root, env=env,
+        return subprocess.run([sys.executable, str(REVIEW), "MyProject", "--rebuild", *options], cwd=self.root, env=env,
                               capture_output=True, text=True)
 
     def test_an_old_lean_is_refused_before_anything_is_built(self):
@@ -418,7 +418,7 @@ class ReviewTest(unittest.TestCase):
         self.stub_graph(f'echo "$*" >> "{calls}"\n'
                         'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
                         "mkdir -p .lake/build/doc\n")
-        self.run_review("v4.35.0")
+        self.run_review("v4.35.0", "--docs")
         builds = [line for line in calls.read_text().splitlines() if line.startswith("build") and "lean-vouch-graph" not in line]
         self.assertEqual(len(builds), 2, "the project, then its docs")
         for build in builds:
@@ -466,8 +466,30 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn(":docs", calls.read_text())
         self.assertNotIn("update", calls.read_text(), "doc-gen4 isn't fetched either")
-        self.assertIn("skipped the docs", result.stdout)
+        self.assertIn("no doc pages", result.stdout)
         self.assertIs(json.loads((self.root / ".lean-vouch" / "build.json").read_text())["docs"], False)
+
+    def docs_built(self, *options):
+        calls = self.root / "calls"
+        calls.unlink(missing_ok=True)
+        (self.root / ".lean-vouch" / "graph.key").unlink(missing_ok=True)   # the stub's graph is a placeholder
+        self.stub_graph(f'echo "$*" >> "{calls}"\n'
+                        'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
+                        "mkdir -p .lake/build/doc\n")
+        self.assertEqual(self.run_review("v4.35.0", *options).returncode, 0)
+        return ":docs" in calls.read_text()
+
+    def test_a_new_project_starts_without_docs_and_remembers_the_choice(self):
+        self.assertFalse(self.docs_built())
+        self.assertTrue(self.docs_built("--docs"))
+        self.assertTrue(self.docs_built(), "kept from the last run")
+        self.assertFalse(self.docs_built("--no-docs"))
+        self.assertFalse(self.docs_built(), "kept from the last run")
+
+    def test_a_project_from_before_the_choice_keeps_its_docs(self):
+        (self.root / ".lean-vouch").mkdir()
+        (self.root / ".lean-vouch" / "build.json").write_text('{"state": "done", "built": "then"}')
+        self.assertTrue(self.docs_built())
 
     def graph_runs(self, script=""):
         calls = self.root / "calls"
@@ -516,7 +538,7 @@ class ReviewTest(unittest.TestCase):
     def test_a_failed_docs_build_leaves_the_old_graph(self):
         self.stub_graph('case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;;\n'
                         '  *docs*) exit 1 ;; esac\n')
-        self.assertNotEqual(self.run_review("v4.35.0").returncode, 0)
+        self.assertNotEqual(self.run_review("v4.35.0", "--docs").returncode, 0)
         self.assertEqual((self.root / ".lean-vouch" / "graph.json").read_text(), '{"good": true}')
 
     def test_an_edited_gitignore_survives_losing_docbuild(self):

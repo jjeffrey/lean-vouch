@@ -9,7 +9,8 @@
 - The diagram's side panels can be hidden, for a larger diagram.
 - The diagram takes `?open=` with a list of modules, opening only the folders on the way to them.
 - A rebuild skips the declaration graph when nothing it's made from has changed: on a project that imports Mathlib, seconds instead of a minute or two. A busy port is reported before building, not after.
-- `--no-docs` skips the docs, for a diagram in a minute or two on a project that imports Mathlib. Marks, notes and challenges work without them; doc pages and quiz mode don't.
+- Doc pages are now optional, and a new project starts without them: the diagram is ready in a minute or two, or a few more with Mathlib, instead of about 35. `--docs` adds them and `--no-docs` stops them, and the project remembers the choice; a project set up before 0.1.1 keeps its docs.
+- Without doc pages, the diagram's sidebar shows a declaration's docstring, its statement as Lean printed it (with what `variable`s add), and its code, colored, with names linked. Quiz mode works from the same.
 - Fixes: a project of one module shows it in the diagram's list, and a `partial def` is called that, not "opaque".
 - Docs: a walkthrough of finding and fixing a definition that doesn't mean what it should, and sharper screenshots.
 

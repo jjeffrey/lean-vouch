@@ -47,7 +47,8 @@ INJECT = (b'<link rel="stylesheet" href="/review/review.css"><script src="/revie
 # any name, so these must not end in .html: then none can be a module's page, even in a project with
 # a module called review.
 PAGES = {"/review/diagram": "graph.html", "/review/quiz": "quiz.html", "/review/review.js": "review.js",
-         "/review/review.css": "review.css", "/review/links.js": "links.js", "/review/math.js": "math.js"}
+         "/review/review.css": "review.css", "/review/links.js": "links.js", "/review/math.js": "math.js",
+         "/review/lean.js": "lean.js"}
 
 lock = threading.Lock()
 args = None

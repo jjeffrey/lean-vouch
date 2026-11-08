@@ -102,6 +102,8 @@
   g.cluster.hl-up > polygon, g.cluster.hl-up > path { stroke: #8e44ad !important; stroke-width: 2px !important; }
   g.cluster.hl-both > polygon, g.cluster.hl-both > path { stroke: #0a8f7a !important; stroke-width: 2px !important; }
   g.cluster.hl-selected > polygon, g.cluster.hl-selected > path { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
+  #sidebar pre.signature { white-space: pre-wrap; }
+  #sidebar pre a.code-ref { color: inherit; text-decoration: none; border-bottom: 1px dotted #1a5fb4; cursor: pointer; }
   #sidebar .challenge-toggle { display: block; margin: 0.5em 0; cursor: pointer; }
   #sidebar .challenge-actions { display: flex; gap: 0.6em; margin: 0.6em 0; }
   #sidebar .challenge-list li button { margin-left: 0.5em; font-size: 0.85em; }
@@ -175,6 +177,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 <script src="https://cdn.jsdelivr.net/npm/d3-graphviz@5.1.0/build/d3-graphviz.min.js"></script>
 <script src="/review/links.js"></script>
 <script src="/review/math.js"></script>
+<script src="/review/lean.js"></script>
 <script>
 (async () => {
   // A large project sends the folder tree and what the marks need; the declarations of a module
@@ -198,9 +201,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   let lastDocs = null;
   try { lastDocs = sessionStorage.getItem("lean-vouch-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
-  // A run with --no-docs has no docs pages, and quiz mode is built on them.
+  // A run with --no-docs has no docs pages.
   const hasDocs = window.reviewDocs !== false;
-  if (!hasDocs) for (const a of document.querySelectorAll("header.views nav a")) a.hidden = true;
+  document.getElementById("docs-link").hidden = !hasDocs;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
   const post = reviewPost;
 
@@ -651,7 +654,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     delete sidebar.dataset.panel;
     sidebar.replaceChildren(el("h2", null, group.name),
       el("p", "muted", `${group.module ? "module" : "folder"}, ${group.count} declarations, ${marked} marked`),
-      ...(hasDocs ? [quiz] : []), reachList(reach));
+      quiz, reachList(reach));
   }
 
   // The list of folders and modules: open or close each one, pick several, or find one by name.
@@ -975,7 +978,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     sidebar.append(el("h2", null, name), el("p", "muted", `${i?.kind ?? ""} in ${i?.module ?? "?"}`));
 
     // Documentation first, as on the docs pages: the declaration as doc-gen4 renders it. Without
-    // the docs, the code below shows it as written.
+    // the docs, its docstring, its statement as Lean printed it, with what `variable`s add, and its
+    // code as written, before the review: what's being reviewed comes first.
     if (hasDocs) {
       const docsHeading = el("h3", null, "Documentation ");
       const docs = el("a", "muted", "open in docs");
@@ -983,6 +987,19 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       docs.style.fontWeight = "normal";
       docsHeading.append(docs);
       sidebar.append(docsHeading, await renderedDocs(name));
+    } else if (!isLibrary) {
+      if (decls[name].doc) {
+        const doc = reviewLean.markdown(decls[name].doc);
+        sidebar.append(doc);
+        reviewMath.typeset(doc);
+      }
+      if (decls[name].signature) {
+        const statement = el("pre", "signature");
+        statement.append(el("span", "lean-keyword", `${decls[name].kind} `), reviewLean.highlight(decls[name].signature, codeLink(name)));
+        statement.title = "As Lean understood it, with every argument, including those a `variable` adds";
+        sidebar.append(el("h3", null, "Statement"), statement);
+      }
+      await appendCode(name);
     }
 
     // Mark and note thread, editable here.
@@ -1088,29 +1105,39 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     };
     sidebar.append(input, add);
 
-    // Code: a theorem's proof is collapsed, since Lean checks it.
-    if (!isLibrary) {
-      sidebar.append(el("h3", null, "Code"));
-      const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json());
-      if (src.error) sidebar.append(el("p", "muted", src.error));
-      else {
-        if (src.edited) sidebar.append(el("p", "stale", "The source has changed since the last build, so this may not line up."));
-        sidebar.append(el("p", "muted", `${src.file}, lines ${src.start}–${src.end}`));
-        const split = src.kind === "theorem" ? reviewProofStart(src.text) : -1;
-        if (split > 0) {
-          sidebar.append(el("pre", null, src.text.slice(0, split).trimEnd()));
-          const proof = el("details");
-          proof.append(el("summary", "muted", "proof (checked by Lean)"), el("pre", null, src.text.slice(split)));
-          sidebar.append(proof);
-        } else sidebar.append(el("pre", null, src.text));
-      }
-    }
+    if (!isLibrary && hasDocs) await appendCode(name);
 
     // Direct neighbours; the diagram highlights everything reachable.
     const deps = isLibrary ? [] : [...decls[name].deps, ...decls[name].uses.filter(visible)];
     sidebar.append(el("h3", "key-down", `Depends on (${deps.length})`), refList(deps));
     const users = usedBy.get(name) ?? [];
     sidebar.append(el("h3", "key-up", `Used by (${users.length})`), refList(users));
+  }
+
+  // A name in a declaration's code, as a link to it, if the graph knows what it means there.
+  const codeLink = within => written => {
+    const target = reviewLean.resolve(written, within, n => !!info(n));
+    if (!target || target === within) return null;
+    const a = el("a", "code-ref", written);
+    a.title = target;
+    a.onclick = () => select(target);
+    return a;
+  };
+  // Code, colored, with its names linked: a theorem's proof is collapsed, since Lean checks it.
+  async function appendCode(name) {
+    sidebar.append(el("h3", null, "Code"));
+    const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json());
+    if (src.error) { sidebar.append(el("p", "muted", src.error)); return; }
+    if (src.edited) sidebar.append(el("p", "stale", "The source has changed since the last build, so this may not line up."));
+    sidebar.append(el("p", "muted", `${src.file}, lines ${src.start}–${src.end}`));
+    const code = text => { const pre = el("pre"); pre.append(reviewLean.highlight(text, codeLink(name))); return pre; };
+    const split = src.kind === "theorem" ? reviewProofStart(src.text) : -1;
+    if (split > 0) {
+      sidebar.append(code(src.text.slice(0, split).trimEnd()));
+      const proof = el("details");
+      proof.append(el("summary", "muted", "proof (checked by Lean)"), code(src.text.slice(split)));
+      sidebar.append(proof);
+    } else sidebar.append(code(src.text));
   }
 
   // doc-gen4 pages, fetched once per module; a declaration's entry is the element with its name.

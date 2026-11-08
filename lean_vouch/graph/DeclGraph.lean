@@ -392,6 +392,16 @@ def hex (h : UInt64) : String :=
   let s := String.ofList (Nat.toDigits 16 h.toNat)
   "".pushn '0' (16 - s.length) ++ s
 
+/-- A declaration's signature as Lean prints it: every argument, including those that came from a
+`variable` and so aren't in its source text, and its type. Empty if it can't be printed. -/
+def signature (env : Environment) (n : Name) : IO String := do
+  -- From inside its own namespace, as its source is written, so neighbours' names print short.
+  let context : Core.Context := { fileName := "", fileMap := default, maxHeartbeats := 0, currNamespace := n.getPrefix }
+  try
+    let (sig, _) ← (Meta.MetaM.run' (PrettyPrinter.ppSignature n)).toIO context { env }
+    return toString sig.fmt
+  catch _ => return ""
+
 /-- `unsafe` only because loading the imported modules' extensions (which record instances and
 deprecations) requires running their initializers. -/
 unsafe def main (args : List String) : IO UInt32 := do
@@ -462,8 +472,15 @@ unsafe def main (args : List String) : IO UInt32 := do
     let shown (a : Name) : String :=
       if a == `Lean.ofReduceBool || a.components.contains `_native then "native_decide" else a.toString
     (if axioms.isEmpty then [] else [("axioms", toJson (axioms.map shown).toList.eraseDups.toArray)])
+  -- What a reviewer reads without the docs: the signature as Lean understood it, and the docstring.
+  let mut readable : Std.HashMap Name (List (String × Json)) := {}
+  for n in names do
+    let sig ← signature env n
+    let doc ← findDocString? env n
+    readable := readable.insert n <|
+      (if sig.isEmpty then [] else [("signature", Json.str sig)]) ++ (doc.map fun d => [("doc", Json.str d)]).getD []
   let decls := (names.qsort Name.lt).map fun n =>
-    (n.toString, Json.mkObj <| List.append (gapFields n) <| [
+    (n.toString, Json.mkObj <| List.append (gapFields n) <| List.append ((readable.get? n).getD []) <| [
       ("kind", kind n),
       ("module", module n),
       ("lines", lines n),

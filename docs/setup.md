@@ -1,6 +1,6 @@
 # Setup and options
 
-The first run adds doc-gen4's packages to `.lake/packages`, and a `.lean-vouch` folder:
+The first run adds a `.lean-vouch` folder, and with `--docs`, doc-gen4's packages in `.lake/packages`:
 
 ```text
 .lean-vouch/
@@ -25,10 +25,14 @@ matches your `lean-toolchain`, so your project gains no dependency. Everything b
 rebuilt or is yours alone, so `.lean-vouch/.gitignore` ignores it. To keep marks out of git too, edit
 that file: it's only written on the first run. In a public repository, committed notes are public.
 
-The first docs build takes time, because doc-gen4 documents everything the project imports. To start
-reviewing sooner, run with `--no-docs`, and build the docs later:
+Doc pages are optional. Without them, the diagram's sidebar shows each declaration's docstring, its
+statement as Lean printed it, and its code, and quiz mode works from the same. With `--docs`, every
+module also gets its doc-gen4 page, with review controls under each declaration, to read a module
+from top to bottom. The project remembers the choice until `--no-docs`, and a project set up before
+lean-vouch 0.1.1 keeps its docs. The first docs build takes time, because doc-gen4 documents
+everything the project imports:
 
-| Project | First run | Disk |
+| Project | First docs build | Disk |
 | --- | --- | --- |
 | No dependencies | about 7 minutes, mostly compiling doc-gen4 | about 1 GB |
 | Using Mathlib | about 35 minutes | 2 GB |
@@ -46,7 +50,8 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 | `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
 | `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git name or email changes, pass your old id to stay the same person; your marks and quiz answers are under it. |
 | `--rebuild` | Rebuild the docs and graph without starting a server |
-| `--no-docs` | Skip the docs, which take most of a first run's time. The diagram, marks, notes and challenges work without them; doc pages and quiz mode need a run without it. A rebuild from a page does the same as the last run. |
+| `--docs` | Build doc pages too, from now on in this project. They take most of a first run's time. |
+| `--no-docs` | Stop building doc pages, from now on in this project. Those already built are kept, but not shown, since they'd be older than the graph. |
 | `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
 | `--challenge [THEOREM ...]` | Write the project's [challenge for `lake comparator`](challenge.md), from the theorems chosen in the pages, or make the theorems named here the chosen ones first |
 
