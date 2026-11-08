@@ -412,12 +412,21 @@ def newest_change():
     if time.monotonic() - newest["checked"] < 10:
         return newest["time"]
     times = []
+    # The challenge written into the project isn't reviewed, so writing it changes nothing here.
+    skip = set()
+    if root := project():
+        try:
+            module = json.loads((root / "comparator.json").read_text(encoding="utf-8")).get("challenge_module")
+            if isinstance(module, str):
+                skip.add(str((challenges.source_root(root) / (module.replace(".", "/") + ".lean")).resolve()))
+        except (OSError, ValueError, AttributeError):
+            pass
     def walk(folder):
         try:
             for entry in os.scandir(folder):
                 if entry.is_dir(follow_symlinks=False) and not entry.name.startswith("."):
                     walk(entry.path)
-                elif entry.name.endswith(".lean") and entry.is_file():
+                elif entry.name.endswith(".lean") and entry.is_file() and os.path.realpath(entry.path) not in skip:
                     times.append(entry.stat().st_mtime)
         except OSError:
             pass

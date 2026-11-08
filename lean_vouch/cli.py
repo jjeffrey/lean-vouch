@@ -619,10 +619,20 @@ def write_challenge(targets, who):
     print("lean-vouch: it matches the project, declaration by declaration.", flush=True)
     # Only now, so the project never holds a challenge that says something else.
     try:
-        for change in challenge.install(out):
-            print(f"lean-vouch: {change}.", flush=True)
+        changes = challenge.install(out)
     except challenge.ChallengeError as error:
         fail(str(error))
+    for change in changes:
+        print(f"lean-vouch: {change}.", flush=True)
+    if any("lakefile" in change for change in changes):
+        # Adding the challenge's library changes nothing reviewed, so the last build is still current,
+        # and open pages shouldn't offer to rebuild for it.
+        last = last_run()
+        if isinstance(last.get("since"), (int, float)):
+            last["since"] = time.time()
+            temporary = HOME / "build.json.tmp"   # swapped in whole, as the server may be reading it
+            temporary.write_text(json.dumps(last), encoding="utf-8")
+            os.replace(temporary, HOME / "build.json")
     waiting = unagreed(graph_file, names, who)
     if waiting:
         print(f"lean-vouch: you haven't agreed with {len(waiting)} of them as they are now: {', '.join(waiting)}.", flush=True)

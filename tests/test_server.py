@@ -151,6 +151,22 @@ class ServerTest(unittest.TestCase):
         server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid(), "since": 500}))
         self.assertFalse(self.status()["stale"], "a build is already on its way")
 
+    def test_writing_the_challenge_into_the_project_isnt_a_code_change(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        server.args.source = [self.root]
+        (self.root / "M.lean").write_text("")
+        os.utime(self.root / "M.lean", (1_000, 1_000))
+        (self.root / "comparator.json").write_text(json.dumps({"challenge_module": "Challenge"}))
+        (self.root / "Challenge.lean").write_text("")   # just written, so newer than the build
+        server.args.build.write_text(json.dumps({"state": "done", "since": 2_000}))
+        server.newest["checked"] = 0
+        self.assertFalse(self.status()["stale"])
+        os.utime(self.root / "M.lean")                    # a reviewed module, though, is
+        server.newest["checked"] = 0
+        self.assertTrue(self.status()["stale"])
+
     def test_a_server_not_started_by_lean_vouch_cant_rebuild(self):
         self.assertFalse(self.status()["can_rebuild"])
         self.assertEqual(self.post("/review/rebuild", {})[0], 409)
