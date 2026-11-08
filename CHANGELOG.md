@@ -2,7 +2,9 @@
 
 ## Unreleased
 
+- `--challenge THEOREM` writes a challenge for `lake comparator`: the theorems' statements and the project's definitions beneath them, checked by fingerprint to say what the project says.
 - Pages say when the code has changed since the last build, with a button to rebuild, and show how far a rebuild has got and how long each step has taken. A build's output also goes to `.lean-vouch/build.log`.
+- The graph program is compiled once for each Lean version, so a rebuild with nothing new takes a couple of seconds instead of about ten. Each step says what it's doing and counts up while it runs.
 - A run no longer shows the project's own build warnings, which `lake build` shows. A failing build still shows everything.
 - The diagram's side panels can be hidden, for a larger diagram.
 - The diagram takes `?open=` with a list of modules, opening only the folders on the way to them.

@@ -43,6 +43,7 @@ python3 -m unittest discover -s tests
 | --- | --- | --- |
 | `tests/test_server.py` | Python | Marks and notes are saved and read back, each in its owner's file; renames and moves never overwrite a mark; a broken or newer marks file is refused and left alone; only the tool's own pages are answered. |
 | `tests/test_review.py` | Python | What the command checks and how it fails, with a stand-in for `lake`; who you are, which modules are reviewed, and what git ignores. |
+| `tests/test_challenge.py` | Python; Lean for the last two | What goes into a challenge, and that one saying something other than the project is caught. |
 | `tests/test_graph.py` | Lean | On edited copies of the example: changing a proof or a docstring changes no fingerprint, and changing a statement or definition changes the right ones. The graph is compared with `tests/golden/`. |
 | `tests/test_pages.py` | Example docs, Chrome, network | The controls attach to doc-gen4's pages, marks are flagged exactly when something changed, the diagram draws, and clicking the buttons does what it should, from inside the page. |
 

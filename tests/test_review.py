@@ -235,6 +235,18 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(review.reason(KeyboardInterrupt()), "The build was interrupted.")
         self.assertEqual(review.reason(SystemExit("lean-vouch: first\nsecond")), "lean-vouch: first")
 
+    def test_a_challenge_lists_what_you_havent_agreed_with_as_it_is_now(self):
+        graph = review.HOME / "graph.json"
+        graph.write_text(json.dumps({"library": {}, "declarations": {
+            name: {"own": own, "deps": [], "uses": [], "module": "M", "kind": "def"} for name, own in
+            (("M.agreed", "1"), ("M.changed", "2"), ("M.asked", "3"), ("M.unmarked", "4"))}}))
+        (review.HOME / "marks").mkdir()
+        mark = lambda status, own: {"status": status, "fingerprint": {"own": own, "deps": {}}, "notes": []}
+        (review.HOME / "marks" / "ada.json").write_text(json.dumps({"format": 3, "name": "Ada", "marks": {
+            "M.agreed": mark("agree", "1"), "M.changed": mark("agree", "old"), "M.asked": mark("question", "3")}}))
+        self.assertEqual(review.unagreed(graph, ["M.agreed", "M.changed", "M.asked", "M.unmarked"], "ada"),
+                         ["M.changed", "M.asked", "M.unmarked"])
+
     def test_no_server_is_none(self):
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
@@ -371,10 +383,32 @@ class ReviewTest(unittest.TestCase):
                         'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
                         "mkdir -p .lake/build/doc\n")
         self.run_review("v4.35.0")
-        builds = [line for line in calls.read_text().splitlines() if line.startswith("build")]
+        builds = [line for line in calls.read_text().splitlines() if line.startswith("build") and "lean-vouch-graph" not in line]
         self.assertEqual(len(builds), 2, "the project, then its docs")
         for build in builds:
             self.assertIn("--log-level=error", build)
+
+    def graph_runs(self, script=""):
+        calls = self.root / "calls"
+        self.stub_graph(f'echo "$*" >> "{calls}"\n' + script +
+                        'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
+                        "mkdir -p .lake/build/doc\n")
+        result = self.run_review("v4.35.0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result, [line for line in calls.read_text().splitlines() if line.startswith("env")]
+
+    def test_the_graph_program_is_compiled_once_for_the_projects_lean(self):
+        result, runs = self.graph_runs('case "$*" in "build lean-vouch-graph") mkdir -p .lake/build/bin && '
+                                       'touch .lake/build/bin/lean-vouch-graph ;; esac\n')
+        self.assertTrue(runs[0].startswith("env /") and runs[0].endswith("lean-vouch-graph MyProject"), runs)
+        tool = self.root / ".lean-vouch" / "graph-tool"
+        self.assertEqual((tool / "lean-toolchain").read_text(), (self.root / "lean-toolchain").read_text())
+        self.assertIn("compiling the graph program", result.stdout)
+
+    def test_a_graph_program_that_wont_compile_still_runs(self):
+        result, runs = self.graph_runs()
+        self.assertTrue(runs[0].startswith("env lean --run ") and runs[0].endswith("DeclGraph.lean MyProject"), runs)
+        self.assertIn("runs more slowly", result.stdout)
 
     def test_a_good_build_says_when_it_started_and_what_it_reviewed(self):
         self.stub_graph('case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'

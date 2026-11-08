@@ -18,11 +18,13 @@ import threading
 import time
 import tomllib
 import unicodedata
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 from urllib.request import urlopen
 
-from lean_vouch.server import ID, VERSION
+from lean_vouch import challenge
+from lean_vouch.server import ID, VERSION, Graph
 
 HERE = Path(__file__).resolve().parent
 MINIMUM = (4, 30)  # the oldest Lean this has been run on, end to end; see docs/internals.md
@@ -189,6 +191,7 @@ JOB = re.compile(r"^\S+ \[(\d+)/(\d+)\] ")   # Lake's line for each job it finis
 
 
 STEPS = {"project": "building the project", "graph": "building the declaration graph", "docs": "building the docs"}
+DONE = {"project": "built the project", "graph": "built the declaration graph", "docs": "built the docs"}
 
 
 def elapsed(seconds):
@@ -197,26 +200,35 @@ def elapsed(seconds):
 
 
 class Terminal:
-    """What a step shows in a terminal. Each finished job replaces the one before, as Lake's own display
-    does, and everything else stays. Lake says nothing while a job runs, and one can take many
-    minutes, so after ten quiet seconds the line says how long the step has taken."""
+    """What a step shows. In a terminal, a line counts up from the step's start until there's output.
+    Each finished job then replaces the one before, as Lake's own display does, and everything else
+    stays. Lake says nothing while a job runs, and one can take many minutes, so after ten quiet
+    seconds the count comes back. When the step is done, a line says so. Elsewhere, as in a log, the
+    step is announced once."""
 
-    def __init__(self, step):
+    def __init__(self, step, label=None, done=None):
         self.live = sys.stdout.isatty()
         self.width = shutil.get_terminal_size().columns - 1
-        self.label, self.began = STEPS.get(step, "building"), time.monotonic()
-        self.heard, self.shown = self.began, False
+        self.label = label or STEPS.get(step, "building")
+        self.finished = done or DONE.get(step, "done")
+        self.began, self.heard, self.shown, self.ok = time.monotonic(), None, False, True
         self.lock, self.done = threading.Lock(), threading.Event()
 
     def __enter__(self):
         if self.live:
+            with self.lock:
+                self.tick()
             threading.Thread(target=self.wait, daemon=True).start()
+        else:
+            print(f"lean-vouch: {self.label}.", flush=True)
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, error, *_):
         self.done.set()
         with self.lock:
             self.clear()
+            if self.live and self.ok and error is None:
+                print(f"lean-vouch: {self.finished} in {elapsed(time.monotonic() - self.began)}.", flush=True)
 
     def clear(self):
         if self.shown:
@@ -224,14 +236,24 @@ class Terminal:
             sys.stdout.flush()
         self.shown = False
 
+    def tick(self):
+        so_far = elapsed(time.monotonic() - self.began)
+        if self.heard is None:
+            text = f"lean-vouch: {self.label}... {so_far}"
+        elif time.monotonic() - self.heard >= 10:
+            text = f"lean-vouch: still {self.label}, {so_far} so far"
+        else:
+            return
+        self.clear()
+        sys.stdout.write(text[:self.width])
+        sys.stdout.flush()
+        self.shown = True
+
     def wait(self):
         while not self.done.wait(1):
             with self.lock:
-                if not self.done.is_set() and time.monotonic() - self.heard >= 10:
-                    self.clear()
-                    sys.stdout.write(f"lean-vouch: still {self.label}, {elapsed(time.monotonic() - self.began)} so far"[:self.width])
-                    sys.stdout.flush()
-                    self.shown = True
+                if not self.done.is_set():
+                    self.tick()
 
     def line(self, line, passing=False):
         """Show a line of output; `passing` lines are replaced by the next."""
@@ -243,11 +265,11 @@ class Terminal:
             sys.stdout.flush()
 
 
-def run(command, cwd=".", env=None, step=None):
+def run(command, cwd=".", env=None, step=None, label=None, done=None):
     """Run a build command, its output going to the terminal and to the build log. Lake's count of jobs
     goes to open pages."""
     reported = 0
-    with LOG.open("a", encoding="utf-8") as log, Terminal(step) as terminal, subprocess.Popen(
+    with LOG.open("a", encoding="utf-8") as log, Terminal(step, label, done) as terminal, subprocess.Popen(
             command, cwd=cwd, env={**os.environ, **(env or {})}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace") as process:
         log.write(f"$ {' '.join(command)}\n")
@@ -258,6 +280,7 @@ def run(command, cwd=".", env=None, step=None):
             if job and step and time.monotonic() - reported > 0.5:
                 reported = time.monotonic()
                 report("building", step=step, done=int(job[1]), total=int(job[2]))
+        terminal.ok = process.wait() == 0
     if process.returncode:
         fail(f"`{' '.join(command)}` failed. Its output is in {LOG}.")
 
@@ -279,7 +302,8 @@ def build_docs(modules):
     follow_project_pins(docbuild)
     if not (docbuild / "lake-manifest.json").exists():
         # Keeps Mathlib's update hook from fetching its cache again.
-        run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"}, step="docs")
+        run(["lake", "update", "doc-gen4"], docbuild, {"MATHLIB_NO_CACHE_ON_UPDATE": "1"}, step="docs",
+            label="fetching doc-gen4", done="fetched doc-gen4")
     if not (docbuild / ".lake/build/doc").exists():
         uses_mathlib = '"mathlib"' in Path("lake-manifest.json").read_text(encoding="utf-8") if Path("lake-manifest.json").exists() else False
         print("lean-vouch: first docs build. doc-gen4 documents everything the project imports" +
@@ -290,15 +314,53 @@ def build_docs(modules):
         {"DOCGEN_SRC": os.environ.get("DOCGEN_SRC", "file")}, step="docs")
 
 
+GRAPH_TOOL = HOME / "graph-tool"
+GRAPH_LAKEFILE = """\
+# Builds lean-vouch's graph program as an executable, for this project's Lean.
+name = "lean-vouch-graph"
+
+[[lean_exe]]
+name = "lean-vouch-graph"
+root = "LeanVouchGraph"
+supportInterpreter = true
+"""
+
+
+def graph_program():
+    """How to run the graph program. Compiled once for the project's Lean, it takes a fraction of a
+    second on a small project, against seconds to compile it each time with `lean --run`, and works
+    faster on a large one. If it won't compile, `lean --run` still works."""
+    files = {"LeanVouchGraph.lean": (HERE / "graph/DeclGraph.lean").read_text(encoding="utf-8"),
+             "lean-toolchain": Path("lean-toolchain").read_text(encoding="utf-8"), "lakefile.toml": GRAPH_LAKEFILE}
+    GRAPH_TOOL.mkdir(exist_ok=True)
+    for name, text in files.items():   # only when different, so Lake sees nothing new
+        path = GRAPH_TOOL / name
+        if not path.exists() or path.read_text(encoding="utf-8") != text:
+            path.write_text(text, encoding="utf-8")
+    executable = GRAPH_TOOL / ".lake/build/bin/lean-vouch-graph"
+    compiling = Terminal(None, "compiling the graph program for this Lean, once", "compiled the graph program")
+    with compiling if not executable.exists() else nullcontext():
+        built = subprocess.run(["lake", "build", "lean-vouch-graph"], cwd=GRAPH_TOOL, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    with LOG.open("a", encoding="utf-8") as log:
+        log.write("$ lake build lean-vouch-graph\n" + built.stdout)
+    if built.returncode == 0 and executable.exists():
+        return [str(executable.resolve())]
+    print(f"lean-vouch: couldn't compile the graph program, so it runs more slowly. See {LOG}.", flush=True)
+    return ["lean", "--run", str(HERE / "graph/DeclGraph.lean")]
+
+
 def build_graph(modules):
     """Build the graph beside the current one, and return it. It goes to a file, since a project's
     initializers can print to stdout, where Lean also puts compile errors: show those on failure."""
     new = HOME / "graph.json.new"
     report("building", step="graph")
-    with Terminal("graph"):
-        done = subprocess.run(["lake", "env", "lean", "--run", str(HERE / "graph/DeclGraph.lean"), *modules],
+    program = graph_program()
+    with Terminal("graph") as terminal:
+        done = subprocess.run(["lake", "env", *program, *modules],
                               stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
                               env={**os.environ, "LEAN_VOUCH_GRAPH": str(new.resolve())})
+        terminal.ok = done.returncode == 0
     if done.returncode:
         new.unlink(missing_ok=True)
         fail(f"building the declaration graph failed:\n{done.stdout[-4000:]}\n"
@@ -385,6 +447,51 @@ def reason(error):
     return (str(getattr(error, "code", error)).splitlines() or ["The build was interrupted."])[0]
 
 
+def unagreed(graph_file, names, who):
+    """Of `names`, those you haven't agreed with as they are now: unmarked, marked otherwise, or
+    changed since."""
+    try:
+        marks = json.loads((HOME / "marks" / f"{who}.json").read_text(encoding="utf-8")).get("marks", {})
+    except (OSError, ValueError, AttributeError):
+        marks = {}
+    graph = Graph(graph_file)
+    current = lambda mark, now: {k: mark.get(k) for k in ("own", "deps")} == {k: now.get(k) for k in ("own", "deps")}
+    return [name for name in names if not (marks.get(name, {}).get("status") == "agree" and
+                                           current(marks[name].get("fingerprint") or {}, graph.fingerprint(name) or {}))]
+
+
+def write_challenge(targets, who):
+    """Write a challenge for `lake comparator` from the last build, and check it says what the project does."""
+    graph_file, out = HOME / "graph.json", HOME / "challenge"
+    if not graph_file.exists():
+        fail("there's no graph yet: run lean-vouch once first.")
+    built = graph_file.stat().st_mtime
+    edited = [path for folder in source_folders() for path in folder.rglob("*.lean")
+              if ".lake" not in path.parts and ".lean-vouch" not in path.parts and path.stat().st_mtime > built]
+    if edited:
+        fail(f"{edited[0]} has changed since the last build, and a challenge is copied from the code that was built. "
+             "Run lean-vouch --rebuild first.")
+    graph = json.loads(graph_file.read_text(encoding="utf-8"))
+    try:
+        names, warnings = challenge.write(graph, source_folders(), targets, out)
+        for warning in warnings:
+            print(f"lean-vouch: note: {warning}.", flush=True)
+        print(f"lean-vouch: wrote {out / 'Challenge.lean'}: {len(targets)} theorems, and {len(names) - len(targets)} "
+              "declarations their statements rest on. Checking that it says what the project says...", flush=True)
+        differ = challenge.check(graph, out, graph_program())
+    except challenge.ChallengeError as error:
+        fail(str(error))
+    if differ:
+        fail(f"the challenge doesn't say what the project says, in {', '.join(differ)}. Copied out of its file, a "
+             "declaration can mean something else, through an `open` or `variable` it relied on. "
+             f"Edit {out / 'Challenge.lean'} and rerun, or choose other theorems.")
+    print("lean-vouch: it matches the project, declaration by declaration.", flush=True)
+    waiting = unagreed(graph_file, names, who)
+    if waiting:
+        print(f"lean-vouch: you haven't agreed with {len(waiting)} of them as they are now: {', '.join(waiting)}.", flush=True)
+    print(f"lean-vouch: {out / 'comparator.json'} is its configuration for `lake comparator`.", flush=True)
+
+
 def running_server(port):
     """The marks folder of the lean-vouch server on this port, if there is one."""
     try:
@@ -404,6 +511,8 @@ def main():
     parser.add_argument("--id", help="who you are, as the name of your marks file (default: from your git name and email)")
     parser.add_argument("--rebuild", action="store_true", help="rebuild the docs and graph, without starting a server")
     parser.add_argument("--clean", action="store_true", help="delete docs pages left by renamed or removed modules")
+    parser.add_argument("--challenge", action="append", metavar="THEOREM",
+                        help="write a challenge for lake comparator with this theorem, from the last build; can be repeated")
     args = parser.parse_args()
     package = package_name()
     tag, version = toolchain()
@@ -411,6 +520,8 @@ def main():
     if not shutil.which("lake"):
         fail("Lake isn't on your PATH. Install Lean through elan: https://github.com/leanprover/elan")
     who, name = identity(args.id, args.name)
+    if args.challenge:
+        return write_challenge(args.challenge, who)
     others = sorted(path.stem for path in (HOME / "marks").glob("*.json") if path.stem != who)
     if others and not (HOME / "marks" / f"{who}.json").exists():
         print(f"lean-vouch: there's no marks file for {who} yet, only for {', '.join(others)}. "

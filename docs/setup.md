@@ -10,6 +10,9 @@ The first run adds doc-gen4's packages to `.lake/packages`, and a `.lean-vouch` 
 ├── quiz/             ignored: each person's quiz answers
 ├── graph.json        ignored
 ├── build.json        ignored: how the latest build went, for open pages
+├── build.log         ignored: the latest build's output
+├── graph-tool/       ignored: the graph program, compiled for the project's Lean
+├── challenge/        ignored: the latest challenge, from --challenge
 ├── links.local.json  ignored, optional
 └── docbuild/         ignored
     └── .lake/build/doc/   the HTML
@@ -41,6 +44,7 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 | `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git name or email changes, pass your old id to stay the same person; your marks and quiz answers are under it. |
 | `--rebuild` | Rebuild the docs and graph without starting a server |
 | `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
+| `--challenge THEOREM` | Write a [challenge for `lake comparator`](challenge.md) with this theorem, and what its statement rests on; can be repeated |
 
 Source links open in VS Code, at the declaration's line. Set `DOCGEN_SRC=github` before the first
 run for GitHub links instead.
