@@ -43,6 +43,7 @@
     border: 1.5px solid #e07000; border-radius: 50%; background: #fff; color: #e07000; font-size: 0.85em; font-weight: 700; }
   .legend .attention-mark { margin-right: 0.3em; }
   .row.pinned .label { font-weight: 600; }
+  .row mark { background: #fbe9b0; color: inherit; padding: 0; }
   .row.focus { background: #dcebfb; }
   #diagram { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 6px;
     overflow: hidden; cursor: grab; }
@@ -660,14 +661,18 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 
   // The list of folders and modules: open or close each one, pick several, or find one by name.
   const rows = document.getElementById("tree-rows"), search = document.getElementById("tree-search");
-  function treeRow(node, depth, label = node.name) {
+  function treeRow(node, depth, label = node.name, found = null) {
     const row = el("div", "row");
     row.style.paddingLeft = `${depth * 0.9 + 0.3}em`;
     if (pinned.has(node)) row.classList.add("pinned");
     if (focus?.group === node) row.classList.add("focus");
     row.title = node.path.replace(/^\//, "") + "\nShift-click for everything it depends on and that uses it";
-    row.append(el("span", "twisty", expanded.has(node.path) ? "▾" : "▸"),
-      el("span", "label", label));
+    const text = el("span", "label");
+    // The text searched for, marked where it is in the name.
+    const at = found ? label.toLowerCase().indexOf(found) : -1;
+    if (at >= 0) text.append(label.slice(0, at), el("mark", null, label.slice(at, at + found.length)), label.slice(at + found.length));
+    else text.textContent = label;
+    row.append(el("span", "twisty", expanded.has(node.path) ? "▾" : "▸"), text);
     const waiting = waitingIn(node);
     if (waiting) {
       const mark = el("span", "waiting", String(waiting));
@@ -688,11 +693,24 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   function renderTree() {
     const term = search.value.trim().toLowerCase();
     const items = [];
+    // A project of one module has nothing under its root, so the list shows the root itself.
+    const top = treeRoot.kids.length ? treeRoot : { kids: [treeRoot] };
     if (term) {
-      for (const node of allNodes) {
-        if (node.path.toLowerCase().includes(term)) items.push(treeRow(node, 0, node.path.replace(/^\//, "").replace(/\/$/, " (module)")));
-        if (items.length >= 200) break;
-      }
+      // The tree, filtered: what matches by its own name, in its place, under its folders, each
+      // shown once, as an editor's file search does.
+      const matches = new Set(allNodes.filter(n => (n !== treeRoot || !treeRoot.kids.length) &&
+        n.name.toLowerCase().includes(term)));
+      const shown = new Set(matches);
+      for (const n of matches) for (let p = n.parent; p && p !== treeRoot; p = p.parent) shown.add(p);
+      const add = (node, depth) => {
+        for (const kid of node.kids) {
+          if (!shown.has(kid) || items.length >= 500) continue;
+          items.push(treeRow(kid, depth, kid.name, matches.has(kid) ? term : null));
+          add(kid, depth + 1);
+        }
+      };
+      add(top, 0);
+      if (!items.length) items.push(el("p", "muted", "No folder or module by that name."));
     } else {
       const add = (node, depth) => {
         for (const kid of node.kids) {
@@ -700,8 +718,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
           if (expanded.has(kid.path)) add(kid, depth + 1);
         }
       };
-      // A project of one module has nothing under its root, so the list shows the root itself.
-      add(treeRoot.kids.length ? treeRoot : { kids: [treeRoot] }, 0);
+      add(top, 0);
     }
     rows.replaceChildren(...items);
   }

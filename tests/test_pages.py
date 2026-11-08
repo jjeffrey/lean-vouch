@@ -368,6 +368,29 @@ class PagesTest(unittest.TestCase):
         """, frame="review/diagram")
         self.assertEqual(results, [["P", "H4", "UL", "P"], 0, False])
 
+    def test_searching_the_list_filters_the_tree(self):
+        entry = lambda module: {"kind": "def", "module": module, "lines": [1, 1], "own": "1", "deps": [], "uses": []}
+        decls = {f"P.{m}.x": entry(f"P.{m}") for m in ("Mechanics.Harmonic", "Mechanics.Rigid", "Waves.Harmonics", "Optics")}
+        graph = {"format": 1, "root": "P", "declarations": decls, "library": {}, "renames": {},
+                 "modules": {d["module"]: [] for d in decls.values()}}
+        results = self.click_through({}, """
+            await ready("#diagram g.node");
+            const search = doc.getElementById("tree-search");
+            const shown = term => {
+              search.value = term;
+              search.dispatchEvent(new Event("input"));
+              return [...doc.querySelectorAll("#tree-rows .row")].map(r =>
+                (parseFloat(r.style.paddingLeft) > 0.5 ? "  " : "") + r.querySelector(".label").textContent +
+                (r.querySelector("mark") ? ` [${r.querySelector("mark").textContent}]` : ""));
+            };
+            results.push(shown("harm"), doc.querySelector("#tree-rows p")?.textContent ?? null);
+            shown("nothing like it");
+            results.push(doc.querySelector("#tree-rows p").textContent);
+        """, frame="review/diagram", graph=graph)
+        # Waves holds one module, so the list shows them as one row, searched or not.
+        self.assertEqual(results, [["Mechanics", "  Harmonic [Harm]", "Waves/Harmonics [Harm]"], None,
+                                   "No folder or module by that name."])
+
     def test_a_project_of_one_module_lists_it(self):
         names = {f"Solo.x{k}": {"kind": "def", "module": "Solo", "lines": [1, 1], "own": "1", "deps": [], "uses": []}
                  for k in range(3)}

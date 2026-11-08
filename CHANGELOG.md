@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Searching the diagram's list of folders and modules filters the tree, matching each by its own name, with its folders above it once, and marks the match. It no longer lists every path that contains the text.
+
 ## 0.1.1 (2026-11-07)
 
 The diagram is now the starting point: doc pages are optional, so a first run takes minutes, and challenges for `lake comparator` can be chosen and written from it. Works with Lean v4.30 to v4.35.
