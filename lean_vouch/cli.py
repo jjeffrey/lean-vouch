@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -352,11 +353,38 @@ def graph_program():
     return ["lean", "--run", str(HERE / "graph/DeclGraph.lean")]
 
 
+GRAPH_KEY = HOME / "graph.key"
+
+
+def graph_inputs(modules):
+    """Everything the graph is made from: the graph program, Lean, the dependencies' pins, the modules
+    asked for, and the project's compiled files, by size and time, since Lake rewrites one only when
+    it recompiles it. If none of this changed, neither did the graph."""
+    key = hashlib.sha256()
+    key.update((HERE / "graph/DeclGraph.lean").read_bytes())
+    for name in ("lean-toolchain", "lake-manifest.json"):
+        key.update(Path(name).read_bytes() if Path(name).exists() else b"")
+    key.update("\n".join(sorted(modules)).encode())
+    for path in sorted(Path(".lake/build/lib").rglob("*.olean")):
+        stat = path.stat()
+        key.update(f"{path}:{stat.st_size}:{stat.st_mtime_ns}\n".encode())
+    return key.hexdigest()
+
+
 def build_graph(modules):
-    """Build the graph beside the current one, and return it. It goes to a file, since a project's
-    initializers can print to stdout, where Lean also puts compile errors: show those on failure."""
+    """Build the graph beside the current one, and return it, unless nothing it's made from has
+    changed since the last good build. It goes to a file, since a project's initializers can print to
+    stdout, where Lean also puts compile errors: show those on failure."""
     new = HOME / "graph.json.new"
     report("building", step="graph")
+    current = HOME / "graph.json"
+    if current.exists() and GRAPH_KEY.exists() and GRAPH_KEY.read_text(encoding="utf-8") == graph_inputs(modules):
+        try:
+            graph = json.loads(current.read_text(encoding="utf-8"))
+            print("lean-vouch: the declaration graph is unchanged since the last build.", flush=True)
+            return graph
+        except (OSError, ValueError):
+            pass
     program = graph_program()
     with Terminal("graph") as terminal:
         done = subprocess.run(["lake", "env", *program, *modules],
@@ -558,6 +586,13 @@ def main():
         fail(f"port {args.port} is serving another project. Choose another with --port.")
     if serving:
         print(f"lean-vouch: already serving on port {args.port}, so this only rebuilds; open pages will offer to reload.", flush=True)
+    elif not args.rebuild and args.challenge is None:
+        # Before building, which can take minutes, rather than after.
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", args.port))
+            except OSError as error:
+                fail(f"can't use port {args.port} ({error.strerror}). Choose another with --port.")
     set_up_folders(tag, package)
     started = time.time()
     LOG.write_text("", encoding="utf-8")
@@ -576,7 +611,9 @@ def main():
             for root in built["roots"]:
                 clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
         # Last, so a failure leaves the graph that matches the docs.
-        (HOME / "graph.json.new").replace(HOME / "graph.json")
+        if (HOME / "graph.json.new").exists():
+            (HOME / "graph.json.new").replace(HOME / "graph.json")
+        GRAPH_KEY.write_text(graph_inputs(modules), encoding="utf-8")
     except KeyboardInterrupt as error:
         report("failed", message=reason(error))
         print("\nlean-vouch: stopped.", file=sys.stderr)

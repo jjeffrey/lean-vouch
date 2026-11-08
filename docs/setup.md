@@ -10,6 +10,7 @@ The first run adds doc-gen4's packages to `.lake/packages`, and a `.lean-vouch` 
 ├── challenge.json    tracked: the theorems chosen for the project's challenge
 ├── quiz/             ignored: each person's quiz answers
 ├── graph.json        ignored
+├── graph.key         ignored: what the graph was made from, to skip rebuilding an unchanged one
 ├── build.json        ignored: how the latest build went, for open pages
 ├── build.log         ignored: the latest build's output
 ├── graph-tool/       ignored: the graph program, compiled for the project's Lean

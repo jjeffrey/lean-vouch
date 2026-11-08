@@ -424,6 +424,37 @@ class ReviewTest(unittest.TestCase):
         for build in builds:
             self.assertIn("--log-level=error", build)
 
+    def test_an_unchanged_graph_isnt_built_again(self):
+        calls = self.root / "calls"
+        self.stub_graph(f'echo "$*" >> "{calls}"\n'
+                        'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n'
+                        "mkdir -p .lake/build/doc\n")
+        graph_runs = lambda: sum(line.startswith("env") for line in calls.read_text().splitlines())
+        self.assertEqual(self.run_review("v4.35.0").returncode, 0)
+        self.assertEqual(graph_runs(), 1)
+        result = self.run_review("v4.35.0")
+        self.assertIn("unchanged since the last build", result.stdout)
+        self.assertEqual(graph_runs(), 1)
+        compiled = self.root / ".lake" / "build" / "lib" / "lean" / "MyProject.olean"
+        compiled.parent.mkdir(parents=True)
+        compiled.write_bytes(b"recompiled")
+        self.run_review("v4.35.0")
+        self.assertEqual(graph_runs(), 2, "a recompiled module means a new graph")
+
+    def test_a_busy_port_stops_the_run_before_it_builds(self):
+        calls = self.root / "calls"
+        self.stub_graph(f'echo "$*" >> "{calls}"\n')
+        (self.root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
+        with socket.socket() as busy:
+            busy.bind(("127.0.0.1", 0))
+            busy.listen()
+            result = subprocess.run([sys.executable, str(REVIEW), "MyProject", "--port", str(busy.getsockname()[1])],
+                                    cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Choose another with --port", result.stderr)
+        self.assertNotIn("build", calls.read_text() if calls.exists() else "")
+
     def test_without_docs_only_the_project_is_built(self):
         calls = self.root / "calls"
         self.stub_graph(f'echo "$*" >> "{calls}"\n'
