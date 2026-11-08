@@ -1,6 +1,7 @@
 # Working on lean-vouch
 
-lean-vouch is a tool for human review of Lean definitions and statements in doc-gen4 pages.
+lean-vouch is a tool for human review of Lean definitions and theorem statements, in a dependency
+diagram and, optionally, in a project's doc-gen4 pages.
 [docs/development.md](docs/development.md) covers the example project and the tests, and
 [docs/internals.md](docs/internals.md) covers how it works.
 
