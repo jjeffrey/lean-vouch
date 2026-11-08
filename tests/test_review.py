@@ -470,6 +470,8 @@ class ReviewTest(unittest.TestCase):
                         '  echo "lean-vouch-progress loading 0 0" >&2\n'
                         '  echo "lean-vouch-progress fingerprinting 1 2" >&2\n'
                         '  echo "lean-vouch-progress fingerprinting 2 2" >&2\n'
+                        # lean-vouch reads progress as it comes, so wait until it's recorded the last.
+                        '  for i in $(seq 1 100); do grep -q \'"done": 2\' .lean-vouch/build.json && break; sleep 0.1; done\n'
                         f'  cp .lean-vouch/build.json "{status}"\n'
                         '  echo "a warning of its own" >&2\n'
                         '  echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;;\n'
