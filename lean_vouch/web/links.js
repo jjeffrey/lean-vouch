@@ -126,7 +126,7 @@ window.reviewWatch = onMarks => {
     if (now.state === "building") say(progress(now), "Lake finds more to build as it goes, so its total can grow.", log);
     else if (now.state === "failed") say("Build failed; changes are tracked from the last good build.", now.message, log,
       ...(now.can_rebuild ? [rebuild] : []));
-    else if (now.built !== (window.reviewBuilt ?? null)) say("Docs updated.", null, reload);
+    else if (now.built !== (window.reviewBuilt ?? null)) say(now.docs === false ? "Rebuilt." : "Docs updated.", null, reload);
     else if (now.stale) say("The code has changed since the last build.", "Marks still work, against what was last built.",
       now.can_rebuild ? rebuild : " Run lean-vouch to rebuild.");
     else if (now.unreadable.length) say(`Left out marks that can't be read: ${now.unreadable.join(", ")}.`);

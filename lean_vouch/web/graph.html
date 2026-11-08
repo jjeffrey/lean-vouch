@@ -198,6 +198,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   let lastDocs = null;
   try { lastDocs = sessionStorage.getItem("lean-vouch-docs"); } catch {}
   document.getElementById("docs-link").href = lastDocs ?? `/${root.replaceAll(".", "/")}.html`;
+  // A run with --no-docs has no docs pages, and quiz mode is built on them.
+  const hasDocs = window.reviewDocs !== false;
+  if (!hasDocs) for (const a of document.querySelectorAll("header.views nav a")) a.hidden = true;
   const docUrl = n => info(n) ? `/${info(n).module.replaceAll(".", "/")}.html#${n}` : null;
   const post = reviewPost;
 
@@ -648,7 +651,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     delete sidebar.dataset.panel;
     sidebar.replaceChildren(el("h2", null, group.name),
       el("p", "muted", `${group.module ? "module" : "folder"}, ${group.count} declarations, ${marked} marked`),
-      quiz, reachList(reach));
+      ...(hasDocs ? [quiz] : []), reachList(reach));
   }
 
   // The list of folders and modules: open or close each one, pick several, or find one by name.
@@ -971,13 +974,16 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const i = info(name), isLibrary = !decls[name];
     sidebar.append(el("h2", null, name), el("p", "muted", `${i?.kind ?? ""} in ${i?.module ?? "?"}`));
 
-    // Documentation first, as on the docs pages: the declaration as doc-gen4 renders it.
-    const docsHeading = el("h3", null, "Documentation ");
-    const docs = el("a", "muted", "open in docs");
-    docs.href = docUrl(name);
-    docs.style.fontWeight = "normal";
-    docsHeading.append(docs);
-    sidebar.append(docsHeading, await renderedDocs(name));
+    // Documentation first, as on the docs pages: the declaration as doc-gen4 renders it. Without
+    // the docs, the code below shows it as written.
+    if (hasDocs) {
+      const docsHeading = el("h3", null, "Documentation ");
+      const docs = el("a", "muted", "open in docs");
+      docs.href = docUrl(name);
+      docs.style.fontWeight = "normal";
+      docsHeading.append(docs);
+      sidebar.append(docsHeading, await renderedDocs(name));
+    }
 
     // Mark and note thread, editable here.
     const STATUS = isLibrary

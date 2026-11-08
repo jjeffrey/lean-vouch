@@ -79,6 +79,12 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
 <script src="/review/math.js"></script>
 <script>
 (async () => {
+  if (window.reviewDocs === false) {
+    document.body.replaceChildren(Object.assign(document.createElement("p"), { innerHTML:
+      "Quiz mode shows each statement from its docs page, and lean-vouch ran with <code>--no-docs</code>. " +
+      "Run it without <code>--no-docs</code> to build them, or go back to the <a href='/review/diagram'>diagram</a>." }));
+    return;
+  }
   let [marks, graph] = await Promise.all([
     fetch("/review/data").then(reviewChecked),
     fetch("/review/graph").then(r => r.json()),

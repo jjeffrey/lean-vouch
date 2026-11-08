@@ -186,6 +186,44 @@ class ServerTest(unittest.TestCase):
         server.args.build.write_text(json.dumps({"state": "building", "pid": os.getpid()}))
         self.assertEqual(self.post("/review/rebuild", {}), (409, {"error": "A build is already running."}))
 
+    def test_without_docs_the_server_offers_the_diagram(self):
+        (self.root / "docs" / "index.html").write_text("<html><body>index</body></html>")
+        self.assertTrue(self.status()["docs"])
+        server.args.build.write_text(json.dumps({"state": "done", "docs": False}))
+        self.assertFalse(self.status()["docs"])
+        status, headers = self.raw_with_headers("GET", "/")
+        self.assertEqual((status, headers.get("Location")), (302, "/review/diagram"))
+        status, body = self.raw("GET", "/Page.html")
+        self.assertEqual(status, 404)
+        self.assertIn(b"--no-docs", body)
+        self.assertIn(b"window.reviewDocs = false", self.get("/review/diagram"))
+
+    def test_a_rebuild_from_a_page_skips_the_docs_if_the_last_run_did(self):
+        home = self.root / ".lean-vouch"
+        server.args.marks, server.args.build = home / "marks", home / "build.json"
+        home.mkdir()
+        server.args.build.write_text(json.dumps({"state": "done", "names": ["Lib"], "docs": False}))
+        started = []
+
+        class Running:
+            def __init__(self, command, **options):
+                started.append(command)
+
+            def poll(self):
+                return None
+
+        self.addCleanup(setattr, server, "rebuilding", None)
+        with unittest.mock.patch.object(server.subprocess, "Popen", Running):
+            self.post("/review/rebuild", {})
+        self.assertEqual(started[0][-3:], ["--rebuild", "--no-docs", "Lib"])
+
+    def raw_with_headers(self, method, path):
+        connection = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port)
+        self.addCleanup(connection.close)
+        connection.request(method, path)
+        response = connection.getresponse()
+        return response.status, response.headers
+
     def test_the_build_log_is_served(self):
         self.assertIn(b"No build", self.get("/review/log"))
         server.args.build.with_name("build.log").write_text("error: it broke\n")

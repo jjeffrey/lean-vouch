@@ -422,8 +422,9 @@ def clean_docs(docs, root, modules):
 
 
 # What carries from one report to the next: when the last good build finished, and started, as
-# the pages still show it after a failure, and what the latest run reviewed, for the pages' rebuild button.
-KEPT = ("built", "since", "names")
+# the pages still show it after a failure, and what the latest run reviewed and whether it built the
+# docs, for the pages' rebuild button and for what the server offers.
+KEPT = ("built", "since", "names", "docs")
 
 
 def report(state, **details):
@@ -534,6 +535,8 @@ def main():
     parser.add_argument("--id", help="who you are, as the name of your marks file (default: from your git name and email)")
     parser.add_argument("--rebuild", action="store_true", help="rebuild the docs and graph, without starting a server")
     parser.add_argument("--clean", action="store_true", help="delete docs pages left by renamed or removed modules")
+    parser.add_argument("--no-docs", action="store_true",
+                        help="skip the docs: the diagram works in minutes, but doc pages and quiz mode need a run without it")
     parser.add_argument("--challenge", nargs="*", metavar="THEOREM",
                         help="write the project's challenge for lake comparator, from the last build; theorems named "
                              "here become the chosen ones")
@@ -558,14 +561,18 @@ def main():
     set_up_folders(tag, package)
     started = time.time()
     LOG.write_text("", encoding="utf-8")
-    report("building", step="project", names=args.names)
+    report("building", step="project", names=args.names, docs=not args.no_docs)
     try:
         modules = modules_of(args.names)
         print(f"lean-vouch: reviewing {len(modules)} module{'' if len(modules) == 1 else 's'}.", flush=True)
         run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
         built = build_graph(modules)
-        build_docs(tops(built["modules"]))
-        if args.clean:
+        if args.no_docs:
+            print("lean-vouch: skipped the docs (--no-docs). The diagram works without them; doc pages and quiz "
+                  "mode need a run without --no-docs.", flush=True)
+        else:
+            build_docs(tops(built["modules"]))
+        if args.clean and not args.no_docs:
             for root in built["roots"]:
                 clean_docs(HOME / "docbuild/.lake/build/doc", root, built["modules"])
         # Last, so a failure leaves the graph that matches the docs.

@@ -447,6 +447,7 @@ def status():
     progress = {key: build.get(key) for key in ("step", "step_since", "done", "total")} if state == "building" else {}
     return {"marks": ",".join(f"{path.stem}:{path.stat().st_mtime_ns}" for path in files), "state": state,
             "message": message, "built": build.get("built"), "stale": stale, "can_rebuild": project() is not None,
+            "docs": has_docs(),
             **progress, "marks_folder": str(args.marks.resolve()),
             "me": {"id": args.id, "name": args.name or args.id}, "unreadable": unreadable}
 
@@ -512,7 +513,8 @@ def rebuild():
     names = names if isinstance(names, list) and all(isinstance(n, str) and not n.startswith("-") for n in names) else []
     package = Path(__file__).resolve().parent.parent   # where lean_vouch is, installed or not
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(package), os.environ.get("PYTHONPATH")]))}
-    rebuilding = subprocess.Popen([sys.executable, "-c", "from lean_vouch.cli import main; main()", "--rebuild", *names],
+    no_docs = ["--no-docs"] if build.get("docs") is False else []
+    rebuilding = subprocess.Popen([sys.executable, "-c", "from lean_vouch.cli import main; main()", "--rebuild", *no_docs, *names],
                                   cwd=project(), env=env, stdin=subprocess.DEVNULL)
     return None
 
@@ -522,12 +524,25 @@ def last_built():
     return build.get("built") if isinstance(build, dict) else None
 
 
+def has_docs():
+    """Whether the latest run built the docs. One with --no-docs says so, and any docs left from an
+    earlier run would show code older than the graph, so they aren't offered."""
+    build = load_json(args.build, {})
+    return not isinstance(build, dict) or build.get("docs") is not False
+
+
+NO_DOCS = ("<!doctype html><meta charset='utf-8'><title>No docs</title><p>lean-vouch ran with <code>--no-docs</code>, "
+           "so there are no docs pages. The <a href='/review/diagram'>diagram</a> works without them; run lean-vouch "
+           "without <code>--no-docs</code> for the docs.").encode()
+
+
 def stamped(page):
-    """A page, saying which build it's from. The page's first look at the status can't say: a build
-    may finish while a large page loads."""
+    """A page, saying which build it's from, and whether there are docs. The page's first look at the
+    status can't say: a build may finish while a large page loads."""
     links = b'<script src="/review/links.js">'
     stamp = json.dumps(last_built()).replace("<", "\\u003c")
-    return page.replace(links, f"<script>window.reviewBuilt = {stamp};</script>".encode() + links, 1)
+    known = f"<script>window.reviewBuilt = {stamp}; window.reviewDocs = {json.dumps(has_docs())};</script>"
+    return page.replace(links, known.encode() + links, 1)
 
 
 def well_formed(body):
@@ -617,6 +632,13 @@ class Handler(SimpleHTTPRequestHandler):
         # Every page gets the script: project pages for review, library pages so the library
         # definitions the project uses can be marked as understood.
         # translate_path decodes the URL, since a module's name needn't be ASCII, and stays in the docs.
+        if not has_docs() and (path == "/" or path.endswith(".html")):
+            if path == "/":
+                self.send_response(302)
+                self.send_header("Location", "/review/diagram")
+                self.end_headers()
+                return
+            return self.send_body(NO_DOCS, "text/html; charset=utf-8", 404)
         file = Path(self.translate_path(self.path))
         file = file / "index.html" if path == "/" else file
         if file.suffix == ".html" and file.is_file():
@@ -768,8 +790,9 @@ def main():
     if graph_format != GRAPH_FORMAT:
         sys.exit(f"lean-vouch: {args.graph} has format {graph_format}; this server reads format "
                  f"{GRAPH_FORMAT}. Rerun lean-vouch to rebuild it.")
-    print(f"lean-vouch {VERSION}: http://127.0.0.1:{args.port}/review/diagram\n"
-          f"Docs: http://127.0.0.1:{args.port}/{args.prefix.replace('.', '/')}.html", flush=True)
+    print(f"lean-vouch {VERSION}: http://127.0.0.1:{args.port}/review/diagram", flush=True)
+    if has_docs():
+        print(f"Docs: http://127.0.0.1:{args.port}/{args.prefix.replace('.', '/')}.html", flush=True)
     try:
         httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     except OSError as error:

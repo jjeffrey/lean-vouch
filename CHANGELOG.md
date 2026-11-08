@@ -8,6 +8,7 @@
 - A run no longer shows the project's own build warnings, which `lake build` shows. A failing build still shows everything.
 - The diagram's side panels can be hidden, for a larger diagram.
 - The diagram takes `?open=` with a list of modules, opening only the folders on the way to them.
+- `--no-docs` skips the docs, for a diagram in a minute or two on a project that imports Mathlib. Marks, notes and challenges work without them; doc pages and quiz mode don't.
 - Fixes: a project of one module shows it in the diagram's list, and a `partial def` is called that, not "opaque".
 - Docs: a walkthrough of finding and fixing a definition that doesn't mean what it should, and sharper screenshots.
 

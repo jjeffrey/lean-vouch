@@ -424,6 +424,20 @@ class ReviewTest(unittest.TestCase):
         for build in builds:
             self.assertIn("--log-level=error", build)
 
+    def test_without_docs_only_the_project_is_built(self):
+        calls = self.root / "calls"
+        self.stub_graph(f'echo "$*" >> "{calls}"\n'
+                        'case "$*" in env*) echo \'{"modules": {"M": []}, "roots": ["M"]}\' > "$LEAN_VOUCH_GRAPH" ;; esac\n')
+        (self.root / "lean-toolchain").write_text("leanprover/lean4:v4.35.0\n")
+        env = {**os.environ, "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
+        result = subprocess.run([sys.executable, str(REVIEW), "MyProject", "--rebuild", "--no-docs"], cwd=self.root, env=env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(":docs", calls.read_text())
+        self.assertNotIn("update", calls.read_text(), "doc-gen4 isn't fetched either")
+        self.assertIn("skipped the docs", result.stdout)
+        self.assertIs(json.loads((self.root / ".lean-vouch" / "build.json").read_text())["docs"], False)
+
     def graph_runs(self, script=""):
         calls = self.root / "calls"
         self.stub_graph(f'echo "$*" >> "{calls}"\n' + script +

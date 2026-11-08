@@ -24,7 +24,8 @@ matches your `lean-toolchain`, so your project gains no dependency. Everything b
 rebuilt or is yours alone, so `.lean-vouch/.gitignore` ignores it. To keep marks out of git too, edit
 that file: it's only written on the first run. In a public repository, committed notes are public.
 
-The first docs build takes time, because doc-gen4 documents everything the project imports:
+The first docs build takes time, because doc-gen4 documents everything the project imports. To start
+reviewing sooner, run with `--no-docs`, and build the docs later:
 
 | Project | First run | Disk |
 | --- | --- | --- |
@@ -44,6 +45,7 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 | `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
 | `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git name or email changes, pass your old id to stay the same person; your marks and quiz answers are under it. |
 | `--rebuild` | Rebuild the docs and graph without starting a server |
+| `--no-docs` | Skip the docs, which take most of a first run's time. The diagram, marks, notes and challenges work without them; doc pages and quiz mode need a run without it. A rebuild from a page does the same as the last run. |
 | `--clean` | Delete docs pages left by renamed or removed modules, which doc-gen4 keeps |
 | `--challenge [THEOREM ...]` | Write the project's [challenge for `lake comparator`](challenge.md), from the theorems chosen in the pages, or make the theorems named here the chosen ones first |
 
