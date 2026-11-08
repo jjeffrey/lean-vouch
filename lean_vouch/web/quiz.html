@@ -355,7 +355,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     const list = args.map(a => `\`${a}\``).join(", ");
     if (kind === "theorem")
       hints.add(`shape|Read it as: given ${list || "no arguments"}, the conclusion \`${type}\` holds. Arguments whose type is a claim are hypotheses; the others name the things it talks about.`);
-    else if (kind === "def" || kind === "instance" || kind === "opaque")
+    else if (kind === "def" || kind === "partial def" || kind === "instance" || kind === "opaque")
       hints.add(`shape|Arguments: ${list || "none"}. Its result has type \`${type}\`. In the code, what follows \`:=\` (or each \`|\` case) is how the result is given.`);
     else if (kind === "structure")
       hints.add("shape|A `structure` is a type whose values each have all the fields listed after `where`, one value per field.");

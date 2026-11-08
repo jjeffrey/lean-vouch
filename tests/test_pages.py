@@ -322,6 +322,17 @@ class PagesTest(unittest.TestCase):
         """, frame="review/diagram#ReviewExample.gcd_divides", graph=graph)
         self.assertEqual(results, [["gcd", "gcd_divides"], True])
 
+    def test_a_project_of_one_module_lists_it(self):
+        names = {f"Solo.x{k}": {"kind": "def", "module": "Solo", "lines": [1, 1], "own": "1", "deps": [], "uses": []}
+                 for k in range(3)}
+        graph = {"format": 1, "root": "Solo", "declarations": names, "library": {}, "renames": {}, "modules": {"Solo": []}}
+        results = self.click_through({}, """
+            await ready("#diagram g.node");
+            results.push([...doc.querySelectorAll("#tree-rows .row")].map(r => r.querySelector(".label").textContent + " " +
+                                                                        r.querySelector(".count").textContent));
+        """, frame="review/diagram", graph=graph)
+        self.assertEqual(results, [["Solo 3"]])
+
     def test_a_change_in_a_closed_folder_is_traced_to_its_box(self):
         names = {f"P.Big.M{i}.x{k}": {"kind": "def", "module": f"P.Big.M{i}", "lines": [1, 1], "own": "1", "deps": [], "uses": []}
                  for i in range(3) for k in range(30)}

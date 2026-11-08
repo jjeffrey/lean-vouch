@@ -434,7 +434,8 @@ unsafe def main (args : List String) : IO UInt32 := do
     | some (.thmInfo _) => "theorem"
     | some (.inductInfo _) => if isStructure env n then "structure" else "inductive"
     | some (.axiomInfo _) => "axiom"
-    | some (.opaqueInfo _) => "opaque"
+    -- Lean keeps a `partial def` as an opaque constant, with its body beside it.
+    | some (.opaqueInfo _) => if (env.find? (Compiler.mkUnsafeRecName n)).isSome then "partial def" else "opaque"
     | _ => if Meta.isInstanceCore env n then "instance" else "def"
   let module (n : Name) : String :=
     match env.getModuleIdxFor? n with

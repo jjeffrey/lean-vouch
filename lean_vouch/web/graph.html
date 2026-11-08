@@ -685,7 +685,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
           if (expanded.has(kid.path)) add(kid, depth + 1);
         }
       };
-      add(treeRoot, 0);
+      // A project of one module has nothing under its root, so the list shows the root itself.
+      add(treeRoot.kids.length ? treeRoot : { kids: [treeRoot] }, 0);
     }
     rows.replaceChildren(...items);
   }

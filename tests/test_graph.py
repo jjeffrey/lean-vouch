@@ -297,6 +297,10 @@ end ReviewExample"""
         self.assertEqual(self.changed(after, "own"), set())
         self.assertTrue(after["declarations"]["ReviewExample.gcd_divides_mul"]["sorry"])
 
+    def test_a_partial_def_says_so(self):
+        after = self.edited(GCD, "end ReviewExample", "partial def spin (n : Nat) : Nat := spin n\n\nend ReviewExample")
+        self.assertEqual(after["declarations"]["ReviewExample.spin"]["kind"], "partial def")
+
     def test_native_decide_is_reported_as_an_axiom(self):
         after = self.edited(GCD, "end ReviewExample", "theorem big : 2 ^ 10 = 1024 := by native_decide\n\nend ReviewExample")
         self.assertEqual(after["declarations"]["ReviewExample.big"]["axioms"], ["native_decide"])

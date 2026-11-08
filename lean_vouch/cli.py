@@ -537,7 +537,7 @@ def main():
     report("building", step="project", names=args.names)
     try:
         modules = modules_of(args.names)
-        print(f"lean-vouch: reviewing {len(modules)} modules.", flush=True)
+        print(f"lean-vouch: reviewing {len(modules)} module{'' if len(modules) == 1 else 's'}.", flush=True)
         run(["lake", "build", QUIET, *[f"+{module}" for module in modules]], step="project")
         built = build_graph(modules)
         build_docs(tops(built["modules"]))
