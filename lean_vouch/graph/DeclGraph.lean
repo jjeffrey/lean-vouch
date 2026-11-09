@@ -416,6 +416,39 @@ def signature (env : Environment) (n : Name) : IO String := do
     return toString sig.fmt
   catch _ => return ""
 
+/-- A structure's fields, or an inductive type's constructors, as doc-gen4 lists them: each with its
+type as Lean prints it, and its docstring. A field's type mentions earlier fields by name. A parent a
+structure extends is one entry, `toParent`, marked `parent`, rather than each of its fields. -/
+def members (env : Environment) (n : Name) : IO (Array Json) := do
+  let some (.inductInfo i) := env.find? n | return #[]
+  let context : Core.Context := { fileName := "", fileMap := default, maxHeartbeats := 0, currNamespace := n }
+  let entry (name : Name) (type : Expr) (doc : Option String) (extra : List (String × Json) := []) : MetaM Json := do
+    let shown := toString (← PrettyPrinter.ppExpr type)
+    return Json.mkObj <| [("name", Json.str name.toString), ("type", Json.str shown)] ++
+      (doc.map fun d => [("doc", Json.str d)]).getD [] ++ extra
+  let run : MetaM (Array Json) := do
+    if isStructure env n then
+      let some ctor := i.ctors.head? | return #[]
+      let some (.ctorInfo c) := env.find? ctor | return #[]
+      Meta.forallTelescope c.type fun xs _ => do
+        let mut out := #[]
+        for x in xs[i.numParams:] do
+          let field := (← x.fvarId!.getDecl).userName
+          let type ← Meta.inferType x
+          let parent := (isSubobjectField? env n field).isSome
+          out := out.push (← entry field type (← findDocString? env (n ++ field))
+            (if parent then [("parent", Json.bool true)] else []))
+        return out
+    else
+      i.ctors.toArray.mapM fun ctor => do
+        let some (.ctorInfo c) := env.find? ctor | return Json.null
+        Meta.forallBoundedTelescope c.type i.numParams fun _ type => do
+          entry (ctor.replacePrefix n .anonymous) type (← findDocString? env ctor)
+  try
+    let (out, _) ← (Meta.MetaM.run' run).toIO context { env }
+    return out.filter (· != Json.null)
+  catch _ => return #[]
+
 /-- `unsafe` only because loading the imported modules' extensions (which record instances and
 deprecations) requires running their initializers. -/
 unsafe def main (args : List String) : IO UInt32 := do
@@ -460,7 +493,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let kind (n : Name) : String :=
     match env.find? n with
     | some (.thmInfo _) => "theorem"
-    | some (.inductInfo _) => if isStructure env n then "structure" else "inductive"
+    | some (.inductInfo _) => if isClass env n then "class" else if isStructure env n then "structure" else "inductive"
     | some (.axiomInfo _) => "axiom"
     -- Lean keeps a `partial def` as an opaque constant, with its body beside it.
     | some (.opaqueInfo _) => if (env.find? (Compiler.mkUnsafeRecName n)).isSome then "partial def" else "opaque"
@@ -498,8 +531,10 @@ unsafe def main (args : List String) : IO UInt32 := do
     progress "statements" count names.size
     let sig ← signature env n
     let doc ← findDocString? env n
+    let parts ← members env n
     readable := readable.insert n <|
-      (if sig.isEmpty then [] else [("signature", Json.str sig)]) ++ (doc.map fun d => [("doc", Json.str d)]).getD []
+      (if sig.isEmpty then [] else [("signature", Json.str sig)]) ++ (doc.map fun d => [("doc", Json.str d)]).getD [] ++
+      (if parts.isEmpty then [] else [("members", Json.arr parts)])
   progress "writing" 0 0
   let decls := (names.qsort Name.lt).map fun n =>
     (n.toString, Json.mkObj <| List.append (gapFields n) <| List.append ((readable.get? n).getD []) <| [

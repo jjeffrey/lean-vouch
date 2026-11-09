@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Without doc pages, the diagram's sidebar shows a structure's or class's fields, and an inductive type's constructors, each with its type and docstring, under its statement. Before, they were only in its code. A class is now called a class, not a structure.
+- An assistant can ask what's waiting on it: `/review/data?id=ID` gives the view from that person's side, with who is waiting on them. The setup guide has a section for assistants: asking, replying, finding what's waiting, and the file format for when the server isn't running.
+- Only the person the server runs as can mark ✓ or ✗ through it. Others, such as assistants, leave notes and `?`s.
 - Searching the diagram's list of folders and modules filters the tree, matching each by its own name, with its folders above it once, and marks the match. It no longer lists every path that contains the text.
 
 ## 0.1.1 (2026-11-07)

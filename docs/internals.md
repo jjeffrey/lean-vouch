@@ -15,7 +15,10 @@
   neither listed nor counted when deciding whether a mark needs re-checking.
 - **What a reviewer reads:** each project declaration's signature, printed by Lean from inside the
   declaration's own namespace, so it shows every argument, including those a `variable` adds, and
-  its docstring. Pages without doc-gen4 show these, and quiz mode asks from them.
+  its docstring. Pages without doc-gen4 show these, and quiz mode asks from them. For a structure or
+  class the graph also lists its fields, and for an inductive type its constructors, each with its
+  type and docstring, which those pages show under the statement; a parent it extends is one field,
+  `toParent`.
 - **Gaps:** what a declaration's proof rests on is worked out as `#print axioms` does, through proofs
   and all, and each `sorry` is named by the declaration it's written in. Each step toward a `sorry`
   is kept, and no other proof dependency, so a project with none has nothing extra in its graph. This

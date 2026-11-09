@@ -1017,6 +1017,16 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const box = sidebar.querySelector("textarea");
     if (box && draftFor) drafts.set(draftFor, box.value);
   };
+  // A structure's fields or an inductive type's constructors, each with its docstring, written after
+  // the signature as in source, so the statement says what a value of the type holds.
+  function members(decl) {
+    if (!decl.members?.length) return "";
+    const lines = decl.members.flatMap(m => [
+      ...(m.doc ? [`  /-- ${m.doc.trim().replaceAll("\n", "\n    ")} -/`] : []),
+      decl.kind === "inductive" ? `  | ${m.name} : ${m.type}` : `  ${m.name} : ${m.type}${m.parent ? "  -- extends" : ""}`]);
+    return " where\n" + lines.join("\n");
+  }
+
   async function renderSidebar(name) {
     keepDraft();
     draftFor = name;
@@ -1044,7 +1054,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       }
       if (decls[name].signature) {
         const statement = el("pre", "signature");
-        statement.append(el("span", "lean-keyword", `${decls[name].kind} `), reviewLean.highlight(decls[name].signature, codeLink(name)));
+        statement.append(el("span", "lean-keyword", `${decls[name].kind} `), reviewLean.highlight(decls[name].signature + members(decls[name]), codeLink(name)));
         statement.title = "As Lean understood it, with every argument, including those a `variable` adds";
         sidebar.append(el("h3", null, "Statement"), statement);
       }

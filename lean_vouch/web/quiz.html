@@ -378,6 +378,8 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
       hints.add(`shape|Arguments: ${list || "none"}. Its result has type \`${type}\`. In the code, what follows \`:=\` (or each \`|\` case) is how the result is given.`);
     else if (kind === "structure")
       hints.add("shape|A `structure` is a type whose values each have all the fields listed after `where`, one value per field.");
+    else if (kind === "class")
+      hints.add("shape|A `class` is a structure whose fields Lean fills in by itself, from an `instance` for the type at hand, wherever one is needed.");
     else if (kind === "inductive")
       hints.add("shape|An `inductive` type lists its constructors after `|`: a value is built by exactly one of them.");
     const first = open => args.find(a => a.startsWith(open));

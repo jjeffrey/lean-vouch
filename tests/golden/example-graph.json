@@ -216,6 +216,16 @@
     9,
     12
    ],
+   "members": [
+    {
+     "name": "done",
+     "type": "Steps"
+    },
+    {
+     "name": "step",
+     "type": "Steps \u2192 Steps"
+    }
+   ],
    "module": "ReviewExample.Steps",
    "own": "d838235e590fb4f4",
    "signature": "ReviewExample.Steps : Type",

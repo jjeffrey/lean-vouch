@@ -311,6 +311,22 @@ end ReviewExample"""
         after = self.edited(GCD, "end ReviewExample", "partial def spin (n : Nat) : Nat := spin n\n\nend ReviewExample")
         self.assertEqual(after["declarations"]["ReviewExample.spin"]["kind"], "partial def")
 
+    def test_a_types_fields_and_constructors_are_listed_with_their_docs(self):
+        after = self.edited(GCD, "end ReviewExample", (
+            "/-- Containers of `α`. -/\nclass Box (α : Type) where\n  /-- The container type. -/\n  Arr : Type\n"
+            "  size : Arr → Nat\n\n/-- Labeled pairs. -/\nstructure Labeled (α : Type) extends Prod α α where\n"
+            "  /-- What it's called. -/\n  label : String\n\nend ReviewExample"))
+        decls = after["declarations"]
+        self.assertEqual(decls["ReviewExample.Box"]["kind"], "class")
+        self.assertEqual(decls["ReviewExample.Box"]["members"], [
+            {"name": "Arr", "type": "Type", "doc": "The container type. "}, {"name": "size", "type": "Arr → Nat"}])
+        self.assertEqual(decls["ReviewExample.Labeled"]["kind"], "structure")
+        self.assertEqual(decls["ReviewExample.Labeled"]["members"], [
+            {"name": "toProd", "type": "α × α", "parent": True},
+            {"name": "label", "type": "String", "doc": "What it's called. "}])
+        self.assertEqual([m["name"] for m in decls["ReviewExample.Steps"]["members"]], ["done", "step"])
+        self.assertEqual(self.changed(after, "own") - {"ReviewExample.Box", "ReviewExample.Labeled"}, set())
+
     def test_native_decide_is_reported_as_an_axiom(self):
         after = self.edited(GCD, "end ReviewExample", "theorem big : 2 ^ 10 = 1024 := by native_decide\n\nend ReviewExample")
         self.assertEqual(after["declarations"]["ReviewExample.big"]["axioms"], ["native_decide"])
