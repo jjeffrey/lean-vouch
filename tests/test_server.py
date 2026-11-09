@@ -651,6 +651,27 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(entry["attention"], ["Claude"])
         self.assertEqual([(n["by"], n["mine"]) for n in entry["notes"]], [("Claude", False)])
 
+    def test_an_assistant_can_ask_whats_waiting_on_it(self):
+        self.write({"A.b": {"status": "question", "date": "2026-01-01T00:00:00",
+                            "notes": [{"date": "2026-01-01T00:00:00", "text": "Is this right?"}]}}, "claude", "Claude")
+        self.assertEqual(json.loads(self.get("/review/data?id=claude"))["A.b"]["attention"], [])
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+        self.post("/review/data", {"name": "A.b", "note": "Yes."})
+        entry = json.loads(self.get("/review/data?id=claude"))["A.b"]
+        self.assertEqual((entry["status"], entry["attention"]), ("question", ["Ada"]))
+        self.assertEqual([(n["by"], n["mine"]) for n in entry["notes"]], [("Claude", True), ("Ada", False)])
+        code, entry = self.post("/review/data", {"name": "A.b", "id": "claude", "note": "Thanks."})
+        self.assertEqual((code, entry["status"], entry["attention"]), (200, "question", []))
+        self.assertEqual(self.raw("GET", "/review/data?id=../evil")[0], 400)
+
+    def test_only_the_servers_own_person_marks_agree_or_reject(self):
+        for status in ("agree", "reject"):
+            code, body = self.post("/review/data", {"name": "A.b", "id": "claude", "status": status})
+            self.assertEqual(code, 403)
+            self.assertIn("leave a note", body["error"])
+        self.assertFalse((self.folder_marks / "claude.json").exists())
+        self.assertEqual(self.post("/review/data", {"name": "A.b", "id": "ada", "status": "agree"})[0], 200)
+
     def test_an_unsafe_id_is_refused(self):
         code, _ = self.post("/review/data", {"name": "A.b", "id": "../evil", "note": "x"})
         self.assertEqual(code, 400)

@@ -307,18 +307,20 @@ def current(who=None, name=None):
     return data
 
 
-def view():
+def view(me=None):
     """What pages read: for each declaration, your mark as its status, date and fingerprint, everyone's
     notes in order with your quiz answers among them, and what others marked under `others`. Others'
     files are only read, so a declaration they marked before a rename shows under its new name.
     `attention` names whoever is waiting on you: someone with a `?` and a note saying what it asks,
-    or who answered your `?`, since you last marked or wrote here. A bare `?` is a person's own reminder."""
+    or who answered your `?`, since you last marked or wrote here. A bare `?` is a person's own reminder.
+    "You" is the server's own person, or `me`, such as an assistant asking what's waiting on it."""
+    me = me or args.id
     renames = graph.current().get("renames", {})
     # Your own file has to be right, or a save could lose it. Someone else's only gets read here,
     # and arrives through git, so a conflict or a newer version of theirs needn't stop you.
-    people, unreadable[:] = {args.id: current()}, []
+    people, unreadable[:] = {me: current(me)}, []
     for path in sorted(args.marks.glob("*.json")):
-        if path.stem != args.id:
+        if path.stem != me:
             try:
                 people[path.stem] = person(path.stem)
             except MarksError as error:
@@ -330,7 +332,7 @@ def view():
         return shown.setdefault(name, {"status": None, "notes": [], "others": []})
 
     for who, data in people.items():
-        mine = who == args.id
+        mine = who == me
         for name, entry in data["marks"].items():
             item = at(name if mine else followed(renames, name))
             item["notes"] += [{"by": data["name"], **note, "who": who, "mine": mine} for note in entry.get("notes", [])]
@@ -339,8 +341,8 @@ def view():
             elif entry.get("status"):
                 item["others"].append({"id": who, "name": data["name"], **{
                     key: entry[key] for key in ("status", "date", "fingerprint") if key in entry}})
-    for name, answers in quiz_answers().items():
-        at(name)["notes"] += [{"by": people[args.id]["name"], **answer, "who": args.id, "mine": True} for answer in answers]
+    for name, answers in (quiz_answers() if me == args.id else {}).items():
+        at(name)["notes"] += [{"by": people[me]["name"], **answer, "who": args.id, "mine": True} for answer in answers]
     for item in shown.values():
         item["notes"].sort(key=lambda note: note["date"])
         seen = max([item.get("date", ""), *(n["date"] for n in item["notes"]
@@ -636,9 +638,12 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/review/status":
             return self.send_json(status())
         if path == "/review/data":
+            who = parse_qs(urlparse(self.path).query).get("id", [args.id])[0]
+            if not ID.fullmatch(who):
+                return self.send_json({"error": "an id is lowercase letters, digits and hyphens"}, 400)
             with lock:
                 try:
-                    return self.send_json(view())
+                    return self.send_json(view(who))
                 except MarksError as error:
                     return self.send_json({"error": str(error)}, 500)
         if path == "/review/tree":
@@ -738,10 +743,15 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": str(error)}, 500)
 
     def change(self, body):
-        # Anyone local can write as themselves: an assistant has no server of its own.
+        # Anyone local can write as themselves: an assistant has no server of its own. Nothing stops a
+        # local program writing as you, or editing a file directly; the record is a convention. But ✓ and
+        # ✗ say what a person has checked, so only the person the server runs as sets them here.
         who = body.get("id", args.id)
         if not ID.fullmatch(who):
             return self.send_json({"error": "an id is lowercase letters, digits and hyphens"}, 400)
+        if who != args.id and body.get("status") in {"agree", "reject"}:
+            return self.send_json({"error": f"only {args.id}, whom this server runs as, marks ✓ or ✗ here; "
+                                            "leave a note or a ?"}, 403)
         data = current(who, body.get("author"))
         marks = data["marks"]
         answers = quiz_answers() if who == args.id else {}
@@ -752,7 +762,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": "bad request"}, 400)
             answers[name][-1]["quiz"]["verdict"] = body["verdict"]
             save_quiz(answers)
-            return self.send_json(view()[name])
+            return self.send_json(view(who)[name])
         if self.path == "/review/data":
             if not isinstance(name, str) or body.get("status") not in STATUSES:
                 return self.send_json({"error": "bad request"}, 400)
@@ -761,7 +771,7 @@ class Handler(SimpleHTTPRequestHandler):
                 answers.setdefault(name, []).append({"date": now(), "text": body["note"], "quiz": {
                     "name": str(quiz.get("name", "")), "description": str(quiz.get("description", ""))}})
                 save_quiz(answers)
-                return self.send_json(view()[name])
+                return self.send_json(view(who)[name])
             # A page from before a rebuild would mark what's there now without having shown it.
             if "status" in body and body.get("built", last_built()) != last_built():
                 return self.send_json({"error": "The docs have been rebuilt. Reload this page, then mark again."}, 409)
@@ -774,7 +784,7 @@ class Handler(SimpleHTTPRequestHandler):
             if body.get("note"):
                 entry["notes"].append({"date": now(), "text": body["note"]})
             save_person(who, data)
-            return self.send_json(view()[name])
+            return self.send_json(view(who)[name])
         if self.path == "/review/move":
             old, new = body.get("from"), followed(renames, body.get("to"))
             if (old not in marks and old not in answers) or not new or new in marks or new in answers:
@@ -787,7 +797,7 @@ class Handler(SimpleHTTPRequestHandler):
             if old in answers:
                 answers[new] = answers.pop(old)
                 save_quiz(answers)
-            return self.send_json(view()[new])
+            return self.send_json(view(who)[new])
         if self.path == "/review/delete":
             # An orphan by its own name, even if that was renamed to something marked already.
             name = next((n for n in (body.get("name"), name) if n in marks or n in answers), None)

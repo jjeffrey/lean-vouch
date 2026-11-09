@@ -105,11 +105,52 @@ with your work, and pull to get everyone else's, which appear on open pages by t
 only their own file, so marks don't conflict. If someone else's file can't be read, such as during a
 merge conflict, pages say so and carry on without it.
 
-An assistant, human or not, is another person with its own file. By convention it leaves notes and `?`s,
-and doesn't mark ✓ or ✗: the record says what a person has checked. While the server runs, it can write
-as itself:
+## Assistants
+
+An assistant, human or not, is another person with its own file, `.lean-vouch/marks/ID.json`. Pick
+an id of lowercase letters, digits and hyphens, such as `claude`, and keep it, so that its notes stay
+in one thread and what's waiting on it can be found.
+
+By convention an assistant leaves notes and `?`s, and doesn't mark ✓ or ✗: the record says what a
+person has checked. The server refuses ✓ and ✗ from anyone but the person it runs as. That's a
+convention made easy, not a safeguard: any program on your machine can still write to the server as
+you, or edit the files directly.
+
+While the server runs, an assistant writes as itself. To ask, send a note with `"status": "question"`:
 
 ```bash
 curl -X POST http://127.0.0.1:8797/review/data -H "Content-Type: application/json" \
   -d '{"id": "claude", "author": "Claude", "name": "MyProject.foo", "status": "question", "note": "Is 0 meant to be included?"}'
 ```
+
+To reply, send the note alone. Leaving out `status` keeps the assistant's mark as it was, so a
+reply doesn't turn into a question of its own:
+
+```bash
+curl -X POST http://127.0.0.1:8797/review/data -H "Content-Type: application/json" \
+  -d '{"id": "claude", "author": "Claude", "name": "MyProject.foo", "note": "Yes: the lemma below needs it."}'
+```
+
+`"status": null` clears its mark. `author` is the name pages show; it's kept in the file, so it only
+needs sending once. Notes are shown as plain text: Markdown and LaTeX aren't rendered, so write
+`x ∈ s` rather than `$x \in s$`.
+
+To find what's waiting on it, an assistant reads the same view pages do, from its own side:
+
+```bash
+curl -s "http://127.0.0.1:8797/review/data?id=claude"
+```
+
+That's every declaration anyone has marked or written on, with its own mark as `status`, all notes
+in order (`mine` is true for its own), others' marks under `others`, and `attention`, which names
+whoever is waiting on it, as the `!` does on pages. Without `id`, it's the view of the person the
+server runs as.
+
+To notice changes without reading everything again, poll `GET /review/status` every few seconds, as
+pages do: its `marks` field changes whenever anyone's file does, and `state` is `building`, `done` or
+`failed`.
+
+When the server isn't running, an assistant can edit its own file instead, which is safe since no
+one else writes it. It's `{"format": 3, "name": "Claude", "marks": {declaration: entry}}`, where an
+entry is `{"status": "question", "date": "2026-11-08T12:00:00Z", "notes": [{"date": "...", "text": "..."}]}`,
+with dates in UTC. The server reads the files afresh each time, so it picks this up whenever it starts.

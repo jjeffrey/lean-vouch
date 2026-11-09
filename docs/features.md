@@ -59,7 +59,7 @@ Across the project:
 - **Shift-click** a declaration, a box or a row in the list to color everything it depends on and
   everything that uses it, all the way down and up, and list how much of each is in each folder.
 
-With others, and with assistants ([how to share marks](setup.md#working-with-others)):
+With others ([how to share marks](setup.md#working-with-others)), and with [assistants](setup.md#assistants):
 
 - **Their marks beside yours,** and their notes in the same thread, each person in their own color.
   The diagram shows your marks, or anyone's, or everyone's, with disagreements in purple.
