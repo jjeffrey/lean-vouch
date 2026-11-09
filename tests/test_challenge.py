@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from lean_vouch import challenge  # noqa: E402
+from graph_program import graph_program  # noqa: E402
 
 EXAMPLE = ROOT / "example"
 GRAPH = EXAMPLE / "review" / "graph.json"
@@ -155,7 +156,7 @@ class CheckTest(unittest.TestCase):
         here = os.getcwd()
         os.chdir(EXAMPLE)
         try:
-            return challenge.check(self.graph, self.out, ["lean", "--run", str(ROOT / "lean_vouch" / "graph" / "DeclGraph.lean")])
+            return challenge.check(self.graph, self.out, graph_program())
         finally:
             os.chdir(here)
 

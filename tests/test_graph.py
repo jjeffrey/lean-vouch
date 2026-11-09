@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from graph_program import graph_program
+
 ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = ROOT / "tests" / "golden" / "example-graph.json"
 GCD = "ReviewExample/Gcd.lean"
@@ -17,7 +19,7 @@ DIVIDES = "ReviewExample/Divides.lean"
 def graph_of(project, *roots):
     roots = roots or ("ReviewExample",)
     subprocess.run(["lake", "build", "-q", *roots], cwd=project, check=True, capture_output=True, text=True)
-    result = subprocess.run(["lake", "env", "lean", "--run", str(ROOT / "lean_vouch" / "graph" / "DeclGraph.lean"), *roots],
+    result = subprocess.run(["lake", "env", *graph_program(), *roots],
                             cwd=project, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 
@@ -196,6 +198,7 @@ class GraphTest(unittest.TestCase):
         self.assertEqual(one["declarations"]["x"]["own"], two["declarations"]["x"]["own"])
 
     def test_the_graph_can_go_to_a_file_away_from_what_a_project_prints(self):
+        # With `lean --run`, as lean-vouch runs it when it can't compile the program.
         copy = Path(tempfile.mkdtemp(dir=self.folder.name)) / "project"
         shutil.copytree(self.original, copy)
         out = copy / "out.json"
