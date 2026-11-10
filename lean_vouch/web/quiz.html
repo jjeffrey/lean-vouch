@@ -25,6 +25,7 @@
   pre { background: #f6f8fa; padding: 0.6em; border-radius: 4px; overflow-x: auto; font-size: 0.9em; white-space: pre-wrap; }
   .ref { cursor: pointer; color: #1a5fb4; text-decoration: none; border-bottom: 2px solid transparent; }
   .ref[data-status="agree"] { border-color: #33aa33; }
+  .ref[data-status="glance"] { border-color: #7fae2e; }
   .ref[data-status="question"] { border-color: #cc9900; }
   .ref[data-status="reject"] { border-color: #cc3333; }
   .hidden-name { color: #888; }
@@ -161,7 +162,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
   // its place in the list. Answers not yet marked come last. In edge order, changed marks come first,
   // then declarations with at least half of what they use marked, those with most first.
   const marked = n => !!marks[n]?.status;
-  const inBook = n => marks[n]?.status === "agree" || marks[n]?.status === "question";
+  const inBook = n => ["agree", "glance", "question"].includes(marks[n]?.status);
   const answered = n => (marks[n]?.notes ?? []).some(x => x.quiz);
   const skipped = new Set();
   function candidates() {

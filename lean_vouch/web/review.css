@@ -6,6 +6,7 @@
 .review-uses { margin-bottom: 0.3em; opacity: 0.8; }
 .review-ref { text-decoration: none; border-bottom: 2px solid #8884; }
 .review-ref[data-status="agree"] { border-color: #3a3; }
+.review-ref[data-status="glance"] { border-color: #7fae2e; }
 .review-ref[data-status="question"] { border-color: #d9a400; }
 .review-ref[data-status="reject"] { border-color: #d44; }
 .review-row { display: flex; gap: 0.4em; align-items: center; flex-wrap: wrap; }
@@ -14,10 +15,11 @@
   cursor: pointer; }
 .review-row button { width: 2em; height: 1.8em; }
 .review-row button[data-status="agree"].active { background: #3a33; border-color: #3a3; }
+.review-row button[data-status="glance"].active { background: #7fae2e40; border-color: #7fae2e; }
 .review-row button[data-status="question"].active { background: #d9a40040; border-color: #d9a400; }
 .review-row button[data-status="reject"].active { background: #d4444040; border-color: #d44; }
 .review-stale { color: #e08a10; font-style: italic; }
-.review-accept { font-style: normal; font-size: 0.9em; margin-left: 0.3em; white-space: nowrap; }
+.review-accept, .review-dismiss { font-style: normal; font-size: 0.9em; margin-left: 0.3em; white-space: nowrap; }
 .review-loading { opacity: 0.6; font-size: 0.9em; font-style: italic; padding: 0.2em 0.6em; }
 .review-prompt { color: #b08800; font-size: 0.9em; margin: 0.2em 0; }
 .review-others { font-size: 0.9em; margin: 0.3em 0; }
@@ -39,6 +41,7 @@
   background: var(--body-bg); color: var(--text-color); border: 1px solid #8888; border-radius: 4px; }
 .review-add { margin-top: 0.2em; padding: 0.1em 0.5em; }
 .decl[data-review-status="agree"] { border-left: 4px solid #3a3; }
+.decl[data-review-status="glance"] { border-left: 4px solid #7fae2e; }
 .decl[data-review-status="question"] { border-left: 4px solid #d9a400; }
 .decl[data-review-status="reject"] { border-left: 4px solid #d44; }
 .decl[data-review-change="changed"] { box-shadow: -4px 0 0 #f0a020; }

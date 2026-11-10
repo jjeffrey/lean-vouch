@@ -640,6 +640,40 @@ class ServerTest(unittest.TestCase):
                             "notes": [{"date": "2026-02-01T00:00:00", "text": "No."}]}}, "bo", "Bo")
         self.assertEqual(self.shown("A.b")["attention"], [])
 
+    def test_dismissing_clears_attention_until_someone_writes_again(self):
+        asked = {"status": "question", "date": "2026-01-01T00:00:00", "notes": [{"date": "2026-01-01T00:00:00", "text": "Why?"}]}
+        self.write({"A.b": asked}, "claude", "Claude")
+        code, entry = self.post("/review/data", {"name": "A.b", "seen": True})
+        self.assertEqual((code, entry["attention"], entry["status"], entry["notes"][-1]["by"]), (200, [], None, "Claude"))
+        self.assertIn("seen", self.stored()["A.b"])
+        asked["notes"].append({"date": "2999-01-01T00:00:00", "text": "Still wondering."})
+        self.write({"A.b": asked}, "claude", "Claude")
+        self.assertEqual(self.shown("A.b")["attention"], ["Claude"])
+
+    def test_an_assistant_can_dismiss_and_mark_at_a_glance(self):
+        self.post("/review/data", {"name": "A.b", "status": "question", "note": "Why?"})
+        self.post("/review/data", {"name": "A.b", "id": "claude", "note": "Because."})
+        code, entry = self.post("/review/data", {"name": "A.b", "id": "claude", "status": "glance", "seen": True})
+        self.assertEqual((code, entry["status"]), (200, "glance"))
+        self.assertEqual([(o["id"], o["status"]) for o in self.shown("A.b")["others"]], [("claude", "glance")])
+
+    def test_a_mark_at_a_glance_is_not_agreeing(self):
+        self.post("/review/data", {"name": "A.b", "status": "glance"})
+        self.assertEqual(self.shown("A.b")["status"], "glance")
+        now = {"own": "x", "deps": {}}
+        self.assertFalse(server.agreed_now({**self.stored()["A.b"], "fingerprint": now}, now))
+        self.assertTrue(server.agreed_now({"status": "agree", "fingerprint": now}, now))
+
+    def test_a_status_from_a_later_version_reads_as_unmarked_and_is_kept(self):
+        self.write({"A.b": {"status": "someday", "date": "2026-01-01T00:00:00", "notes": []}})
+        self.write({"A.b": {"status": "someday", "date": "2026-01-01T00:00:00",
+                            "notes": [{"date": "2026-01-01T00:00:00", "text": "Hm."}]}}, "bo", "Bo")
+        entry = self.shown("A.b")
+        self.assertEqual((entry["status"], entry["others"], entry["notes"][0]["text"]), (None, [], "Hm."))
+        self.assertEqual(self.status()["unreadable"], [])
+        self.post("/review/data", {"name": "A.b", "note": "Mine."})
+        self.assertEqual(self.stored()["A.b"]["status"], "someday")
+
     def test_your_own_question_never_needs_your_attention(self):
         self.post("/review/data", {"name": "A.b", "status": "question", "note": "Why?"})
         self.assertEqual(self.shown("A.b")["attention"], [])

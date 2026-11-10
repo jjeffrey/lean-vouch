@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A fourth mark, ~, for "looks right at a glance" but not checked closely. It doesn't disagree with a ✓, asks nothing of anyone, and doesn't count as agreeing in a challenge. lean-vouch 0.1.1 can't read a marks file containing one and leaves that person out, so everyone sharing marks should upgrade together. From now on, a mark a later version adds shows as unmarked instead.
+- "Needs your attention" can be dismissed without a mark or a note, and comes back when someone writes there again. Assistants send `"seen": true`.
 - The diagram's folders, diagram and details are divided by a line instead of each having a border, and dragging a line makes the panel beside it wider or narrower. The width is remembered per browser; double-click the line to go back to the default.
 - Without doc pages, the diagram's sidebar shows a structure's or class's fields, and an inductive type's constructors, each with its type and docstring, under its statement. Before, they were only in its code. A class is now called a class, not a structure.
 - An assistant can ask what's waiting on it: `/review/data?id=ID` gives the view from that person's side, with who is waiting on them. The setup guide has a section for assistants: asking, replying, finding what's waiting, and the file format for when the server isn't running.

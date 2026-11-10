@@ -37,7 +37,8 @@ MARKS_FORMAT = 3
 GRAPH_FORMAT = 1  # stored in the graph as "format"
 
 WEB = Path(__file__).resolve().parent / "web"
-STATUSES = {"agree", "question", "reject", None}
+# ✓, ~ (looks right at a glance), ? and ✗. A status a later version adds reads as unmarked.
+STATUSES = {"agree", "glance", "question", "reject", None}
 ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")   # plain, so that a file can't differ between machines
 VERDICTS = {"match", "partly", "miss"}   # how a quiz answer compared with the real name and docstring
 LARGE = 5000  # declarations; above this, pages get the parts of the graph they need, not all of it
@@ -234,7 +235,7 @@ def is_note(note):
 
 def is_entry(entry):
     return (isinstance(entry, dict) and isinstance(entry.get("date", ""), str)
-            and isinstance(entry.get("status"), (str, type(None))) and entry.get("status") in STATUSES
+            and isinstance(entry.get("status"), (str, type(None))) and isinstance(entry.get("seen", ""), str)
             and isinstance(entry.get("fingerprint") or {}, dict)
             and isinstance(entry.get("notes", []), list) and all(is_note(note) for note in entry.get("notes", [])))
 
@@ -312,7 +313,8 @@ def view(me=None):
     notes in order with your quiz answers among them, and what others marked under `others`. Others'
     files are only read, so a declaration they marked before a rename shows under its new name.
     `attention` names whoever is waiting on you: someone with a `?` and a note saying what it asks,
-    or who answered your `?`, since you last marked or wrote here. A bare `?` is a person's own reminder.
+    or who answered your `?`, since you last marked, wrote or dismissed it here. A bare `?` is a person's
+    own reminder. A status this version doesn't know, from a later one, shows as unmarked.
     "You" is the server's own person, or `me`, such as an assistant asking what's waiting on it."""
     me = me or args.id
     renames = graph.current().get("renames", {})
@@ -338,14 +340,16 @@ def view(me=None):
             item["notes"] += [{"by": data["name"], **note, "who": who, "mine": mine} for note in entry.get("notes", [])]
             if mine:
                 item.update({key: value for key, value in entry.items() if key != "notes"})
-            elif entry.get("status"):
+                if item["status"] not in STATUSES:
+                    item["status"] = None
+            elif entry.get("status") in STATUSES - {None}:
                 item["others"].append({"id": who, "name": data["name"], **{
                     key: entry[key] for key in ("status", "date", "fingerprint") if key in entry}})
     for name, answers in (quiz_answers() if me == args.id else {}).items():
         at(name)["notes"] += [{"by": people[me]["name"], **answer, "who": args.id, "mine": True} for answer in answers]
     for item in shown.values():
         item["notes"].sort(key=lambda note: note["date"])
-        seen = max([item.get("date", ""), *(n["date"] for n in item["notes"]
+        seen = max([item.get("date", ""), item.get("seen", ""), *(n["date"] for n in item["notes"]
                                             if n["mine"] and "quiz" not in n and n["by"] != "lean-vouch")])
         new = [note for note in item["notes"] if note["date"] > seen and not note["mine"] and note["by"] != "lean-vouch"]
         wrote = {note["who"] for note in item["notes"] if note["by"] != "lean-vouch"}
@@ -776,6 +780,8 @@ class Handler(SimpleHTTPRequestHandler):
             if "status" in body and body.get("built", last_built()) != last_built():
                 return self.send_json({"error": "The docs have been rebuilt. Reload this page, then mark again."}, 409)
             entry = marks.setdefault(name, {"status": None, "notes": []})
+            if body.get("seen"):   # clears attention without a mark or a note, until someone writes again
+                entry["seen"] = now()
             if "status" in body:
                 entry["status"] = body["status"]
                 if fingerprint := graph.fingerprint(name):

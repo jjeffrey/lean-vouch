@@ -65,11 +65,13 @@
   #sidebar ul { margin: 0.2em 0; padding-left: 1.2em; }
   #sidebar .ref { cursor: pointer; color: #1a5fb4; text-decoration: none; border-bottom: 2px solid transparent; }
   #sidebar .ref[data-status="agree"] { border-color: #33aa33; }
+  #sidebar .ref[data-status="glance"] { border-color: #7fae2e; }
   #sidebar .ref[data-status="question"] { border-color: #cc9900; }
   #sidebar .ref[data-status="reject"] { border-color: #cc3333; }
   #sidebar .marks button { width: 2em; height: 1.8em; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
   #sidebar .marks button.accept { width: auto; padding: 0 0.5em; }
   #sidebar .marks button[data-status="agree"].active { background: #c8ecc8; border-color: #33aa33; }
+  #sidebar .marks button[data-status="glance"].active { background: #e4f2c4; border-color: #7fae2e; }
   #sidebar .marks button[data-status="question"].active { background: #fbe9b0; border-color: #cc9900; }
   #sidebar .marks button[data-status="reject"].active { background: #f6c4c4; border-color: #cc3333; }
   #sidebar textarea { width: 100%; box-sizing: border-box; font: inherit; }
@@ -88,6 +90,7 @@
   #sidebar .others .old { opacity: 0.6; }
   #sidebar .others .disagree { color: #7b4fb5; font-weight: 600; }
   #sidebar .others .attention { color: #c77700; font-weight: 600; }
+  #sidebar .others button { font-size: 0.9em; }
   #sidebar .review-notes .by-tool { background: none; border-color: #ccc; color: #777; font-style: italic; font-size: 0.9em; }
   /* Highlighting the selected node, what it depends on (below) and what depends on it (above). */
   .hl-dim { opacity: 0.45; }
@@ -156,6 +159,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   <span id="groups">plumbing:</span>
   <div class="legend">
     <span><i class="swatch" style="background:#c8ecc8"></i>agree / understood</span>
+    <span><i class="swatch" style="background:#e4f2c4"></i>looks right at a glance</span>
     <span><i class="swatch" style="background:#fbe9b0"></i>question</span>
     <span><i class="swatch" style="background:#f6c4c4"></i>reject</span>
     <span id="disagree-key" hidden><i class="swatch" style="background:#e6dcf5"></i>disagreement</span>
@@ -268,8 +272,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     : (marks[n]?.others ?? []).find(o => o.id === viewer.value);
   const statusOf = n => {
     if (viewer.value !== "all") return shownMark(n)?.status;
-    const current = new Set(everyMark(n).filter(m => !isOld(n, m)).map(m => m.status));
-    return current.size > 1 ? "disagree" : everyMark(n)[0]?.status;
+    return reviewDiffer(everyMark(n).filter(m => !isOld(n, m)).map(m => m.status)) ? "disagree" : everyMark(n)[0]?.status;
   };
   const stale = n => viewer.value === "all" ? false : isOld(n, shownMark(n));
   // What changed, and how many marks rely on each: every mark recorded what lay below it, so this
@@ -290,7 +293,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const waitingIn = node => Object.keys(marks).filter(n => asked(n) && node.modules.includes(decls[n]?.module)).length;
   const ORANGE = "#e07000";
   const unexplained = n => marks[n]?.status === "question" && !marks[n].notes.some(x => x.mine && x.by !== "lean-vouch");
-  const SYMBOL = { agree: "✓", question: "?", reject: "✗" };
+  const SYMBOL = { agree: "✓", glance: "~", question: "?", reject: "✗" };
   const nodeClass = n => { const s = statusOf(n); return library[n] && !decls[n] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked"); };
   // Whether a declaration's proof has a gap. The marks say whether a statement is right; this says
   // whether it's proved, so it has its own border, and a mark can stand beside it.
@@ -1068,8 +1071,10 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 
     // Mark and note thread, editable here.
     const STATUS = isLibrary
-      ? [["agree", "✓", "I understand this"], ["question", "?", "I have a question about this"], ["reject", "✗", "This surprises me or seems wrong"]]
-      : [["agree", "✓", "I agree with this"], ["question", "?", "I have a question"], ["reject", "✗", "I reject how this is defined"]];
+      ? [["agree", "✓", "I understand this"], ["glance", "~", "I roughly follow this"],
+        ["question", "?", "I have a question about this"], ["reject", "✗", "This surprises me or seems wrong"]]
+      : [["agree", "✓", "I agree with this"], ["glance", "~", "Looks right at a glance; I haven't checked it closely"],
+        ["question", "?", "I have a question"], ["reject", "✗", "I reject how this is defined"]];
     const markRow = el("div", "marks");
     const input = el("textarea");
     const add = el("button", null, "Add note");
@@ -1130,6 +1135,16 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     if (asked(name)) {
       const line = el("p", "others");
       line.append(el("span", "attention", `needs your attention: ${marks[name].attention.join(", ")}`));
+      // Clears it without a mark or a note, until someone writes here again.
+      const dismiss = el("button", null, "Dismiss");
+      dismiss.title = "Stop flagging this until someone writes here again. Nobody else sees it.";
+      dismiss.onclick = async () => {
+        marks[name] = await post("/review/data", { name, seen: true });
+        recolorAll();
+        showAskedKey();
+        renderSidebar(name);
+      };
+      line.append(dismiss);
       sidebar.append(line);
     }
     if (decls[name]?.sorry || decls[name]?.sorryFrom?.length || decls[name]?.axioms?.length) {
@@ -1255,9 +1270,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return host;
   }
 
-  const COLORS = { unmarked: ["#ffffff", "#888888"], agree: ["#c8ecc8", "#33aa33"],
+  const COLORS = { unmarked: ["#ffffff", "#888888"], agree: ["#c8ecc8", "#33aa33"], glance: ["#e4f2c4", "#7fae2e"],
     question: ["#fbe9b0", "#cc9900"], reject: ["#f6c4c4", "#cc3333"], lib: ["#eeeeee", "#aaaaaa"],
-    lib_agree: ["#e3f3e3", "#33aa33"], lib_question: ["#fbf1d0", "#cc9900"],
+    lib_agree: ["#e3f3e3", "#33aa33"], lib_glance: ["#eff7de", "#7fae2e"], lib_question: ["#fbf1d0", "#cc9900"],
     lib_reject: ["#f9dede", "#cc3333"], disagree: ["#e6dcf5", "#7b4fb5"], lib_disagree: ["#e6dcf5", "#7b4fb5"] };   // six-digit: Graphviz doesn't read the three-digit form
 
   // A soft color per box (pale fill, matching border and label), the same everywhere.

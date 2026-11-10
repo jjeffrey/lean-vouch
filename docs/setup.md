@@ -98,7 +98,13 @@ owner alone, and differing current marks show as a disagreement.
 
 A `?` alone is your own reminder. With a note, it asks the others. A declaration needs your attention,
 shown by a `!`, when someone is waiting on you: they asked, wrote more under their `?`, or answered
-yours. It clears when you mark the declaration or reply.
+yours. It clears when you mark the declaration or reply, or when you dismiss it, which only you see;
+anything they write after that brings it back.
+
+A `~` is "looks right at a glance". It sits between ✓ and `?`: it asks nothing of anyone, doesn't
+disagree with a ✓, and doesn't count as agreeing in a challenge. Everyone sharing marks needs 0.1.2
+or later for it: 0.1.1 leaves out the whole file of anyone who has marked `~`. From 0.1.2, a mark a
+later version adds shows as unmarked instead.
 
 Marks are shared with plain git, and lean-vouch never commits or pushes for you. Commit your file
 with your work, and pull to get everyone else's, which appear on open pages by themselves. Each person writes
@@ -111,7 +117,7 @@ An assistant, human or not, is another person with its own file, `.lean-vouch/ma
 an id of lowercase letters, digits and hyphens, such as `claude`, and keep it, so that its notes stay
 in one thread and what's waiting on it can be found.
 
-By convention an assistant leaves notes and `?`s, and doesn't mark ✓ or ✗: the record says what a
+By convention an assistant leaves notes, `?`s and `~`s, and doesn't mark ✓ or ✗: the record says what a
 person has checked. The server refuses ✓ and ✗ from anyone but the person it runs as. That's a
 convention made easy, not a safeguard: any program on your machine can still write to the server as
 you, or edit the files directly.
@@ -131,7 +137,8 @@ curl -X POST http://127.0.0.1:8797/review/data -H "Content-Type: application/jso
   -d '{"id": "claude", "author": "Claude", "name": "MyProject.foo", "note": "Yes: the lemma below needs it."}'
 ```
 
-`"status": null` clears its mark. `author` is the name pages show; it's kept in the file, so it only
+`"status": null` clears its mark, and `"seen": true` dismisses what's waiting on it there without a
+note, until someone writes again. `author` is the name pages show; it's kept in the file, so it only
 needs sending once. Notes are shown as plain text: Markdown and LaTeX aren't rendered, so write
 `x ∈ s` rather than `$x \in s$`.
 
@@ -153,4 +160,5 @@ pages do: its `marks` field changes whenever anyone's file does, and `state` is 
 When the server isn't running, an assistant can edit its own file instead, which is safe since no
 one else writes it. It's `{"format": 3, "name": "Claude", "marks": {declaration: entry}}`, where an
 entry is `{"status": "question", "date": "2026-11-08T12:00:00Z", "notes": [{"date": "...", "text": "..."}]}`,
-with dates in UTC. The server reads the files afresh each time, so it picks this up whenever it starts.
+with dates in UTC. A status is `agree`, `glance`, `question`, `reject` or `null`, and an optional `seen`
+date dismisses attention up to then. The server reads the files afresh each time, so it picks this up whenever it starts.

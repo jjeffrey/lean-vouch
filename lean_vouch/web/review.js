@@ -1,16 +1,18 @@
-// Review controls for doc-gen4 pages. Each declaration gets a mark (✓ / ? / ✗) and a thread of
+// Review controls for doc-gen4 pages. Each declaration gets a mark (✓ / ~ / ? / ✗) and a thread of
 // notes, saved through server.py. With a declaration graph, a mark is flagged when the
 // declaration or anything it depends on has changed since it was made, project declarations list
 // the library definitions they use, and those library definitions can be marked as understood.
 (() => {
   const PROJECT_STATUS = [
     ["agree", "✓", "I agree with this"],
+    ["glance", "~", "Looks right at a glance; I haven't checked it closely"],
     ["question", "?", "I have a question"],
     ["reject", "✗", "I reject how this is defined"],
   ];
-  const SYMBOL = { agree: "✓", question: "?", reject: "✗" };
+  const SYMBOL = { agree: "✓", glance: "~", question: "?", reject: "✗" };
   const LIBRARY_STATUS = [
     ["agree", "✓", "I understand this"],
+    ["glance", "~", "I roughly follow this"],
     ["question", "?", "I have a question about this"],
     ["reject", "✗", "This surprises me or seems wrong"],
   ];
@@ -229,14 +231,15 @@
       const isCurrent = m => { const d = changes(name, m); return !d.self && !d.deps.length; };
       const current = [...(e.status && isCurrent(e) ? [e.status] : []),
         ...(e.others ?? []).filter(isCurrent).map(o => o.status)];
-      const disagree = new Set(current).size > 1;
+      const disagree = reviewDiffer(current);
       element.dataset.reviewDisagree = disagree ? "yes" : "";
       element.dataset.reviewAttention = e.attention?.length ? "yes" : "";
       others.replaceChildren(...(e.others ?? []).map(o =>
         el("span", isCurrent(o) ? null : "old", `${o.name}: ${SYMBOL[o.status]}${isCurrent(o) ? "" : " (changed since)"}`)));
       const differing = reviewDisagreement(e.status && isCurrent(e) ? e.status : null, (e.others ?? []).filter(isCurrent));
       if (differing) others.append(el("span", "disagree", differing));
-      if (e.attention?.length) others.append(el("span", "attention", `needs your attention: ${e.attention.join(", ")}`));
+      if (e.attention?.length) others.append(el("span", "attention", `needs your attention: ${e.attention.join(", ")} `),
+        dismissButton(name, render));
       notes.replaceChildren(...(e.notes ?? []).map(noteItem));
       summarize();
     };
@@ -318,17 +321,26 @@
   }
 
   const needingAttention = () => Object.keys(marks).filter(n => marks[n].attention?.length);
+  // Clears the attention without a mark or a note; someone writing again brings it back.
+  const dismissButton = (name, then) => {
+    const b = el("button", "review-dismiss", "Dismiss");
+    b.title = "Stop flagging this until someone writes here again. Nobody else sees it.";
+    b.onclick = async () => { then(await post("/review/data", { name, seen: true })); showBar(); };
+    return b;
+  };
 
   function attentionPanel() {
     const panel = el("div", "review-orphans");
     const close = el("button", "review-close", "close");
     close.onclick = () => panel.remove();
     panel.append(el("h3", null, "Needs your attention"), close,
-      el("p", null, "Someone is waiting on you here: they asked a question, or answered yours. Mark it or reply to clear it."));
+      el("p", null, "Someone is waiting on you here: they asked a question, or answered yours. " +
+        "Mark it or reply to clear it, or dismiss it until they write again."));
     const list = el("ul");
     for (const name of needingAttention()) {
       const item = el("li");
-      item.append(link(name, name), ` (${marks[name].attention.join(", ")})`);
+      item.append(link(name, name), ` (${marks[name].attention.join(", ")}) `,
+        dismissButton(name, e => { (renderers.get(name) ?? (x => { marks[name] = x; }))(e); item.remove(); }));
       list.append(item);
     }
     panel.append(list);
@@ -373,7 +385,7 @@
     const sources = decls.filter(d => d.dataset.reviewGap === "source").length;
     const affected = decls.filter(d => d.dataset.reviewGap === "affected").length;
     document.querySelector("#review-summary .counts").textContent =
-      `✓ ${count("agree")}  ? ${count("question")}  ✗ ${count("reject")}  unmarked ${count("")}` +
+      `✓ ${count("agree")}  ~ ${count("glance")}  ? ${count("question")}  ✗ ${count("reject")}  unmarked ${count("")}` +
       (staleCount ? `  · ${staleCount} to re-check` : "") +
       (sources + affected ? `  · ${sources} sorry, ${affected} relying on one` : "");
   }

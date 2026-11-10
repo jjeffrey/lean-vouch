@@ -5,11 +5,15 @@
 //
 // With DOCGEN_SRC=file the source links are file:// URLs, which browsers won't follow from a web
 // page. They open in VS Code instead, at the line `lineOf(a)` gives, if any.
+// ✓ and ~ (looks right at a glance) are on the same side: neither disagrees with the other.
+window.reviewSide = status => status === "glance" ? "agree" : status;
+// Whether marks that are current disagree.
+window.reviewDiffer = statuses => new Set(statuses.map(reviewSide)).size > 1;
 // Who disagrees with whom, among marks that are current: `mine` is your status, if any.
 window.reviewDisagreement = (mine, others) => {
-  const differ = others.filter(o => o.status !== mine);
+  const differ = others.filter(o => reviewSide(o.status) !== reviewSide(mine));
   if (mine && differ.length) return `${differ.map(o => o.name).join(", ")} ${differ.length === 1 ? "disagrees" : "disagree"} with you`;
-  return new Set(others.map(o => o.status)).size > 1 ? "others disagree" : null;
+  return reviewDiffer(others.map(o => o.status)) ? "others disagree" : null;
 };
 
 // Reads a reply. An error says so and throws, so that a page never takes it for what it asked for and

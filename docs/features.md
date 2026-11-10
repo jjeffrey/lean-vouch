@@ -3,7 +3,8 @@
 For every declaration, in the diagram's sidebar, and under it on its doc page if you build them
 (`--docs`):
 
-- **A mark:** ✓ agree, ? question, ✗ reject how it's defined. Click it again to clear it.
+- **A mark:** ✓ agree, ~ looks right at a glance but not checked closely, ? question, ✗ reject how
+  it's defined. Click it again to clear it. Only ✓ counts as agreeing in a [challenge](challenge.md).
 - **A note thread,** for questions and answers, from everyone reviewing.
 - **Change tracking:** the mark is flagged when the declaration has changed since it was made, or
   when anything below it has, however far, in libraries too ("depends on `Divides`, which changed since
@@ -64,7 +65,8 @@ With others ([how to share marks](setup.md#working-with-others)), and with [assi
 - **Their marks beside yours,** and their notes in the same thread, each person in their own color.
   The diagram shows your marks, or anyone's, or everyone's, with disagreements in purple.
 - **Needs your attention:** a `!` where someone is waiting on you, because they asked a question or
-  answered yours. Listed at the bottom of the page, and counted in the diagram's folders.
+  answered yours. Listed at the bottom of the page, and counted in the diagram's folders. Reply,
+  mark it, or dismiss it until they write again.
 - **Live updates:** marks and notes appear on open pages by themselves. Pages say when the code has
   changed since the last build, with a button to [rebuild](setup.md#rebuilding), show how far a
   rebuild has got, and offer to reload when it's done.
