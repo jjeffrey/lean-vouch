@@ -23,11 +23,16 @@
   .note { color: #555; max-width: 60em; margin: 0 0 0.6em; }
   .note summary { cursor: pointer; color: #1a5fb4; }
   .note p { margin: 0.4em 0 0; }
-  body > .layout { flex: 1; min-height: 0; display: flex; gap: 1em; align-items: stretch; }
-  /* Either side panel can be hidden, for a larger diagram. */
-  body.hide-tree #tree, body.hide-sidebar #sidebar { display: none; }
-  #tree { width: 17em; flex: none; display: flex; flex-direction: column; border: 1px solid #ddd;
-    border-radius: 6px; font-size: 0.88em; min-height: 0; }
+  body > .layout { flex: 1; min-height: 0; display: flex; align-items: stretch; border-top: 1px solid #ddd; }
+  /* Either side panel can be hidden, for a larger diagram, or made wider or narrower by dragging the
+     line beside it. */
+  body.hide-tree #tree, body.hide-sidebar #sidebar,
+  body.hide-tree .divider[data-panel=tree], body.hide-sidebar .divider[data-panel=sidebar] { display: none; }
+  .divider { flex: none; width: 9px; margin: 0 -4px; z-index: 1; cursor: col-resize; touch-action: none;
+    background: linear-gradient(to right, transparent 4px, #ddd 4px, #ddd 5px, transparent 5px); }
+  .divider:hover, .divider.dragging { background: linear-gradient(to right, transparent 3px, #1a5fb4 3px, #1a5fb4 6px, transparent 6px); }
+  body.dragging { cursor: col-resize; user-select: none; }
+  #tree { width: 17em; flex: none; display: flex; flex-direction: column; font-size: 0.88em; min-height: 0; }
   #tree input[type=search] { margin: 0.5em; font: inherit; }
   #tree-hint { color: #666; margin: 0 0.7em 0.4em; font-size: 0.92em; }
   #tree-rows { flex: 1; overflow: auto; padding-bottom: 0.4em; }
@@ -45,14 +50,13 @@
   .row.pinned .label { font-weight: 600; }
   .row mark { background: #fbe9b0; color: inherit; padding: 0; }
   .row.focus { background: #dcebfb; }
-  #diagram { flex: 1; min-width: 0; border: 1px solid #ddd; border-radius: 6px;
-    overflow: hidden; cursor: grab; }
+  #diagram { flex: 1; min-width: 0; overflow: hidden; cursor: grab; }
   #diagram:active { cursor: grabbing; }
   #diagram g.node { cursor: pointer; }
   #diagram g.cluster text { cursor: pointer; }
   #diagram svg { width: 100%; height: 100%; max-width: none !important; }
-  #sidebar { width: 36%; max-width: 40em; overflow: auto; border: 1px solid #ddd;
-    border-radius: 6px; padding: 0.8em 1em; box-sizing: border-box; font-size: 0.92em; }
+  #sidebar { width: 36%; max-width: 40em; flex: none; overflow: auto;
+    padding: 0.8em 1em; box-sizing: border-box; font-size: 0.92em; }
   #sidebar h2 { font-size: 1.05em; margin: 0 0 0.2em; word-break: break-all; }
   #sidebar h3 { font-size: 0.95em; margin: 1em 0 0.3em; }
   #sidebar .muted { color: #666; }
@@ -171,7 +175,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     <p id="tree-hint">Click to open or close. Cmd- or Ctrl-click here or on a box to pick it, and show only what's picked.</p>
     <div id="tree-rows"></div>
   </nav>
+  <div class="divider" data-panel="tree" title="Drag to resize; double-click to reset"></div>
   <div id="diagram"></div>
+  <div class="divider" data-panel="sidebar" title="Drag to resize; double-click to reset"></div>
   <aside id="sidebar"><p class="muted">Click a node to see its code, notes and dependencies.</p></aside>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
@@ -1368,6 +1374,42 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       const hidden = !document.body.classList.contains(`hide-${panel}`);
       show(hidden);
       try { localStorage.setItem(key, hidden ? "1" : "0"); } catch {}
+    };
+  }
+
+  // Dragging the line beside a side panel sets its width, remembered per browser; double-clicking
+  // it goes back to the default. The diagram keeps at least 200 pixels.
+  for (const divider of document.querySelectorAll(".divider")) {
+    const panel = document.getElementById(divider.dataset.panel), key = `lean-vouch.width-${divider.dataset.panel}`;
+    const layout = divider.parentElement;
+    const setWidth = width => {
+      const others = [...layout.children].filter(e => e !== panel && e.id !== "diagram" && e.offsetParent)
+        .reduce((sum, e) => sum + e.getBoundingClientRect().width, 0);
+      const most = layout.getBoundingClientRect().width - others - 200;
+      width = Math.round(Math.max(120, Math.min(width, most)));
+      Object.assign(panel.style, { width: `${width}px`, maxWidth: "none" });
+      return width;
+    };
+    try { const saved = Number(localStorage.getItem(key)); if (saved) setWidth(saved); } catch {}
+    divider.onpointerdown = down => {
+      down.preventDefault();
+      divider.setPointerCapture(down.pointerId);
+      divider.classList.add("dragging");
+      document.body.classList.add("dragging");
+      const start = panel.getBoundingClientRect().width, from = down.clientX;
+      const left = divider.dataset.panel === "tree";
+      let width = start;
+      divider.onpointermove = move => { width = setWidth(start + (left ? 1 : -1) * (move.clientX - from)); };
+      divider.onpointerup = divider.onpointercancel = () => {
+        divider.onpointermove = divider.onpointerup = divider.onpointercancel = null;
+        divider.classList.remove("dragging");
+        document.body.classList.remove("dragging");
+        try { localStorage.setItem(key, String(width)); } catch {}
+      };
+    };
+    divider.ondblclick = () => {
+      panel.style.width = panel.style.maxWidth = "";
+      try { localStorage.removeItem(key); } catch {}
     };
   }
 
