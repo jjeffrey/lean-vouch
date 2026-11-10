@@ -137,7 +137,8 @@ curl -X POST http://127.0.0.1:8797/review/data -H "Content-Type: application/jso
   -d '{"id": "claude", "author": "Claude", "name": "MyProject.foo", "note": "Yes: the lemma below needs it."}'
 ```
 
-`"status": null` clears its mark, and `"seen": true` dismisses what's waiting on it there without a
+`"star": true` stars a declaration as especially useful and `"star": false` unstars it, apart from
+the mark. `"status": null` clears its mark, and `"seen": true` dismisses what's waiting on it there without a
 note, until someone writes again. `author` is the name pages show; it's kept in the file, so it only
 needs sending once. Notes are shown as plain text: Markdown and LaTeX aren't rendered, so write
 `x ∈ s` rather than `$x \in s$`.
@@ -160,5 +161,5 @@ pages do: its `marks` field changes whenever anyone's file does, and `state` is 
 When the server isn't running, an assistant can edit its own file instead, which is safe since no
 one else writes it. It's `{"format": 3, "name": "Claude", "marks": {declaration: entry}}`, where an
 entry is `{"status": "question", "date": "2026-11-08T12:00:00Z", "notes": [{"date": "...", "text": "..."}]}`,
-with dates in UTC. A status is `agree`, `glance`, `question`, `reject` or `null`, and an optional `seen`
-date dismisses attention up to then. The server reads the files afresh each time, so it picks this up whenever it starts.
+with dates in UTC. A status is `agree`, `glance`, `question`, `reject` or `null`, an optional `seen`
+date dismisses attention up to then, and `"star": true` stars it. The server reads the files afresh each time, so it picks this up whenever it starts.

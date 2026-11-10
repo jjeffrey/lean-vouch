@@ -5,6 +5,9 @@ For every declaration, in the diagram's sidebar, and under it on its doc page if
 
 - **A mark:** ✓ agree, ~ looks right at a glance but not checked closely, ? question, ✗ reject how
   it's defined. Click it again to clear it. Only ✓ counts as agreeing in a [challenge](challenge.md).
+- **A star,** apart from the mark, for a declaration that's especially useful. Everyone sees who
+  starred it, and the diagram puts a ★ on its corner, or on a closed folder's or module's with
+  how many are inside.
 - **A note thread,** for questions and answers, from everyone reviewing.
 - **Change tracking:** the mark is flagged when the declaration has changed since it was made, or
   when anything below it has, however far, in libraries too ("depends on `Divides`, which changed since

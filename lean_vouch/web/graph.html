@@ -46,7 +46,8 @@
   .row .waiting + .count { margin-left: 0; }
   .attention-mark { display: inline-block; width: 1.2em; height: 1.2em; line-height: 1.15em; text-align: center;
     border: 1.5px solid #e07000; border-radius: 50%; background: #fff; color: #e07000; font-size: 0.85em; font-weight: 700; }
-  .legend .attention-mark { margin-right: 0.3em; }
+  .legend .attention-mark, .legend .star-mark { margin-right: 0.3em; }
+  .star-mark { color: #d4a017; }
   .row.pinned .label { font-weight: 600; }
   .row mark { background: #fbe9b0; color: inherit; padding: 0; }
   .row.focus { background: #dcebfb; }
@@ -70,6 +71,9 @@
   #sidebar .ref[data-status="reject"] { border-color: #cc3333; }
   #sidebar .marks button { width: 2em; height: 1.8em; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
   #sidebar .marks button.accept { width: auto; padding: 0 0.5em; }
+  #sidebar .marks button.star { margin-left: 0.6em; color: #b08800; }
+  #sidebar .marks button.star.active { background: #fff3c4; border-color: #d4a017; }
+  #sidebar .others .stars { color: #8a6d00; }
   #sidebar .marks button[data-status="agree"].active { background: #c8ecc8; border-color: #33aa33; }
   #sidebar .marks button[data-status="glance"].active { background: #e4f2c4; border-color: #7fae2e; }
   #sidebar .marks button[data-status="question"].active { background: #fbe9b0; border-color: #cc9900; }
@@ -166,6 +170,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     <span><i class="swatch" style="background:#fff"></i>unmarked</span>
     <span><i class="swatch" style="background:#eee"></i>library</span>
     <span id="attention-key" hidden><span class="attention-mark">!</span> needs your attention</span>
+    <span id="star-key" hidden><span class="star-mark">★</span> especially useful</span>
     <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px solid #f0a020"></i>changed</span>
     <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #f0a020"></i>relies on a change</span>
     <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px solid #c62828"></i>contains sorry</span>
@@ -291,7 +296,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   const changeOf = n => changedNames().has(n) ? "changed" : stale(n) ? "affected" : null;
   const asked = n => marks[n]?.attention?.length > 0;
   const waitingIn = node => Object.keys(marks).filter(n => asked(n) && node.modules.includes(decls[n]?.module)).length;
-  const ORANGE = "#e07000";
+  const ORANGE = "#e07000", STAR = "#d4a017";
+  const starred = n => !!marks[n]?.star || marks[n]?.stars?.length > 0;
+  const starsIn = node => Object.keys(marks).filter(n => starred(n) && node.modules.includes(decls[n]?.module)).length;
   const unexplained = n => marks[n]?.status === "question" && !marks[n].notes.some(x => x.mine && x.by !== "lean-vouch");
   const SYMBOL = { agree: "✓", glance: "~", question: "?", reject: "✗" };
   const nodeClass = n => { const s = statusOf(n); return library[n] && !decls[n] ? (s ? "lib_" + s : "lib") : (s ?? "unmarked"); };
@@ -760,7 +767,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const key = element.closest("g.node")?.dataset.key;
     return key && model.name.has(key) ? key : null;
   }
-  // A bubble on the top right corner of what needs your attention, a box counting what's inside.
+  // A bubble on the top right corner of what needs your attention, a box counting what's inside,
+  // and a star on the top left of what anyone starred, or of a box with a count of those inside.
   function drawBadges() {
     const NS = "http://www.w3.org/2000/svg";
     const shape = (tag, attributes) => {
@@ -770,7 +778,29 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     };
     for (const [id, g] of nodeElements()) {
       g.querySelector(".attention-badge")?.remove();
+      g.querySelector(".star-badge")?.remove();
       const box = model.box.get(id);
+      // A closed box counts the stars inside it, beside its star.
+      const stars = box ? starsIn(box) : starred(model.name.get(id)) ? 1 : 0;
+      if (stars) {
+        const area = g.querySelector("path, polygon, rect").getBBox();
+        const size = Math.min(area.height * 0.3, 9) * 2;
+        const badge = shape("text", { class: "star-badge", x: area.x, y: area.y, "text-anchor": "middle",
+          "dominant-baseline": "central", "font-size": size, fill: STAR, stroke: "#ffffff", "stroke-width": 0.8,
+          "paint-order": "stroke" });
+        badge.textContent = "★";
+        if (box) {
+          const count = shape("tspan", { "font-size": size * 0.65, "font-weight": 700, fill: "#8a6d00", dx: size * 0.05 });
+          count.textContent = String(stars);
+          badge.setAttribute("text-anchor", "start");
+          badge.setAttribute("x", area.x - size * 0.45);
+          badge.append(count);
+          const title = shape("title", {});
+          title.textContent = `${stars} starred inside`;
+          badge.append(title);
+        }
+        g.append(badge);
+      }
       if (!(box ? waitingIn(box) : asked(model.name.get(id)))) continue;
       const area = g.querySelector("path, polygon, rect").getBBox();
       const r = area.height * 0.38, x = area.x + area.width, y = area.y;
@@ -1091,6 +1121,17 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       };
       markRow.append(b, " ");
     }
+    // A star, apart from the mark: especially useful, worth pointing others to.
+    const star = el("button", marks[name]?.star ? "star active" : "star", marks[name]?.star ? "★" : "☆");
+    star.title = marks[name]?.star ? "Starred as especially useful. Click to unstar."
+      : "Star as especially useful. Everyone sees it, whatever their mark.";
+    star.onclick = async () => {
+      marks[name] = await post("/review/data", { name, star: !marks[name]?.star });
+      drawBadges();
+      showStarKey();
+      renderSidebar(name);
+    };
+    markRow.append(star, " ");
     if (c.self) markRow.append(el("span", "stale", " changed since you marked it"));
     else if (c.deps.length) {
       const s = el("span", "stale", " depends on ");
@@ -1130,6 +1171,12 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       const mine = marks[name]?.status && !isOld(name, marks[name]) ? marks[name].status : null;
       const differing = reviewDisagreement(mine, others.filter(o => !isOld(name, o)));
       if (differing) line.append(el("span", "disagree", differing));
+      sidebar.append(line);
+    }
+    const starredBy = [...(marks[name]?.star ? ["you"] : []), ...(marks[name]?.stars ?? [])];
+    if (starredBy.length) {
+      const line = el("p", "others");
+      line.append(el("span", "stars", `★ starred by ${starredBy.join(", ")}`));
       sidebar.append(line);
     }
     if (asked(name)) {
@@ -1442,6 +1489,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   };
   const showAskedKey = () => document.getElementById("attention-key").hidden = !Object.keys(marks).some(asked);
   showAskedKey();
+  const showStarKey = () => document.getElementById("star-key").hidden = !Object.keys(marks).some(starred);
+  showStarKey();
   reviewWatch(async () => {
     const fresh = await fetch("/review/data").then(reviewChecked);
     const changed = [...new Set([...Object.keys(marks), ...Object.keys(fresh)])]
@@ -1457,6 +1506,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     if (sidebar.dataset.panel === "challenge" && !writingChallenge && !sidebar.querySelector("pre.challenge-output"))
       renderChallenge();
     showAskedKey();
+    showStarKey();
     // Redraw the sidebar's thread, unless that would lose a note being written.
     const input = sidebar.querySelector("textarea");
     if (changed.includes(selected) && !input?.value.trim()) {

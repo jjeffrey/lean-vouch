@@ -236,6 +236,7 @@ def is_note(note):
 def is_entry(entry):
     return (isinstance(entry, dict) and isinstance(entry.get("date", ""), str)
             and isinstance(entry.get("status"), (str, type(None))) and isinstance(entry.get("seen", ""), str)
+            and isinstance(entry.get("star", False), bool)
             and isinstance(entry.get("fingerprint") or {}, dict)
             and isinstance(entry.get("notes", []), list) and all(is_note(note) for note in entry.get("notes", [])))
 
@@ -315,6 +316,8 @@ def view(me=None):
     `attention` names whoever is waiting on you: someone with a `?` and a note saying what it asks,
     or who answered your `?`, since you last marked, wrote or dismissed it here. A bare `?` is a person's
     own reminder. A status this version doesn't know, from a later one, shows as unmarked.
+    A star, apart from the mark, says a declaration is especially useful: `star` is yours, `stars` names
+    the others who starred it.
     "You" is the server's own person, or `me`, such as an assistant asking what's waiting on it."""
     me = me or args.id
     renames = graph.current().get("renames", {})
@@ -331,7 +334,7 @@ def view(me=None):
     shown = {}
 
     def at(name):
-        return shown.setdefault(name, {"status": None, "notes": [], "others": []})
+        return shown.setdefault(name, {"status": None, "notes": [], "others": [], "stars": []})
 
     for who, data in people.items():
         mine = who == me
@@ -342,7 +345,10 @@ def view(me=None):
                 item.update({key: value for key, value in entry.items() if key != "notes"})
                 if item["status"] not in STATUSES:
                     item["status"] = None
-            elif entry.get("status") in STATUSES - {None}:
+                continue
+            if entry.get("star"):
+                item["stars"].append(data["name"])
+            if entry.get("status") in STATUSES - {None}:
                 item["others"].append({"id": who, "name": data["name"], **{
                     key: entry[key] for key in ("status", "date", "fingerprint") if key in entry}})
     for name, answers in (quiz_answers() if me == args.id else {}).items():
@@ -782,6 +788,11 @@ class Handler(SimpleHTTPRequestHandler):
             entry = marks.setdefault(name, {"status": None, "notes": []})
             if body.get("seen"):   # clears attention without a mark or a note, until someone writes again
                 entry["seen"] = now()
+            if "star" in body:
+                if body["star"] is True:
+                    entry["star"] = True
+                else:
+                    entry.pop("star", None)
             if "status" in body:
                 entry["status"] = body["status"]
                 if fingerprint := graph.fingerprint(name):

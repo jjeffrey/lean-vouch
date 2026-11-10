@@ -187,6 +187,9 @@
       row.append(b);
       return b;
     });
+    // A star, apart from the mark: especially useful, worth pointing others to.
+    const star = el("button", "review-star");
+    row.append(star);
     const stale = el("span", "review-stale");
     row.append(stale);
     const others = el("div", "review-others");
@@ -207,6 +210,11 @@
       marks[name] = e;
       prompt.hidden = !unexplained(e);
       for (const b of buttons) b.classList.toggle("active", e.status === b.dataset.status);
+      star.textContent = e.star ? "★" : "☆";
+      star.classList.toggle("active", !!e.star);
+      star.title = e.star ? "Starred as especially useful. Click to unstar."
+        : "Star as especially useful. Everyone sees it, whatever their mark.";
+      element.dataset.reviewStar = e.star || e.stars?.length ? "yes" : "";
       element.dataset.reviewStatus = e.status ?? "";
       const c = e.status ? changes(name, e) : { self: false, deps: [] };
       stale.replaceChildren();
@@ -238,6 +246,8 @@
         el("span", isCurrent(o) ? null : "old", `${o.name}: ${SYMBOL[o.status]}${isCurrent(o) ? "" : " (changed since)"}`)));
       const differing = reviewDisagreement(e.status && isCurrent(e) ? e.status : null, (e.others ?? []).filter(isCurrent));
       if (differing) others.append(el("span", "disagree", differing));
+      const starredBy = [...(e.star ? ["you"] : []), ...(e.stars ?? [])];
+      if (starredBy.length) others.append(el("span", "stars", `★ starred by ${starredBy.join(", ")}`));
       if (e.attention?.length) others.append(el("span", "attention", `needs your attention: ${e.attention.join(", ")} `),
         dismissButton(name, render));
       notes.replaceChildren(...(e.notes ?? []).map(noteItem));
@@ -249,6 +259,7 @@
         render(await post("/review/data", { name, status }));
         if (unexplained(marks[name])) input.focus();
       };
+    star.onclick = async () => render(await post("/review/data", { name, star: !marks[name]?.star }));
     add.onclick = async () => {
       const note = input.value.trim();
       if (!note) return;

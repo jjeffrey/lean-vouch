@@ -664,6 +664,16 @@ class ServerTest(unittest.TestCase):
         self.assertFalse(server.agreed_now({**self.stored()["A.b"], "fingerprint": now}, now))
         self.assertTrue(server.agreed_now({"status": "agree", "fingerprint": now}, now))
 
+    def test_a_star_is_apart_from_the_mark_and_seen_by_everyone(self):
+        self.post("/review/data", {"name": "A.b", "status": "question"})
+        code, entry = self.post("/review/data", {"name": "A.b", "star": True})
+        self.assertEqual((code, entry["star"], entry["status"]), (200, True, "question"))
+        self.post("/review/data", {"name": "A.c", "id": "claude", "author": "Claude", "star": True})
+        self.assertEqual((self.shown("A.c")["stars"], self.shown("A.c")["status"]), (["Claude"], None))
+        self.post("/review/data", {"name": "A.b", "star": False})
+        self.assertNotIn("star", self.stored()["A.b"])
+        self.assertEqual(self.stored()["A.b"]["status"], "question")
+
     def test_a_status_from_a_later_version_reads_as_unmarked_and_is_kept(self):
         self.write({"A.b": {"status": "someday", "date": "2026-01-01T00:00:00", "notes": []}})
         self.write({"A.b": {"status": "someday", "date": "2026-01-01T00:00:00",

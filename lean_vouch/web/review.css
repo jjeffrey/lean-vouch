@@ -19,6 +19,9 @@
 .review-row button[data-status="question"].active { background: #d9a40040; border-color: #d9a400; }
 .review-row button[data-status="reject"].active { background: #d4444040; border-color: #d44; }
 .review-stale { color: #e08a10; font-style: italic; }
+.review-row button.review-star { margin-left: 0.6em; color: #b08800; }
+.review-row button.review-star.active { background: #fff3c4; border-color: #d4a017; }
+.review-others .stars { color: #8a6d00; }
 .review-accept, .review-dismiss { font-style: normal; font-size: 0.9em; margin-left: 0.3em; white-space: nowrap; }
 .review-loading { opacity: 0.6; font-size: 0.9em; font-style: italic; padding: 0.2em 0.6em; }
 .review-prompt { color: #b08800; font-size: 0.9em; margin: 0.2em 0; }
