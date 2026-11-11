@@ -61,7 +61,7 @@
   #sidebar h2 { font-size: 1.05em; margin: 0 0 0.2em; word-break: break-all; }
   #sidebar h3 { font-size: 0.95em; margin: 1em 0 0.3em; }
   #sidebar .muted { color: #666; }
-  #sidebar pre { background: #f6f8fa; padding: 0.6em; border-radius: 4px; overflow-x: auto; font-size: 0.9em;
+  #sidebar pre { background: #f6f8fa; padding: 0.6em; border-radius: 4px; overflow-x: auto; font-size: 1em;
     margin: 0.3em 0; white-space: pre; }
   #sidebar ul { margin: 0.2em 0; padding-left: 1.2em; }
   #sidebar .ref { cursor: pointer; color: #1a5fb4; text-decoration: none; border-bottom: 2px solid transparent; }
@@ -114,7 +114,7 @@
   g.cluster.hl-up > polygon, g.cluster.hl-up > path { stroke: #8e44ad !important; stroke-width: 2px !important; }
   g.cluster.hl-both > polygon, g.cluster.hl-both > path { stroke: #0a8f7a !important; stroke-width: 2px !important; }
   g.cluster.hl-selected > polygon, g.cluster.hl-selected > path { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
-  #sidebar pre.signature { white-space: pre-wrap; }
+  #sidebar pre.signature { white-space: pre-wrap; font-size: 1.2em; }
   #sidebar pre a.code-ref { color: inherit; text-decoration: none; border-bottom: 1px dotted #1a5fb4; cursor: pointer; }
   #sidebar .challenge-toggle { display: block; margin: 0.5em 0; cursor: pointer; }
   #sidebar .challenge-actions { display: flex; gap: 0.6em; margin: 0.6em 0; }
@@ -1296,7 +1296,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const style = document.createElement("style");
     // Light theme, like this page; a little less spacing than a full docs page.
     style.textContent = css + " .wrap { font-family: 'Lato Medium', sans-serif; font-size: 15px; " +
-      "line-height: 1.5; color: var(--text-color); } .decl { margin: 0; }" + reviewMath.css;
+      "line-height: 1.5; color: var(--text-color); } .decl { margin: 0; } .decl_header { font-size: 1.2em; }" + reviewMath.css;
     const wrap = el("div", "wrap");
     wrap.dataset.theme = "light";
     const copy = document.importNode(decl, true);
