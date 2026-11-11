@@ -124,7 +124,7 @@
   #sidebar .module-code pre { white-space: pre-wrap; }
   #sidebar a.module-link { cursor: pointer; color: inherit; text-decoration: underline dotted; }
   #sidebar .module-decl { border-left: 4px solid #888; padding-left: 0.5em; margin: 0.6em 0; }
-  #sidebar .module-decl > .ref { font-size: 1.15em; font-weight: 600; }
+  #sidebar .module-decl pre { margin: 0; }
   #sidebar .module-decl details summary { font-size: 0.9em; cursor: pointer; }
   #sidebar pre a.code-ref { color: inherit; text-decoration: none; border-bottom: 1px dotted #1a5fb4; cursor: pointer; }
   #sidebar .challenge-toggle { display: block; margin: 0.5em 0; cursor: pointer; }
@@ -695,8 +695,8 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     if (reach) sidebar.append(reachList(reach));
     if (group.module) sidebar.append(moduleCode(group.module));
   }
-  // A module's code, all of it, as in its file: each declaration has its mark's color down the left
-  // and its name above, to open it; a theorem's proof is collapsed, since Lean checks it.
+  // A module's code, all of it, as in its file: each declaration has its mark's color down the left,
+  // and its name where it's declared opens it; a theorem's proof is collapsed, since Lean checks it.
   function moduleCode(module) {
     const box = el("div", "module-code");
     box.append(el("h3", null, "Code"));
@@ -707,7 +707,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
       const lines = src.text.split("\n");
       const code = (text, within) => {
         const pre = el("pre");
-        pre.append(reviewLean.highlight(text, codeLink(within)));
+        pre.append(reviewLean.highlight(text, codeLink(within, true)));
         return pre;
       };
       // Text between declarations (imports, namespaces, comments), unless it's only blank lines.
@@ -721,7 +721,6 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
         const text = lines.slice(d.start - 1, d.end).join("\n");
         const part = el("div", "module-decl");
         part.style.borderLeftColor = decls[d.name] ? COLORS[nodeClass(d.name)][1] : "#888888";
-        part.append(ref(d.name));
         const split = d.kind === "theorem" ? reviewProofStart(text) : -1;
         if (split > 0) {
           part.append(code(text.slice(0, split).trimEnd(), d.name));
@@ -1337,9 +1336,9 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   }
 
   // A name in a declaration's code, as a link to it, if the graph knows what it means there.
-  const codeLink = within => written => {
+  const codeLink = (within, self = false) => written => {
     const target = reviewLean.resolve(written, within, n => !!info(n));
-    if (!target || target === within) return null;
+    if (!target || target === within && !self) return null;
     const a = el("a", "code-ref", written);
     a.title = target;
     a.onclick = () => select(target);
