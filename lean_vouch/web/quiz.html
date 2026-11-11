@@ -358,19 +358,6 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
       .filter(t => t && t !== ":");
     shapeHints(args, header.querySelector(".decl_type")?.textContent.replace(/\s+/g, " ").trim() ?? "", kind, hints);
   }
-  // A signature as the graph has it, `Name binders : type`, split into its binders and its type.
-  function signatureParts(signature) {
-    const text = signature.replace(/\s+/g, " ").replace(/^(?:«[^»]*»|[^\s«])+\s?/, "");
-    const args = [];
-    let depth = 0, start = -1;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if ("([{⦃".includes(c)) { if (depth++ === 0) start = i; }
-      else if (")]}⦄".includes(c)) { if (--depth === 0) args.push(text.slice(start, i + 1)); }
-      else if (depth === 0 && c === ":" && text[i + 1] !== "=") return { args, type: text.slice(i + 1).trim() };
-    }
-    return { args, type: "" };
-  }
   function shapeHints(args, type, kind, hints) {
     const list = args.map(a => `\`${a}\``).join(", ");
     if (kind === "theorem")
@@ -549,7 +536,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     if (!hasDocs) {
       const statement = statementFromGraph(name, true);
       if (statement) {
-        const { args, type } = signatureParts(decls[name].signature);
+        const { args, type } = reviewLean.signatureParts(decls[name].signature);
         shapeHints(args, type, kind, hints);
         texts.push(statement.textContent);
         main.append(el("h2", null, "Statement"), statement);

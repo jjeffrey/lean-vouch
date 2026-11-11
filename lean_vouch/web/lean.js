@@ -91,10 +91,27 @@ window.reviewLean = (() => {
     return root;
   }
 
+  // A signature as the graph has it, `Name binders : type`, split into its name, its binders and its
+  // type. No type if it can't be split.
+  function signatureParts(signature) {
+    const flat = signature.replace(/\s+/g, " ");
+    const name = flat.match(/^(?:«[^»]*»|[^\s«])+/)?.[0] ?? "";
+    const text = flat.slice(name.length).trimStart();
+    const args = [];
+    let depth = 0, start = -1;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if ("([{⦃".includes(c)) { if (depth++ === 0) start = i; }
+      else if (")]}⦄".includes(c)) { if (--depth === 0) args.push(text.slice(start, i + 1)); }
+      else if (depth === 0 && c === ":" && text[i + 1] !== "=") return { name, args, type: text.slice(i + 1).trim() };
+    }
+    return { name, args, type: "" };
+  }
+
   const css = ".lean-keyword { color: #8b2fc9; font-weight: 600; } .lean-comment { color: #6a737d; font-style: italic; } " +
     ".lean-string { color: #22863a; } .lean-number { color: #005cc5; } .lean-doc p { margin: 0.3em 0; } " +
     ".lean-doc h4 { margin: 0.5em 0 0.2em; } .lean-doc pre { background: #f6f8fa; padding: 0.4em; } " +
     ".lean-doc ul, .lean-doc ol { margin: 0.2em 0; padding-left: 1.4em; }";
   document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
-  return { highlight, resolve, markdown };
+  return { highlight, resolve, markdown, signatureParts };
 })();

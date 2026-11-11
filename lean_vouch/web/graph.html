@@ -115,6 +115,12 @@
   g.cluster.hl-both > polygon, g.cluster.hl-both > path { stroke: #0a8f7a !important; stroke-width: 2px !important; }
   g.cluster.hl-selected > polygon, g.cluster.hl-selected > path { stroke: #1a5fb4 !important; stroke-width: 4px !important; }
   #sidebar pre.signature { white-space: pre-wrap; font-size: 1.2em; }
+  #sidebar pre.signature.laid-out { white-space: normal; }
+  #sidebar pre.signature .sig-name { font-weight: 600; }
+  #sidebar pre.signature .sig-args { padding-left: 4ch; }
+  #sidebar pre.signature .sig-arg { display: inline-block; white-space: pre-wrap; padding-left: 2ch; text-indent: -2ch; }
+  #sidebar pre.signature .sig-type { white-space: pre-wrap; padding-left: 4ch; text-indent: -2ch; }
+  #sidebar pre.signature .sig-members { white-space: pre-wrap; }
   #sidebar .module-code pre { white-space: pre-wrap; }
   #sidebar a.module-link { cursor: pointer; color: inherit; text-decoration: underline dotted; }
   #sidebar .module-decl { border-left: 4px solid #888; padding-left: 0.5em; margin: 0.6em 0; }
@@ -1156,8 +1162,34 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
         reviewMath.typeset(doc);
       }
       if (decls[name].signature) {
-        const statement = el("pre", "signature");
-        statement.append(el("span", "lean-keyword", `${decls[name].kind} `), reviewLean.highlight(decls[name].signature + members(decls[name]), codeLink(name)));
+        // Laid out as doc-gen4 does: the name, then the arguments, indented, breaking only between
+        // them, then the type on a line of its own.
+        const statement = el("pre", "signature"), link = codeLink(name);
+        const { name: shown, args, type } = reviewLean.signatureParts(decls[name].signature);
+        if (type) {
+          statement.classList.add("laid-out");
+          const head = el("div");
+          head.append(el("span", "lean-keyword", `${decls[name].kind} `), el("span", "sig-name", shown));
+          const list = el("div", "sig-args");
+          args.forEach((arg, i) => {
+            const part = el("span", "sig-arg");
+            part.append(reviewLean.highlight(arg, link));
+            list.append(part, i < args.length - 1 ? " " : "");
+          });
+          list.append(args.length ? " :" : "");
+          const result = el("div", "sig-type");
+          result.append(args.length ? "" : ": ", reviewLean.highlight(type, link));
+          statement.append(head, ...(args.length ? [list] : []), result);
+          // A structure's fields or a type's constructors, under `where` at the end of the type.
+          const more = members(decls[name]);
+          if (more) {
+            result.append(reviewLean.highlight(" where", link));
+            const rest = el("div", "sig-members");
+            rest.append(reviewLean.highlight(more.replace(/^ where\n/, ""), link));
+            statement.append(rest);
+          }
+        } else
+          statement.append(el("span", "lean-keyword", `${decls[name].kind} `), reviewLean.highlight(decls[name].signature + members(decls[name]), link));
         statement.title = "As Lean understood it, with every argument, including those a `variable` adds";
         sidebar.append(el("h3", null, "Statement"), statement);
       }
