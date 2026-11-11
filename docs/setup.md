@@ -26,7 +26,7 @@ rebuilt or is yours alone, so `.lean-vouch/.gitignore` ignores it. To keep marks
 that file: it's only written on the first run. In a public repository, committed notes are public.
 
 Doc pages are optional. Without them, the diagram's sidebar shows each declaration's docstring, its
-statement as Lean printed it, and its code, and quiz mode works from the same. With `--docs`, every
+statement as Lean printed it (with a short definition's body), and its code, and quiz mode works from the same. With `--docs`, every
 module also gets its doc-gen4 page, with review controls under each declaration, to read a module
 from top to bottom. The project remembers the choice until `--no-docs`, and a project set up before
 lean-vouch 0.1.1 keeps its docs. The first docs build takes time, because doc-gen4 documents

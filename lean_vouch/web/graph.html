@@ -121,6 +121,7 @@
   #sidebar pre.signature .sig-arg { display: inline-block; white-space: pre-wrap; padding-left: 2ch; text-indent: -2ch; }
   #sidebar pre.signature .sig-type { white-space: pre-wrap; padding-left: 4ch; text-indent: -2ch; }
   #sidebar pre.signature .sig-members { white-space: pre-wrap; }
+  #sidebar pre.signature .sig-body { white-space: pre-wrap; padding-left: 2ch; }
   #sidebar .module-code pre { white-space: pre-wrap; }
   #sidebar a.module-link { cursor: pointer; color: inherit; text-decoration: underline dotted; }
   #sidebar .module-decl { border-left: 4px solid #888; padding-left: 0.5em; margin: 0.6em 0; }
@@ -1127,6 +1128,28 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return " where\n" + lines.join("\n");
   }
 
+  // A definition's body as written, after its `:=` or `where`, or its `|` cases, without the common
+  // indent, with what joins it to the type. Nothing if it's long: the code below has it.
+  const BODIED = new Set(["def", "instance", "partial def"]);
+  async function definitionBody(name) {
+    const src = await fetch(`/review/source?name=${encodeURIComponent(name)}`).then(r => r.json()).catch(() => ({}));
+    if (!src.text) return null;
+    let at = reviewProofStart(src.text), joiner = " :=", skip = 2;
+    // `instance : C α where` gives its fields after `where`, each with its own `:=`.
+    // Past the doc comment, which may say "where" too.
+    const from = /^\s*\/-/.test(src.text) ? src.text.indexOf("-/") + 2 : 0;
+    const where = src.text.slice(from, at < 0 ? undefined : at).search(/\swhere\s/);
+    if (where >= 0) { at = from + where + 1; joiner = " where"; skip = 5; }
+    if (at < 0) return null;
+    // Cases start a line, so the split is at its start, before the `|`.
+    if (src.text.slice(at).trimStart().startsWith("|")) { joiner = ""; skip = 0; }
+    const lines = src.text.slice(at + skip).replace(/^[ \t]*\n/, "").trimEnd().split("\n");
+    if (lines.length > 25) return null;
+    const indent = Math.min(...lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
+    const text = lines.map(l => l.slice(indent)).join("\n");
+    return text.trim() ? { joiner, text: text.replace(/^\n+/, "") } : null;
+  }
+
   async function renderSidebar(name) {
     keepDraft();
     draftFor = name;
@@ -1185,6 +1208,15 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
             result.append(reviewLean.highlight(" where", link));
             const rest = el("div", "sig-members");
             rest.append(reviewLean.highlight(more.replace(/^ where\n/, ""), link));
+            statement.append(rest);
+          }
+          // A definition says what it means in its body, so a short one is shown here too.
+          const body = BODIED.has(decls[name].kind) && !more ? await definitionBody(name) : null;
+          if (body) {
+            result.append(reviewLean.highlight(body.joiner, link));
+            const rest = el("div", "sig-body");
+            rest.title = "As written in the source";
+            rest.append(reviewLean.highlight(body.text, link));
             statement.append(rest);
           }
         } else
