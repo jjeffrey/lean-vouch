@@ -59,7 +59,10 @@ Across the project:
   boxes, with a module's declarations fetched when you open it.
 - **The list of folders and modules,** beside the diagram. Click one to open or close it, search by
   name, and Cmd- or Ctrl-click one here or its box in the diagram to pick it, opening it, however
-  distant: the diagram then shows only what's picked and the arrows between them.
+  distant: the diagram then shows only what's picked and the arrows between them. Opening or picking a
+  module shows all its code beside the diagram, each declaration with its mark's color and its
+  name to click, and theorems' proofs folded away; a declaration's module, under its name, goes
+  back to it.
 - **Shift-click** a declaration, a box or a row in the list to color everything it depends on and
   everything that uses it, all the way down and up, and list how much of each is in each folder.
 

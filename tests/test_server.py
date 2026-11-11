@@ -493,6 +493,37 @@ class ServerTest(unittest.TestCase):
         server.args.source = [self.root / "src"]
         self.assertEqual(json.loads(self.get("/review/source?name=b"))["text"], "def b : Nat := 2")
 
+    def test_a_modules_whole_source_says_where_each_declaration_is(self):
+        (self.root / "src" / "P").mkdir(parents=True)
+        text = "import Q\n\nstructure S where\n  x : Nat\n\ntheorem t : True := trivial\n"
+        (self.root / "src" / "P" / "M.lean").write_text(text)
+        self.graph.write_text(json.dumps({"modules": {"P.M": []}, "declarations": {
+            "P.t": {"module": "P.M", "lines": [6, 6], "kind": "theorem"},
+            "P.S": {"module": "P.M", "lines": [3, 4], "kind": "structure"},
+            "P.S.x": {"module": "P.M", "lines": [4, 4], "kind": "def"},
+            "P.instReprS": {"module": "P.M", "lines": [3, 4], "kind": "instance", "derived": True},
+            "P.u": {"module": "P.N", "lines": [1, 1], "kind": "def"}}}))
+        server.args.source = [self.root / "src"]
+        found = json.loads(self.get("/review/module-source?module=P.M"))
+        self.assertEqual(found["text"], text)
+        self.assertEqual([(d["name"], d["start"], d["end"]) for d in found["declarations"]],
+                         [("P.S", 3, 4), ("P.t", 6, 6)])
+
+    def test_only_a_module_the_graph_knows_has_its_source_read(self):
+        (self.root / "src").mkdir()
+        (self.root / "secret.lean").write_text("hidden")
+        self.graph.write_text(json.dumps({"modules": {"M": []}, "declarations": {}}))
+        server.args.source = [self.root / "src"]
+        for module in ["..secret", "...secret", "N"]:
+            self.assertIn("error", json.loads(self.get(f"/review/module-source?module={module}")))
+
+    def test_a_module_that_got_shorter_says_so(self):
+        (self.root / "src").mkdir()
+        (self.root / "src" / "M.lean").write_text("theorem t : True := trivial\n")
+        self.graph.write_text(json.dumps({"declarations": {"t": {"module": "M", "lines": [40, 41], "kind": "theorem"}}}))
+        server.args.source = [self.root / "src"]
+        self.assertIn("Rebuild", json.loads(self.get("/review/module-source?module=M"))["error"])
+
     def test_your_own_unreadable_file_still_stops_you(self):
         self.folder_marks.mkdir()
         self.marks.write_text("<<<<<<< HEAD")

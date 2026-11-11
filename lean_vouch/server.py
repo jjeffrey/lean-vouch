@@ -366,25 +366,62 @@ def view(me=None):
     return shown
 
 
+def module_file(module):
+    """A module's file in the project's source folders, its lines, and whether it has been edited
+    since the last build, or an error to show."""
+    if not args.source:
+        return {"error": "no source"}
+    path = Path(module.replace(".", "/") + ".lean")
+    folder = next((folder for folder in args.source if (folder / path).exists()), None)
+    if folder is None:
+        return {"error": f"{path} not found"}
+    # Not splitlines(): Lean counts only \n, and that also splits on form feeds and the like.
+    lines = (folder / path).read_text(encoding="utf-8").split("\n")
+    # Lines come from the last build, so an edit since then can put them in the wrong place.
+    edited = args.graph and args.graph.exists() and (folder / path).stat().st_mtime > args.graph.stat().st_mtime
+    return {"file": str(path), "lines": lines, "edited": bool(edited)}
+
+
 def source_of(name):
     """A declaration's source text, with the doc comment just above it, from the graph's line
     numbers and the project's files."""
     decl = graph.current().get("declarations", {}).get(name)
     if not decl or not decl.get("lines") or not args.source:
         return {"error": "no source"}
-    module = Path(decl["module"].replace(".", "/") + ".lean")
-    folder = next((folder for folder in args.source if (folder / module).exists()), None)
-    if folder is None:
-        return {"error": f"{module} not found"}
-    # Not splitlines(): Lean counts only \n, and that also splits on form feeds and the like.
-    lines = (folder / module).read_text(encoding="utf-8").split("\n")
+    found = module_file(decl["module"])
+    if "error" in found:
+        return found
+    lines = found["lines"]
     start, end = decl["lines"][0] - 1, decl["lines"][1]
     if end > len(lines):
-        return {"error": f"{module} has changed since the last build. Rebuild to see this declaration's code."}
-    # Lines come from the last build, so an edit since then can put them in the wrong place.
-    edited = args.graph and args.graph.exists() and (folder / module).stat().st_mtime > args.graph.stat().st_mtime
-    return {"file": str(module), "start": start + 1, "end": end, "edited": bool(edited),
+        return {"error": f"{found['file']} has changed since the last build. Rebuild to see this declaration's code."}
+    return {"file": found["file"], "start": start + 1, "end": end, "edited": found["edited"],
             "text": "\n".join(lines[start:end]), "kind": decl.get("kind")}
+
+
+def module_source(module):
+    """A module's whole source, with where each of its declarations is, first line first. One
+    inside another, as Lean makes for a structure's fields, is left to the one around it."""
+    declarations = graph.current().get("declarations", {})
+    # Only a module the graph knows, which also keeps the path inside the source folders.
+    if module not in graph.current().get("modules", {}) and not any(
+            d.get("module") == module for d in declarations.values()):
+        return {"error": "no such module"}
+    found = module_file(module)
+    if "error" in found:
+        return found
+    lines = found["lines"]
+    spans = sorted((d["lines"][0], -d["lines"][1], name) for name, d in declarations.items()
+                   if d.get("module") == module and d.get("lines") and not d.get("derived"))
+    if any(-end > len(lines) for _, end, _ in spans):
+        return {"error": f"{found['file']} has changed since the last build. Rebuild to see its code."}
+    places, end = [], 0
+    for start, minus_end, name in spans:
+        if start > end:
+            places.append({"name": name, "start": start, "end": -minus_end,
+                           "kind": declarations[name].get("kind")})
+            end = -minus_end
+    return {"file": found["file"], "edited": found["edited"], "text": "\n".join(lines), "declarations": places}
 
 
 def alive(pid):
@@ -684,6 +721,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/review/source":
             name = parse_qs(urlparse(self.path).query).get("name", [""])[0]
             return self.send_json(source_of(name))
+        if path == "/review/module-source":
+            module = parse_qs(urlparse(self.path).query).get("module", [""])[0]
+            return self.send_json(module_source(module))
         if path in PAGES:
             name = PAGES[path]
             kind = {"js": "text/javascript", "css": "text/css", "html": "text/html; charset=utf-8"}[name.rsplit(".", 1)[1]]
