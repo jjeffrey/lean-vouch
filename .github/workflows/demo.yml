@@ -1,0 +1,49 @@
+name: Demo
+# The web demo (demo/), on GitHub Pages: the example project, with lean-vouch running in the browser.
+# Needs Pages turned on, with "GitHub Actions" as its source, in the repository's settings.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v6
+        with:
+          path: example/.lake
+          key: demo-${{ runner.os }}-${{ hashFiles('example/lean-toolchain', 'example/lake-manifest.json') }}
+      - name: Build the example and its graph
+        working-directory: example
+        run: |
+          lake build -q
+          lake env lean --run ../lean_vouch/graph/DeclGraph.lean ReviewExample > review/graph.json
+      - run: python3 demo/build.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
