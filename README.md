@@ -4,7 +4,11 @@ lean-vouch helps you check that Lean definitions and theorem statements mean wha
 It shows your project as a dependency diagram, where you mark what you agree with, discuss questions
 and disagreements, and see when something beneath a mark changes.
 
-![a dependency diagram colored by review marks, with a sorry and what relies on it](https://raw.githubusercontent.com/jjeffrey/lean-vouch/main/docs/images/sorry-diagram.png)
+**[Try the demo in your browser](https://jjeffrey.github.io/lean-vouch/)**: a small example project with
+marks and notes already in it, and nothing to install. Mark things, leave notes and take the quiz;
+what you do stays in your browser.
+
+[![a dependency diagram colored by review marks, with a sorry and what relies on it](https://raw.githubusercontent.com/jjeffrey/lean-vouch/main/docs/images/sorry-diagram.png)](https://jjeffrey.github.io/lean-vouch/)
 
 ## Try it
 
