@@ -1,9 +1,12 @@
 name: Demo
 # The web demo (demo/), on GitHub Pages: the example project, with lean-vouch running in the browser.
-# Needs Pages turned on, with "GitHub Actions" as its source, in the repository's settings.
+# It shows the latest release, so it's rebuilt once a release is published, or by hand. Run after
+# Publish, it runs from main, which the github-pages environment allows by default; it then builds
+# the newest release tag. Needs Pages turned on, with "GitHub Actions" as its source.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [Publish]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +20,14 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check out the newest release
+        run: git checkout "$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
       - name: Install elan
         run: |
           curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
