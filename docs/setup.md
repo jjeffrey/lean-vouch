@@ -52,8 +52,8 @@ When the project moves to another Lean version, the next run moves `docbuild/` t
 
 | Option | Meaning |
 | --- | --- |
-| `lean-vouch` | Review every library in the project, tests included |
-| `lean-vouch MyLibrary My.Module` | Review only these libraries and modules. Use this to leave out a library that doesn't build, or a project's large test libraries. Libraries are imported together for the graph, so also leave out one whose names clash with another's, such as exercises and their solutions. Reviewing a smaller part of a project than before can flag marks that haven't really changed: see [the limits](internals.md#limits). |
+| `lean-vouch` | Review what `lake build` builds: the project's default targets, or every library if it has none |
+| `lean-vouch MyLibrary My.Module` | Review only these libraries and modules. Use this to add a library that isn't a default target, or to leave out one that doesn't build. Libraries are imported together for the graph, so also leave out one whose names clash with another's, such as exercises and their solutions. Reviewing a smaller part of a project than before can flag marks that haven't really changed: see [the limits](internals.md#limits). |
 | `--port N` | Serve on another port, for reviewing two projects at once (default 8797) |
 | `--name NAME` | The name shown on your marks and notes, which can change (default your git name) |
 | `--id ID` | Who you are, as the name of your file: lowercase letters, digits and hyphens. It should never change, and comes by default from your git name and email, which tells two people of the same name apart. A name with no Latin letters needs one chosen. If your git name or email changes, pass your old id to stay the same person; your marks and quiz answers are under it. |

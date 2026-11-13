@@ -106,20 +106,31 @@ def package_name():
     return found.strip("«»")
 
 
-def library_names():
-    """The project's libraries, as its lakefile declares them."""
+def library_names(default_only=False):
+    """The project's libraries, as its lakefile declares them, or only those `lake build` builds:
+    its default targets."""
     if Path("lakefile.toml").exists():
-        return [library["name"].strip("«»") for library in lakefile_toml().get("lean_lib", [])]
-    found = re.findall(r"^(?:@\[.*?\]\s*)?lean_lib\s+(\S+)", Path("lakefile.lean").read_text(encoding="utf-8"), re.M)
-    return [name.strip('«»"') for name in found]
+        lakefile = lakefile_toml()
+        names = [library["name"].strip("«»") for library in lakefile.get("lean_lib", [])]
+        defaults = {name.strip("«»") for name in lakefile.get("defaultTargets", [])}
+        return [name for name in names if name in defaults] if default_only else names
+    found = re.findall(r"^(?:@\[(.*?)\]\s*)?lean_lib\s+(\S+)", Path("lakefile.lean").read_text(encoding="utf-8"), re.M)
+    return [name.strip('«»"') for attributes, name in found
+            if not default_only or "default_target" in attributes.replace(" ", "").split(",")]
 
 
 def modules_of(names):
-    """What to review: the modules of the libraries named, or of them all, and any modules named.
-    Lake lists a library's modules, since its globs decide them. The first named comes first, as the
-    project's name; then the shortest names, which is what the graph keeps as its roots."""
+    """What to review: the modules of the libraries named, or of those `lake build` builds (its
+    default targets, or every library if it has none), and any modules named. Lake lists a library's
+    modules, since its globs decide them. The first named comes first, as the project's name; then
+    the shortest names, which is what the graph keeps as its roots."""
     libraries = library_names()
-    chosen = names or libraries
+    defaults = library_names(default_only=True)
+    chosen = names or defaults or libraries
+    if not names and defaults and len(defaults) < len(libraries):
+        others = [name for name in libraries if name not in defaults]
+        print(f"lean-vouch: reviewing {', '.join(defaults)}, which `lake build` builds; name libraries to "
+              f"choose others, as in `lean-vouch {' '.join(defaults + others[:1])}`.", flush=True)
     # A challenge copied into the project, as for `lake comparator`, repeats the project's names, so
     # it can't be imported with the project: unless named, its library is left out.
     challenge_module = None
@@ -127,8 +138,8 @@ def modules_of(names):
         challenge_module = json.loads(Path("comparator.json").read_text(encoding="utf-8")).get("challenge_module")
     except (OSError, ValueError, AttributeError):
         pass
-    if not names and challenge_module in libraries:
-        chosen = [name for name in libraries if name != challenge_module]
+    if not names and challenge_module in chosen:
+        chosen = [name for name in chosen if name != challenge_module]
         print(f"lean-vouch: leaving out {challenge_module}, the challenge in comparator.json.", flush=True)
     modules = []
     for name in chosen:

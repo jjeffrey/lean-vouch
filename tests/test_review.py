@@ -1,5 +1,6 @@
 """The lean-vouch command's checks and failures, with a stand-in for lake. Needs only Python."""
 
+import io
 import json
 import os
 import shutil
@@ -70,11 +71,25 @@ class ModulesTest(unittest.TestCase):
         with mock.patch.object(review.subprocess, "run", side_effect=found):
             return review.modules_of(names)
 
-    def test_every_library_by_default(self):
+    def test_every_library_when_there_are_no_default_targets(self):
         Path("lakefile.toml").write_text('name = "p"\n\n[[lean_lib]]\nname = "Lib"\n\n[[lean_exe]]\nname = "run"\n\n'
                                          '[[lean_lib]]\nglobs = ["Tests.+"]\nname = "Tests"\n')
         self.assertEqual(review.library_names(), ["Lib", "Tests"])
         self.assertEqual(self.modules([], {"Lib": "Lib.A\nLib\n", "Tests": "Tests.B\n"}), ["Lib", "Lib.A", "Tests.B"])
+
+    def test_only_what_lake_build_builds_by_default(self):
+        Path("lakefile.toml").write_text('name = "p"\ndefaultTargets = ["Lib", "run"]\n\n[[lean_lib]]\nname = "Lib"\n\n'
+                                         '[[lean_exe]]\nname = "run"\n\n[[lean_lib]]\nname = "Tests"\n')
+        listed = {"Lib": "Lib\n", "Tests": "Tests\n"}
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as said:
+            self.assertEqual(self.modules([], listed), ["Lib"])
+        self.assertIn("lean-vouch Lib Tests", said.getvalue())
+        self.assertEqual(self.modules(["Tests"], listed), ["Tests"])
+
+    def test_a_lean_lakefiles_default_targets(self):
+        Path("lakefile.lean").write_text('package p\n\n@[default_target]\nlean_lib Lib where\n\n'
+                                         'lean_lib «Tests»\n\n@[test_driver, default_target] lean_lib Checks\n')
+        self.assertEqual(review.library_names(default_only=True), ["Lib", "Checks"])
 
     def test_a_copied_challenge_is_left_out_unless_named(self):
         Path("lakefile.toml").write_text('name = "p"\n\n[[lean_lib]]\nname = "Lib"\n\n[[lean_lib]]\nname = "Challenge"\n')

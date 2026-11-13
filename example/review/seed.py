@@ -91,6 +91,10 @@ for name, entry in marks.items():
         text = {"date": note["date"], "text": note["text"]}
         people[who][1].setdefault(name, {"status": None, "notes": []})["notes"].append(text)
 people["assistant"][1][P + "lcm"]["notes"] = [{key: raised["notes"][0][key] for key in ("date", "text")}]
+# Stars, apart from marks: Ada's on the definition everything rests on, and the assistant's on a
+# result it finds useful, so a closed folder shows how many are inside.
+people["ada"][1][P + "Divides"]["star"] = True
+people["assistant"][1][P + "gcd_divides"] = {"status": None, "notes": [], "star": True}
 
 (HERE / "seed").mkdir(exist_ok=True)
 for who, (name, entries) in people.items():

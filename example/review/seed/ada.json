@@ -38,6 +38,7 @@
           "text": "So 0 divides only 0, and every number divides 0?"
         }
       ],
+      "star": true,
       "status": "agree"
     },
     "ReviewExample.Divides.mod": {

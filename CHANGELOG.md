@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-11-12)
 
+A first run builds only what `lake build` does, and reviewing reads more easily: a ~ mark for "looks right at a glance", stars, a module's whole code beside the diagram, and statements laid out as in doc-gen4. Works with Lean v4.30 to v4.35. Everyone sharing marks should upgrade together, since 0.1.1 can't read a ~.
+
+- With no libraries named, lean-vouch reviews what `lake build` builds: the project's default targets, or every library if it sets none. Before, it reviewed and built every library, tests and examples included, which could take much longer than `lake build` or fail where it doesn't. It says which it chose, and how to name others. If you've been reviewing a library that isn't a default target, name it, as in `lean-vouch MyLib Tests`, or its marks will show as orphans.
 - A fourth mark, ~, for "looks right at a glance" but not checked closely. It doesn't disagree with a ✓, asks nothing of anyone, and doesn't count as agreeing in a challenge. lean-vouch 0.1.1 can't read a marks file containing one and leaves that person out, so everyone sharing marks should upgrade together. From now on, a mark a later version adds shows as unmarked instead.
 - A star, apart from the mark, for declarations that are especially useful. Everyone sees who starred what, and the diagram shows a ★ on each, and on a closed folder or module with how many are inside. Assistants send `"star": true`.
 - Without doc pages, a declaration's statement is laid out as doc-gen4 does: its name, then its arguments, indented and broken only between them, then its type on a line of its own. A short definition's body follows, as written, since that is what it means.

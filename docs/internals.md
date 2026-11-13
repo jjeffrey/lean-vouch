@@ -76,6 +76,7 @@ Three things are versioned separately:
   | --- | --- |
   | 0.1.0 | v4.30.0 to v4.35.0 |
   | 0.1.1 | v4.30.0 to v4.35.0 |
+  | 0.1.2 | v4.30.0 to v4.35.0 |
 
   `lean-vouch` stops on an older Lean, since the graph needs newer library functions, and warns on a newer one.
 

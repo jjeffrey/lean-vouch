@@ -29,7 +29,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lean_vouch import challenge as challenges  # noqa: E402
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 # Bump a format when old readers would misread the new one; see docs/internals.md.
 # A person's file is {"format": 3, "name": display name, "marks": {declaration: entry}}, and their
 # quiz file {"format": 3, "answers": {declaration: [answer]}}. The file's name is their id.
