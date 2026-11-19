@@ -33,7 +33,7 @@ Across the project:
   rely on it. In the diagram a solid orange border is what changed and a dashed one what relies on it,
   and selecting a flagged declaration lights the way down to the change.
 - **Library definitions can be marked too,** meaning "I understand this", so you record what `%` on
-  `Nat` means to you once, for every use: in the diagram, with "show library definitions" on, or on
+  `Nat` means to you once, for every use: in the diagram, with "library definitions" on under **View**, or on
   their own doc pages.
 - **A challenge for comparator:** choose the theorems that matter, and lean-vouch writes their
   statements and everything beneath them as a challenge for `lake comparator`, checked to say what
@@ -44,8 +44,9 @@ Across the project:
 - **A dependency diagram,** on its own page: a Hasse diagram of the project's declarations (and
   optionally the library definitions they use), colored by your marks. Clicking a node highlights
   what it depends on and what depends on it, and opens a sidebar with what it says, its mark and
-  notes, and its direct dependencies and dependents. "hide folders" and "hide details" hide the
-  panels on either side, for a larger diagram, and dragging the line beside one resizes it.
+  notes, and its direct dependencies and dependents. **View** chooses what it draws; « and » on the
+  lines beside the panels hide them, for a larger diagram, and dragging a line resizes the panel. The
+  **?** at the top opens a short tutorial, which also opens by itself on a first visit.
 - **What a `sorry` reaches,** on by default if the project has one. A declaration that contains
   `sorry` gets a red border, and whatever relies on it a dashed one, even if only through a proof,
   with dashed red arrows leading to it step by step. Folders count both, and the pages name the `sorry`s each declaration depends on. A mark is about the

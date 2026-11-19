@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quiz</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 1em 1.5em; color: #222; background: #fff; }
-  h1 { margin: 0 0 0.3em; font-size: 1.6em; }
-  header.views { display: flex; align-items: baseline; gap: 1.2em; flex-wrap: wrap; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 0.8em 1.2em; color: #222; background: #fff; }
+  h1 { margin: 0; font-size: 1.35em; }
+  header.views { display: flex; align-items: center; gap: 1.2em; flex-wrap: wrap; margin-bottom: 0.6em; }
   header.views nav { display: flex; gap: 1em; }
   header.views nav a { color: #1a5fb4; }
+  #help-slot { margin-left: auto; }
+  .review-me { color: #777; font-size: 0.9em; }
   h2 { font-size: 1.05em; margin: 1em 0 0.3em; }
   .note { color: #555; max-width: 60em; margin: 0 0 0.8em; }
   .muted { color: #666; }
@@ -44,10 +46,17 @@
   .past[data-verdict="miss"] { border-color: #cc3333; }
   button.chosen { background: #e8f1fd; border-color: #1a5fb4; }
   .key { color: #888; font-size: 0.85em; }
-  textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 0.3em; }
-  button { font: inherit; padding: 0.15em 0.7em; margin: 0.5em 0.4em 0 0; border: 1px solid #bbb; border-radius: 4px;
-    background: #fff; cursor: pointer; }
-  button.primary { border-color: #1a5fb4; color: #1a5fb4; }
+  /* Fields and buttons as on the diagram page. */
+  textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 0.4em 0.5em; }
+  textarea, input, select { border: 1px solid #c9cdd3; border-radius: 6px; background: #fff; }
+  input { padding: 0.25em 0.5em; }
+  select { padding: 0.15em 0.3em; }
+  button { font: inherit; font-size: 0.95em; color: #333; padding: 0.25em 0.75em; margin: 0.5em 0.4em 0 0;
+    border: 1px solid #c9cdd3; border-radius: 6px; background: #fff; cursor: pointer; }
+  button:hover { background: #f3f5f8; }
+  button.primary { background: #1a5fb4; border-color: #1a5fb4; color: #fff; }
+  button.primary:hover { background: #174f96; }
+  button.primary .key { color: #ffffffb3; }
   details.hints summary { cursor: pointer; color: #1a5fb4; }
   details.hints li { margin: 0.3em 0; }
   .compare { display: flex; gap: 1em; flex-wrap: wrap; }
@@ -59,10 +68,9 @@
 </head>
 <body>
 <header class="views"><h1 id="project">Quiz</h1>
-  <nav><a id="docs-link" href="/">docs</a><a href="/review/diagram">dependency graph</a><span class="review-me" style="color: #666; font-size: 0.9em; margin-left: 1.2em"></span></nav></header>
-<p class="note">Read a statement, write what you think it says, then compare with its real name and
-docstring. A mismatch means you misread it or the name or docstring is wrong. Your answer is saved for you alone. Names you have marked ✓ or ? can be looked up while you answer.
-<span class="key">Cmd-Enter saves or moves on; 1, 2, 3 say how it compared.</span></p>
+  <nav><a id="docs-link" href="/">docs</a><a href="/review/diagram">dependency graph</a></nav><span class="review-me"></span>
+  <span id="help-slot"></span></header>
+<p class="note">Write what you think each statement says, then compare it with its name and docstring.</p>
 <div class="controls">
   <label>Quiz on <input type="search" id="scope" list="scopes" placeholder="everything"></label>
   <datalist id="scopes"></datalist>
@@ -79,6 +87,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
 <script src="/review/links.js"></script>
 <script src="/review/math.js"></script>
 <script src="/review/lean.js"></script>
+<script src="/review/help.js"></script>
 <script>
 (async () => {
   let [marks, graph] = await Promise.all([
@@ -92,6 +101,7 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     document.getElementById("project").textContent = `${root}: quiz`;
     document.title = `${root}: quiz`;
   }
+  reviewHelp.button(document.getElementById("help-slot"), "quiz");
   const isGenerated = n => !!decls[n]?.derived;
   const short = n => n.startsWith(root + ".") ? n.slice(root.length + 1) : n;
   const info = n => decls[n] ?? library[n];
@@ -586,7 +596,8 @@ docstring. A mismatch means you misread it or the name or docstring is wrong. Yo
     desc.rows = 4;
     desc.id = "answer-description";
     descLabel.htmlFor = "answer-description";
-    const reveal = el("button", "primary", "Save and show its name and docstring");
+    const reveal = el("button", "primary", "Save and show its name and docstring ");
+    reveal.append(el("span", "key", navigator.platform.startsWith("Mac") ? "⌘↵" : "Ctrl+↵"));
     const skip = el("button", null, "Skip");
     const answerBox = el("div");
     if (askName) answerBox.append(nameLabel, nameRow);

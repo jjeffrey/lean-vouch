@@ -25,10 +25,13 @@ serve() {  # serve EXAMPLE [nodocs]: serve that copy of the example, with fresh 
   SERVER=$!
   sleep 1
   kill -0 $SERVER  # stop here if the server didn't start
+  # The tutorial opens by itself on a first visit, once per browser: visit once, so it's not in the shots.
+  "$CHROME" --headless=new --disable-gpu --user-data-dir="$WORK/profile" --virtual-time-budget=5000 \
+    --dump-dom "http://127.0.0.1:$PORT/review/diagram" > /dev/null 2>&1
 }
 
 shot() {  # shot NAME WIDTH HEIGHT PATH [SCHEME]: SCHEME 1 is light (the default), 0 dark
-  "$CHROME" --headless=new --disable-gpu --hide-scrollbars --window-size="$2,$3" --force-device-scale-factor=2 \
+  "$CHROME" --headless=new --disable-gpu --user-data-dir="$WORK/profile" --hide-scrollbars --window-size="$2,$3" --force-device-scale-factor=2 \
     --blink-settings=preferredColorScheme="${5:-1}" --virtual-time-budget=20000 \
     --screenshot="$OUT/$1.png" "http://127.0.0.1:$PORT/$4" 2> /dev/null
   echo "docs/images/$1.png"

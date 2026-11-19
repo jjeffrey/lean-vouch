@@ -128,12 +128,14 @@ class PagesTest(unittest.TestCase):
         return docs
 
     def click_through(self, marks, script, *, frame=None, page="ReviewExample/Gcd.html", people={}, build=None, graph=None,
-                      challenge=None, allow_errors=False):
+                      challenge=None, allow_errors=False, first_visit=False):
         """Run `script` in a real page, which can't be clicked from outside headless Chrome, and return
-        what it adds to `results`. It sees `doc`, the page's document, and any uncaught error fails."""
+        what it adds to `results`. It sees `doc`, the page's document, and any uncaught error fails.
+        Unless it's a `first_visit`, the tutorial has been seen, so it doesn't open over the page."""
         driver = DRIVER.replace("SCRIPT", script)
         if frame:
-            docs = self.docs_with("drive.html", f'<html><body><iframe id="frame" src="/{frame}" width="1400" height="900">'
+            seen = "" if first_visit else '<script>localStorage.setItem("lean-vouch.help-seen", "1")</script>'
+            docs = self.docs_with("drive.html", f'<html><body>{seen}<iframe id="frame" src="/{frame}" width="1400" height="900">'
                                                 f'</iframe>{driver}</body></html>')
             path = "drive.html"
         else:
@@ -203,21 +205,36 @@ class PagesTest(unittest.TestCase):
         """, frame=f"review/diagram#{GCD}")
         self.assertEqual(results, ["agree", "reject", "", "question", True])
 
+    def test_the_tutorial_opens_once_by_itself(self):
+        results = self.click_through({}, """
+            await ready("dialog.help");
+            const dialog = doc.querySelector("dialog.help");
+            results.push(dialog.open, dialog.querySelector("h2").textContent);
+            dialog.querySelector(".help-next").click();
+            results.push(dialog.querySelector("h2").textContent);
+            dialog.querySelector(".help-close").click();
+            results.push(dialog.open, localStorage.getItem("lean-vouch.help-seen"));
+            doc.querySelector(".help-button").click();
+            results.push(dialog.open);
+        """, frame="review/diagram", first_visit=True)
+        self.assertEqual(results, [True, "What this is", "Marking", False, "1", True])
+
     def test_the_side_panels_can_be_hidden_for_a_larger_diagram(self):
         results = self.click_through({}, """
             await ready("#diagram svg g.node");
             const width = () => doc.querySelector("#diagram svg").getBoundingClientRect().width;
             const before = width();
-            doc.getElementById("toggle-tree").click();
-            doc.getElementById("toggle-sidebar").click();
+            const toggle = panel => doc.querySelector(`.divider[data-panel=${panel}] .panel-toggle`);
+            toggle("tree").click();
+            toggle("sidebar").click();
             await until(() => width() > before + 100);
             const shown = id => view.getComputedStyle(doc.getElementById(id)).display !== "none";
-            results.push(shown("tree"), shown("sidebar"), doc.getElementById("toggle-tree").textContent,
+            results.push(shown("tree"), shown("sidebar"), toggle("tree").title,
                          view.localStorage.getItem("lean-vouch.hide-sidebar"));
-            doc.getElementById("toggle-sidebar").click();
-            results.push(shown("sidebar"), doc.getElementById("toggle-sidebar").textContent);
+            toggle("sidebar").click();
+            results.push(shown("sidebar"), toggle("sidebar").title);
         """, frame=f"review/diagram#{GCD}")
-        self.assertEqual(results, [False, False, "show folders", "1", True, "hide details"])
+        self.assertEqual(results, [False, False, "Show the folders", "1", True, "Hide the details"])
 
     def test_a_note_answers_the_diagrams_prompt(self):
         results = self.click_through({}, """

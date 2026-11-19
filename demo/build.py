@@ -50,7 +50,7 @@ def main():
 
     for name, target in [("graph.html", "index.html"), ("quiz.html", "quiz.html")]:
         (out / target).write_text(page((WEB / name).read_text(encoding="utf-8"), built), encoding="utf-8")
-    for name in ["links.js", "math.js", "lean.js", "review.js", "review.css"]:
+    for name in ["links.js", "math.js", "lean.js", "help.js", "review.js", "review.css"]:
         shutil.copy(WEB / name, out / name)
     shutil.copy(HERE / "demo.js", out / "demo.js")
 

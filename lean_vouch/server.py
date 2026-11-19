@@ -50,7 +50,7 @@ INJECT = (b'<link rel="stylesheet" href="/review/review.css"><script src="/revie
 # a module called review.
 PAGES = {"/review/diagram": "graph.html", "/review/quiz": "quiz.html", "/review/review.js": "review.js",
          "/review/review.css": "review.css", "/review/links.js": "links.js", "/review/math.js": "math.js",
-         "/review/lean.js": "lean.js"}
+         "/review/lean.js": "lean.js", "/review/help.js": "help.js"}
 
 lock = threading.Lock()
 args = None

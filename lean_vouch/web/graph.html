@@ -7,34 +7,56 @@
 <style>
   /* The page fits the window: only the diagram (zoom, pan) and the sidebar (scroll) move. */
   html, body { height: 100%; }
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 1em 1.5em; box-sizing: border-box;
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 0.8em 1.2em 0; box-sizing: border-box;
     display: flex; flex-direction: column; overflow: hidden; color: #222; background: #fff; }
   body > * { flex: none; }
-  h1 { margin: 0 0 0.3em; font-size: 1.6em; }
-  header.views { display: flex; align-items: baseline; gap: 1.2em; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 1.35em; }
+  header.views { display: flex; align-items: center; gap: 1.2em; flex-wrap: wrap; margin-bottom: 0.6em; }
   header.views nav { display: flex; gap: 1em; }
   header.views nav a { color: #1a5fb4; }
-  .controls { display: flex; gap: 0.6em 1.5em; align-items: center; flex-wrap: wrap; margin-bottom: 0.8em; }
-  .legend span { display: inline-block; margin-right: 1em; }
+  #help-slot { margin-left: auto; }
+  .review-me { color: #777; font-size: 0.9em; }
+  /* One row: what's used often as buttons, the rest under View. */
+  .controls { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; margin-bottom: 0.6em; }
+  .controls .grow { flex: 1; }
+  .controls button, .menu summary { font: inherit; font-size: 0.9em; color: #333; background: #fff; cursor: pointer;
+    border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.25em 0.75em; }
+  .controls button:hover, .menu summary:hover { background: #f3f5f8; }
+  .controls label { font-size: 0.9em; color: #444; }
+  .controls select { font: inherit; font-size: 0.95em; border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.15em 0.3em; background: #fff; }
+  .menu { position: relative; }
+  .menu summary { list-style: none; }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu summary::after { content: " ▾"; color: #888; }
+  .menu-panel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; background: #fff; min-width: 14em;
+    border: 1px solid #d6d9de; border-radius: 8px; box-shadow: 0 6px 20px #0002; padding: 0.5em 0.8em; }
+  .menu-panel label { display: block; margin: 0.3em 0; white-space: nowrap; }
+  .menu-head { margin: 0.7em 0 0.2em; padding-top: 0.5em; border-top: 1px solid #eee; font-size: 0.8em; color: #777;
+    text-transform: uppercase; letter-spacing: 0.04em; }
+  /* The key, in the diagram's corner; it lets clicks through to the diagram. */
+  #diagram-area { flex: 1; min-width: 0; position: relative; display: flex; }
+  .legend { position: absolute; left: 0.6em; bottom: 0.6em; max-width: calc(100% - 1.2em); pointer-events: none;
+    display: flex; flex-wrap: wrap; gap: 0.15em 0.9em; font-size: 0.78em; color: #555;
+    background: #ffffffd9; border-radius: 6px; padding: 0.3em 0.6em; }
   .legend span[hidden] { display: none; }
-  .review-me { color: #666; font-size: 0.9em; margin-left: 1.2em; }
   .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; vertical-align: middle;
-    margin-right: 0.3em; border: 1px solid #888; }
-  .note { color: #555; max-width: 60em; margin: 0 0 0.6em; }
-  .note summary { cursor: pointer; color: #1a5fb4; }
-  .note p { margin: 0.4em 0 0; }
+    margin-right: 0.3em; border: 1px solid #888; box-sizing: border-box; }
   body > .layout { flex: 1; min-height: 0; display: flex; align-items: stretch; border-top: 1px solid #ddd; }
-  /* Either side panel can be hidden, for a larger diagram, or made wider or narrower by dragging the
-     line beside it. */
-  body.hide-tree #tree, body.hide-sidebar #sidebar,
-  body.hide-tree .divider[data-panel=tree], body.hide-sidebar .divider[data-panel=sidebar] { display: none; }
-  .divider { flex: none; width: 9px; margin: 0 -4px; z-index: 1; cursor: col-resize; touch-action: none;
+  /* Either side panel can be hidden, for a larger diagram, with the button on the line beside it,
+     or made wider or narrower by dragging that line. */
+  body.hide-tree #tree, body.hide-sidebar #sidebar { display: none; }
+  .divider { flex: none; width: 9px; margin: 0 -4px; z-index: 2; cursor: col-resize; touch-action: none; position: relative;
     background: linear-gradient(to right, transparent 4px, #ddd 4px, #ddd 5px, transparent 5px); }
   .divider:hover, .divider.dragging { background: linear-gradient(to right, transparent 3px, #1a5fb4 3px, #1a5fb4 6px, transparent 6px); }
+  body.hide-tree .divider[data-panel=tree], body.hide-sidebar .divider[data-panel=sidebar] { cursor: default; background:
+    linear-gradient(to right, transparent 4px, #ddd 4px, #ddd 5px, transparent 5px); }
+  .panel-toggle { position: absolute; top: 0.5em; left: 50%; transform: translateX(-50%); width: 1.5em; height: 1.5em;
+    padding: 0; border-radius: 50%; border: 1px solid #c9cdd3; background: #fff; color: #666; font-size: 0.85em;
+    line-height: 1; cursor: pointer; }
+  .panel-toggle:hover { background: #f3f5f8; color: #111; }
   body.dragging { cursor: col-resize; user-select: none; }
   #tree { width: 17em; flex: none; display: flex; flex-direction: column; font-size: 0.88em; min-height: 0; }
-  #tree input[type=search] { margin: 0.5em; font: inherit; }
-  #tree-hint { color: #666; margin: 0 0.7em 0.4em; font-size: 0.92em; }
+  #tree input[type=search] { margin: 0.5em; font: inherit; border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.25em 0.5em; }
   #tree-rows { flex: 1; overflow: auto; padding-bottom: 0.4em; }
   .row { display: flex; align-items: center; gap: 0.25em; padding: 0.1em 0.5em 0.1em 0; cursor: pointer;
     white-space: nowrap; }
@@ -52,6 +74,8 @@
   .row mark { background: #fbe9b0; color: inherit; padding: 0; }
   .row.focus { background: #dcebfb; }
   #diagram { flex: 1; min-width: 0; overflow: hidden; cursor: grab; }
+  #sidebar .start { color: #666; }
+  #sidebar .start a { cursor: pointer; color: #1a5fb4; }
   #diagram:active { cursor: grabbing; }
   #diagram g.node { cursor: pointer; }
   #diagram g.cluster text { cursor: pointer; }
@@ -69,7 +93,11 @@
   #sidebar .ref[data-status="glance"] { border-color: #7fae2e; }
   #sidebar .ref[data-status="question"] { border-color: #cc9900; }
   #sidebar .ref[data-status="reject"] { border-color: #cc3333; }
-  #sidebar .marks button { width: 2em; height: 1.8em; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  /* Buttons in the sidebar look like those above the diagram; the marks are squares. */
+  #sidebar button { font: inherit; font-size: 0.9em; color: #333; background: #fff; cursor: pointer;
+    border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.2em 0.7em; }
+  #sidebar button:hover { background: #f3f5f8; }
+  #sidebar .marks button { width: 2.1em; height: 1.9em; padding: 0; border-color: #c9cdd3; }
   #sidebar .marks button.accept { width: auto; padding: 0 0.5em; }
   #sidebar .marks button.star { margin-left: 0.6em; color: #b08800; }
   #sidebar .marks button.star.active { background: #fff3c4; border-color: #d4a017; }
@@ -78,7 +106,8 @@
   #sidebar .marks button[data-status="glance"].active { background: #e4f2c4; border-color: #7fae2e; }
   #sidebar .marks button[data-status="question"].active { background: #fbe9b0; border-color: #cc9900; }
   #sidebar .marks button[data-status="reject"].active { background: #f6c4c4; border-color: #cc3333; }
-  #sidebar textarea { width: 100%; box-sizing: border-box; font: inherit; }
+  #sidebar textarea { width: 100%; box-sizing: border-box; font: inherit; border: 1px solid #c9cdd3; border-radius: 6px;
+    padding: 0.4em 0.5em; margin: 0.3em 0; }
   #sidebar .stale { color: #b45f00; font-style: italic; }
   #sidebar .gap { color: #c62828; margin: 0.4em 0; }
   #sidebar .docs { margin: 0.3em -0.4em; }
@@ -144,62 +173,53 @@
 </head>
 <body>
 <header class="views"><h1 id="project">Dependency graph</h1>
-  <nav><a id="docs-link" href="/">docs</a><a href="/review/quiz">quiz</a><span class="review-me"></span></nav></header>
-<details class="note"><summary>How to read this diagram</summary><p>Each arrow points from a declaration to one it depends on, with the arrows implied
-by others left out (a Hasse diagram). For a theorem, only its statement counts; for a definition,
-its statement and body. Colors are your marks; a solid orange border means it changed since a mark that relies on it, a
-dashed one that something below it did; selecting one traces the way down to the change. Scroll to zoom, drag to pan. Click a node to see its code and notes, and to
-highlight <span class="key-down">what it depends on</span> and <span class="key-up">what depends
-on it</span>; click empty space to clear. Boxes are folders and modules, with how many of their
-declarations you have marked: click one to open it, and click an open box's label to close it.
-A thicker arrow between boxes stands for more dependencies. Arrows are drawn between neighbors in
-the same folder; "arrows across folders" draws the rest. <b>Shift-click</b> anything, a declaration
-or a box, to color everything it depends on and everything that uses it, however far away. Cmd- or
-Ctrl-click a box, or a row in the list, to open it and show only what you pick, however distant, and the
-arrows between them. Opening or picking a module shows all its code beside the diagram. A red border means a declaration contains <code>sorry</code>, and a dashed one
-that it relies on one, even if only through a proof; dashed red arrows lead to the <code>sorry</code>
-step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></details>
+  <nav><a id="docs-link" href="/">docs</a><a href="/review/quiz">quiz</a></nav><span class="review-me"></span>
+  <span id="help-slot"></span></header>
 <div class="controls">
-  <button type="button" id="toggle-tree" title="Hide or show the list of folders and modules">hide folders</button>
-  <button type="button" id="toggle-sidebar" title="Hide or show the panel with a declaration's code and notes">hide details</button>
   <button type="button" id="close-all">close all</button>
   <button type="button" id="open-all" hidden>open all</button>
   <button type="button" id="clear-pins" hidden>show everything</button>
   <button type="button" id="what-changed" hidden></button>
   <button type="button" id="challenge-button" hidden title="The project's challenge: the theorems chosen, and everything they rest on"></button>
-  <label><input type="checkbox" id="clusters" checked> group by module</label>
-  <label><input type="checkbox" id="across"> arrows across folders</label>
-  <label><input type="checkbox" id="library"> show library definitions</label>
-  <label id="gaps-label" hidden><input type="checkbox" id="gaps" checked> show sorry</label>
+  <span class="grow"></span>
   <label id="viewer-label" hidden>marks of <select id="viewer"></select></label>
-  <span id="groups">plumbing:</span>
-  <div class="legend">
-    <span><i class="swatch" style="background:#c8ecc8"></i>agree / understood</span>
-    <span><i class="swatch" style="background:#e4f2c4"></i>looks right at a glance</span>
-    <span><i class="swatch" style="background:#fbe9b0"></i>question</span>
-    <span><i class="swatch" style="background:#f6c4c4"></i>reject</span>
-    <span id="disagree-key" hidden><i class="swatch" style="background:#e6dcf5"></i>disagreement</span>
-    <span><i class="swatch" style="background:#fff"></i>unmarked</span>
-    <span><i class="swatch" style="background:#eee"></i>library</span>
-    <span id="attention-key" hidden><span class="attention-mark">!</span> needs your attention</span>
-    <span id="star-key" hidden><span class="star-mark">★</span> especially useful</span>
-    <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px solid #f0a020"></i>changed</span>
-    <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #f0a020"></i>relies on a change</span>
-    <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px solid #c62828"></i>contains sorry</span>
-    <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #c62828"></i>relies on sorry</span>
-    <span class="gaps-key" id="gaps-total" hidden></span>
-  </div>
+  <details class="menu" id="view-menu"><summary>View</summary>
+    <div class="menu-panel">
+      <label><input type="checkbox" id="clusters" checked> group by module</label>
+      <label><input type="checkbox" id="across"> arrows across folders</label>
+      <label><input type="checkbox" id="library"> library definitions</label>
+      <label id="gaps-label" hidden><input type="checkbox" id="gaps" checked> show sorry</label>
+      <div class="menu-head" title="Library definitions most proofs use without thinking of them, hidden unless chosen here">Library plumbing</div>
+      <div id="groups"></div>
+    </div></details>
 </div>
 <div class="layout">
   <nav id="tree">
     <input type="search" id="tree-search" placeholder="Find a folder or module">
-    <p id="tree-hint">Click to open or close. Cmd- or Ctrl-click here or on a box to pick it, and show only what's picked. Opening or picking a module shows its code.</p>
     <div id="tree-rows"></div>
   </nav>
-  <div class="divider" data-panel="tree" title="Drag to resize; double-click to reset"></div>
-  <div id="diagram"></div>
-  <div class="divider" data-panel="sidebar" title="Drag to resize; double-click to reset"></div>
-  <aside id="sidebar"><p class="muted">Click a node to see its code, notes and dependencies.</p></aside>
+  <div class="divider" data-panel="tree" title="Drag to resize; double-click to reset"><button type="button" class="panel-toggle"></button></div>
+  <div id="diagram-area">
+    <div id="diagram"></div>
+    <div class="legend">
+      <span><i class="swatch" style="background:#c8ecc8"></i>agree</span>
+      <span><i class="swatch" style="background:#e4f2c4"></i>at a glance</span>
+      <span><i class="swatch" style="background:#fbe9b0"></i>question</span>
+      <span><i class="swatch" style="background:#f6c4c4"></i>reject</span>
+      <span id="disagree-key" hidden><i class="swatch" style="background:#e6dcf5"></i>disagreement</span>
+      <span><i class="swatch" style="background:#fff"></i>unmarked</span>
+      <span><i class="swatch" style="background:#eee"></i>library</span>
+      <span id="attention-key" hidden><span class="attention-mark">!</span>needs you</span>
+      <span id="star-key" hidden><span class="star-mark">★</span>useful</span>
+      <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px solid #f0a020"></i>changed</span>
+      <span class="change-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #f0a020"></i>relies on a change</span>
+      <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px solid #c62828"></i>contains sorry</span>
+      <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #c62828"></i>relies on sorry</span>
+      <span class="gaps-key" id="gaps-total" hidden></span>
+    </div>
+  </div>
+  <div class="divider" data-panel="sidebar" title="Drag to resize; double-click to reset"><button type="button" class="panel-toggle"></button></div>
+  <aside id="sidebar"></aside>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@2.13.0/dist/graphviz.umd.js"></script>
@@ -207,6 +227,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
 <script src="/review/links.js"></script>
 <script src="/review/math.js"></script>
 <script src="/review/lean.js"></script>
+<script src="/review/help.js"></script>
 <script>
 (async () => {
   // A large project sends the folder tree and what the marks need; the declarations of a module
@@ -1150,12 +1171,21 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     return text.trim() ? { joiner, text: text.replace(/^\n+/, "") } : null;
   }
 
+  // What the sidebar says with nothing chosen.
+  function startHint() {
+    const tour = el("a", null, "How this works");
+    tour.onclick = () => reviewHelp.open("start");
+    const second = el("p", "start");
+    second.append(tour, " takes a minute.");
+    return [el("p", "start", "Click a declaration to see its statement, code and notes here, and mark it."), second];
+  }
+
   async function renderSidebar(name) {
     keepDraft();
     draftFor = name;
     sidebar.replaceChildren();
     delete sidebar.dataset.panel;
-    if (!name) { sidebar.append(el("p", "muted", "Click a node to see its code, notes and dependencies.")); return; }
+    if (!name) { sidebar.append(...startHint()); return; }
     const i = info(name), isLibrary = !decls[name];
     // The module, a link back to its code when it's the project's.
     const where = el("p", "muted", `${i?.kind ?? ""} in `), home = allNodes.find(n => n.module && n.module === i?.module);
@@ -1550,14 +1580,17 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
         .width(target.clientWidth).height(target.clientHeight).renderDot(dot, resolve));
   }
 
-  // The side panels, hidden or shown for a larger diagram; remembered per browser. Hiding one
-  // resizes the diagram, which redraws to fit.
+  // The side panels, hidden or shown for a larger diagram by the button on the line beside each;
+  // remembered per browser. Hiding one resizes the diagram, which redraws to fit.
   for (const [panel, name] of [["tree", "folders"], ["sidebar", "details"]]) {
-    const button = document.getElementById(`toggle-${panel}`), key = `lean-vouch.hide-${panel}`;
+    const button = document.querySelector(`.divider[data-panel=${panel}] .panel-toggle`), key = `lean-vouch.hide-${panel}`;
     const show = hidden => {
       document.body.classList.toggle(`hide-${panel}`, hidden);
-      button.textContent = `${hidden ? "show" : "hide"} ${name}`;
+      // Each arrow points the way the panel moves.
+      button.textContent = (panel === "tree") === hidden ? "»" : "«";
+      button.title = `${hidden ? "Show" : "Hide"} the ${name}`;
     };
+    button.onpointerdown = e => e.stopPropagation();
     try { show(localStorage.getItem(key) === "1"); } catch {}
     button.onclick = () => {
       const hidden = !document.body.classList.contains(`hide-${panel}`);
@@ -1572,7 +1605,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const panel = document.getElementById(divider.dataset.panel), key = `lean-vouch.width-${divider.dataset.panel}`;
     const layout = divider.parentElement;
     const setWidth = width => {
-      const others = [...layout.children].filter(e => e !== panel && e.id !== "diagram" && e.offsetParent)
+      const others = [...layout.children].filter(e => e !== panel && e.id !== "diagram-area" && e.offsetParent)
         .reduce((sum, e) => sum + e.getBoundingClientRect().width, 0);
       const most = layout.getBoundingClientRect().width - others - 200;
       width = Math.round(Math.max(120, Math.min(width, most)));
@@ -1581,6 +1614,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     };
     try { const saved = Number(localStorage.getItem(key)); if (saved) setWidth(saved); } catch {}
     divider.onpointerdown = down => {
+      if (!panel.offsetParent) return;   // hidden: nothing to resize
       down.preventDefault();
       divider.setPointerCapture(down.pointerId);
       divider.classList.add("dragging");
@@ -1608,7 +1642,7 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
     const size = `${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
     if (panelSize && size !== panelSize) { clearTimeout(resizing); resizing = setTimeout(draw, 200); }
     panelSize = size;
-  }).observe(document.getElementById("diagram"));
+  }).observe(document.getElementById("diagram-area"));
   for (const id of ["clusters", "across", "gaps"]) document.getElementById(id).onchange = draw;
   viewer.onchange = () => {
     document.getElementById("disagree-key").hidden = viewer.value !== "all";
@@ -1653,6 +1687,11 @@ step by step. Shift-click a <code>sorry</code> to see all it reaches.</p></detai
   document.getElementById("clear-pins").onclick = () => { pinned = new Set(); draw(); };
   openAll.onclick = () => { expanded = new Set(allNodes.filter(n => !modulesOnly || !n.module).map(n => n.path)); draw(); };
   document.getElementById("library").onchange = draw;
+  sidebar.replaceChildren(...startHint());
+  reviewHelp.button(document.getElementById("help-slot"), "start");
+  // The View menu closes when you click elsewhere.
+  const viewMenu = document.getElementById("view-menu");
+  document.addEventListener("click", e => { if (!viewMenu.contains(e.target)) viewMenu.open = false; });
   // Open a declaration directly with diagram#Name.
   const fromHash = decodeURIComponent(location.hash.slice(1));
   if (fromHash && !info(fromHash) && !tree.complete) await load(`name=${encodeURIComponent(fromHash)}`);

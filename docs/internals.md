@@ -11,7 +11,7 @@
   `HEq`, …); `notation`, what `if`, `match`, `do`, `throw` and `try` mean (`ite`, `Except.bind`,
   …); `internals`, formatting and string-slice internals; and `theorems`, library theorems used
   inside a definition's body. Each group is hidden by default and can be switched on under "show
-  plumbing" in the pages and on the diagram page (remembered per browser). A hidden group is
+  plumbing" in the doc pages and under **View** on the diagram page (remembered per browser). A hidden group is
   neither listed nor counted when deciding whether a mark needs re-checking.
 - **What a reviewer reads:** each project declaration's signature, printed by Lean from inside the
   declaration's own namespace, so it shows every argument, including those a `variable` adds, and

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The pages explain less in place: a **?** at the top of the diagram and quiz pages opens a short tutorial, which opens by itself on a first visit. The diagram's controls fit on one row, with what it draws, library plumbing included, under a **View** menu; its key sits in a corner of the diagram; and « and » on the lines beside the panels hide them. Buttons and fields look the same across pages.
+
 ## 0.1.2 (2026-11-12)
 
 A first run builds only what `lake build` does, and reviewing reads more easily: a ~ mark for "looks right at a glance", stars, a module's whole code beside the diagram, and statements laid out as in doc-gen4. Works with Lean v4.30 to v4.35. Everyone sharing marks should upgrade together, since 0.1.1 can't read a ~.
