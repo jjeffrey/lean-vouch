@@ -33,11 +33,10 @@
   .menu-panel label { display: block; margin: 0.3em 0; white-space: nowrap; }
   .menu-head { margin: 0.7em 0 0.2em; padding-top: 0.5em; border-top: 1px solid #eee; font-size: 0.8em; color: #777;
     text-transform: uppercase; letter-spacing: 0.04em; }
-  /* The key, in the diagram's corner; it lets clicks through to the diagram. */
-  #diagram-area { flex: 1; min-width: 0; position: relative; display: flex; }
-  .legend { position: absolute; left: 0.6em; bottom: 0.6em; max-width: calc(100% - 1.2em); pointer-events: none;
-    display: flex; flex-wrap: wrap; gap: 0.15em 0.9em; font-size: 0.78em; color: #555;
-    background: #ffffffd9; border-radius: 6px; padding: 0.3em 0.6em; }
+  /* The key, in a row of its own above the diagram, so it never covers any of it. */
+  #diagram-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .legend { flex: none; display: flex; flex-wrap: wrap; gap: 0.15em 0.9em; font-size: 0.78em; color: #555;
+    padding: 0.4em 0.6em; }
   .legend span[hidden] { display: none; }
   .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; vertical-align: middle;
     margin-right: 0.3em; border: 1px solid #888; box-sizing: border-box; }
@@ -73,7 +72,7 @@
   .row.pinned .label { font-weight: 600; }
   .row mark { background: #fbe9b0; color: inherit; padding: 0; }
   .row.focus { background: #dcebfb; }
-  #diagram { flex: 1; min-width: 0; overflow: hidden; cursor: grab; }
+  #diagram { flex: 1; min-width: 0; min-height: 0; overflow: hidden; cursor: grab; }
   #sidebar .start { color: #666; }
   #sidebar .start a { cursor: pointer; color: #1a5fb4; }
   #diagram:active { cursor: grabbing; }
@@ -200,7 +199,6 @@
   </nav>
   <div class="divider" data-panel="tree" title="Drag to resize; double-click to reset"><button type="button" class="panel-toggle"></button></div>
   <div id="diagram-area">
-    <div id="diagram"></div>
     <div class="legend">
       <span><i class="swatch" style="background:#c8ecc8"></i>agree</span>
       <span><i class="swatch" style="background:#e4f2c4"></i>at a glance</span>
@@ -217,6 +215,7 @@
       <span class="gaps-key" hidden><i class="swatch" style="background:#fff;border:2px dashed #c62828"></i>relies on sorry</span>
       <span class="gaps-key" id="gaps-total" hidden></span>
     </div>
+    <div id="diagram"></div>
   </div>
   <div class="divider" data-panel="sidebar" title="Drag to resize; double-click to reset"><button type="button" class="panel-toggle"></button></div>
   <aside id="sidebar"></aside>
