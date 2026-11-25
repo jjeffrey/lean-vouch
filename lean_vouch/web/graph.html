@@ -44,11 +44,12 @@
   /* Either side panel can be hidden, for a larger diagram, with the button on the line beside it,
      or made wider or narrower by dragging that line. */
   body.hide-tree #tree, body.hide-sidebar #sidebar { display: none; }
-  .divider { flex: none; width: 9px; margin: 0 -4px; z-index: 2; cursor: col-resize; touch-action: none; position: relative;
-    background: linear-gradient(to right, transparent 4px, #ddd 4px, #ddd 5px, transparent 5px); }
-  .divider:hover, .divider.dragging { background: linear-gradient(to right, transparent 3px, #1a5fb4 3px, #1a5fb4 6px, transparent 6px); }
+  /* A gutter as wide as its button, so neither covers the panels; the line runs down its middle. */
+  .divider { flex: none; width: 22px; z-index: 2; cursor: col-resize; touch-action: none; position: relative;
+    background: linear-gradient(to right, transparent 10.5px, #ddd 10.5px, #ddd 11.5px, transparent 11.5px); }
+  .divider:hover, .divider.dragging { background: linear-gradient(to right, transparent 9.5px, #1a5fb4 9.5px, #1a5fb4 12.5px, transparent 12.5px); }
   body.hide-tree .divider[data-panel=tree], body.hide-sidebar .divider[data-panel=sidebar] { cursor: default; background:
-    linear-gradient(to right, transparent 4px, #ddd 4px, #ddd 5px, transparent 5px); }
+    linear-gradient(to right, transparent 10.5px, #ddd 10.5px, #ddd 11.5px, transparent 11.5px); }
   .panel-toggle { position: absolute; top: 0.5em; left: 50%; transform: translateX(-50%); width: 1.5em; height: 1.5em;
     padding: 0; border-radius: 50%; border: none; background: #eceef1; color: #666; font-size: 0.85em;
     line-height: 1; cursor: pointer; }
