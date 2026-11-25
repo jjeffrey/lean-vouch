@@ -93,9 +93,12 @@ window.reviewLean = (() => {
 
   // A signature as the graph has it, `Name binders : type`, split into its name, its binders and its
   // type. No type if it can't be split.
+  // The name a signature starts with, with its universes when Lean prints them, as in
+  // `Pair.{u, v}`: the list has spaces, and may be broken across lines.
+  const signatureName = signature => signature.match(/^(?:«[^»]*»|\.\{[^}]*\}|[^\s«])+/)?.[0] ?? "";
   function signatureParts(signature) {
     const flat = signature.replace(/\s+/g, " ");
-    const name = flat.match(/^(?:«[^»]*»|[^\s«])+/)?.[0] ?? "";
+    const name = signatureName(flat);
     const text = flat.slice(name.length).trimStart();
     const args = [];
     let depth = 0, start = -1;
@@ -113,5 +116,5 @@ window.reviewLean = (() => {
     ".lean-doc h4 { margin: 0.5em 0 0.2em; } .lean-doc pre { background: #f6f8fa; padding: 0.4em; } " +
     ".lean-doc ul, .lean-doc ol { margin: 0.2em 0; padding-left: 1.4em; }";
   document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
-  return { highlight, resolve, markdown, signatureParts };
+  return { highlight, resolve, markdown, signatureName, signatureParts };
 })();

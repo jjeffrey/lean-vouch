@@ -458,7 +458,7 @@
     const pre = el("pre", "code statement");
     pre.style.whiteSpace = "pre-wrap";
     pre.append(el("span", "lean-keyword", `${decls[name].kind} `));
-    const rest = signature.replace(/^(?:«[^»]*»|[^\s«])+/, "");
+    const rest = signature.slice(reviewLean.signatureName(signature).length);
     if (hidden) pre.append(Object.assign(el("span", "hidden-name", "▢"), { title: "name hidden" }));
     else pre.append(short(name));
     pre.append(reviewLean.highlight(rest, written => {

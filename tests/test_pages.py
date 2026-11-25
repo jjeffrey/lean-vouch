@@ -205,6 +205,16 @@ class PagesTest(unittest.TestCase):
         """, frame=f"review/diagram#{GCD}")
         self.assertEqual(results, ["agree", "reject", "", "question", True])
 
+    def test_a_statement_with_universes_keeps_its_name_and_arguments(self):
+        # Lean prints a declaration's universes after its name, with spaces, and may break the line.
+        results = self.click_through({}, """
+            await ready("#sidebar");
+            const lean = doc.defaultView.reviewLean, signature = "Pair.{u,\\n  v} (A : Type u) (B : Type v) : Type (max u v)";
+            results.push(lean.signatureParts(signature), signature.slice(lean.signatureName(signature).length));
+        """, frame="review/diagram")
+        self.assertEqual(results, [{"name": "Pair.{u, v}", "args": ["(A : Type u)", "(B : Type v)"], "type": "Type (max u v)"},
+                                   " (A : Type u) (B : Type v) : Type (max u v)"])
+
     def test_the_tutorial_opens_once_by_itself(self):
         results = self.click_through({}, """
             await ready("dialog.help");
