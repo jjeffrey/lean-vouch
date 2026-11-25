@@ -158,13 +158,13 @@ window.reviewHelp = (() => {
       border-radius: 4px; padding: 0 0.35em; background: #fafbfc; }
     dialog.help .help-foot { display: flex; justify-content: flex-end; gap: 0.5em; padding: 0.8em 1.6em 1em; }
     dialog.help .help-foot button { font: inherit; font-size: 0.9em; padding: 0.3em 0.9em; border-radius: 6px;
-      border: 1px solid #c9cdd3; background: #fff; cursor: pointer; }
+      border: 1px solid transparent; background: #eceef1; cursor: pointer; }
     dialog.help .help-foot button:disabled { opacity: 0.4; cursor: default; }
     dialog.help .help-foot button.primary, dialog.help .help-foot button.help-next { background: #1a5fb4; border-color: #1a5fb4; color: #fff; }
     @media (max-width: 40em) { dialog.help nav { display: none; } }
     .help-button { font: 600 0.9em system-ui, sans-serif; width: 1.8em; height: 1.8em; border-radius: 50%; margin: 0;
-      border: 1px solid #c9cdd3; background: #fff; color: #555; cursor: pointer; padding: 0; }
-    .help-button:hover { background: #f3f5f8; color: #111; }`;
+      border: none; background: #eceef1; color: #555; cursor: pointer; padding: 0; }
+    .help-button:hover { background: #e1e4e8; color: #111; }`;
 
   return { open, button };
 })();

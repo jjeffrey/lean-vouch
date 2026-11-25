@@ -19,9 +19,9 @@
   /* One row: what's used often as buttons, the rest under View. */
   .controls { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; margin-bottom: 0.6em; }
   .controls .grow { flex: 1; }
-  .controls button, .menu summary { font: inherit; font-size: 0.9em; color: #333; background: #fff; cursor: pointer;
-    border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.25em 0.75em; }
-  .controls button:hover, .menu summary:hover { background: #f3f5f8; }
+  .controls button, .menu summary { font: inherit; font-size: 0.9em; color: #333; background: #eceef1; cursor: pointer;
+    border: 1px solid transparent; border-radius: 6px; padding: 0.25em 0.75em; }
+  .controls button:hover, .menu summary:hover { background: #e1e4e8; }
   .controls label { font-size: 0.9em; color: #444; }
   .controls select { font: inherit; font-size: 0.95em; border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.15em 0.3em; background: #fff; }
   .menu { position: relative; }
@@ -51,9 +51,9 @@
   body.hide-tree .divider[data-panel=tree], body.hide-sidebar .divider[data-panel=sidebar] { cursor: default; background:
     linear-gradient(to right, transparent 4px, #ddd 4px, #ddd 5px, transparent 5px); }
   .panel-toggle { position: absolute; top: 0.5em; left: 50%; transform: translateX(-50%); width: 1.5em; height: 1.5em;
-    padding: 0; border-radius: 50%; border: 1px solid #c9cdd3; background: #fff; color: #666; font-size: 0.85em;
+    padding: 0; border-radius: 50%; border: none; background: #eceef1; color: #666; font-size: 0.85em;
     line-height: 1; cursor: pointer; }
-  .panel-toggle:hover { background: #f3f5f8; color: #111; }
+  .panel-toggle:hover { background: #e1e4e8; color: #111; }
   body.dragging { cursor: col-resize; user-select: none; }
   #tree { width: 17em; flex: none; display: flex; flex-direction: column; font-size: 0.88em; min-height: 0; }
   #tree input[type=search] { margin: 0.5em; font: inherit; border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.25em 0.5em; }
@@ -94,10 +94,10 @@
   #sidebar .ref[data-status="question"] { border-color: #cc9900; }
   #sidebar .ref[data-status="reject"] { border-color: #cc3333; }
   /* Buttons in the sidebar look like those above the diagram; the marks are squares. */
-  #sidebar button { font: inherit; font-size: 0.9em; color: #333; background: #fff; cursor: pointer;
-    border: 1px solid #c9cdd3; border-radius: 6px; padding: 0.2em 0.7em; }
-  #sidebar button:hover { background: #f3f5f8; }
-  #sidebar .marks button { width: 2.1em; height: 1.9em; padding: 0; border-color: #c9cdd3; }
+  #sidebar button { font: inherit; font-size: 0.9em; color: #333; background: #eceef1; cursor: pointer;
+    border: 1px solid transparent; border-radius: 6px; padding: 0.2em 0.7em; }
+  #sidebar button:hover { background: #e1e4e8; }
+  #sidebar .marks button { width: 2.1em; height: 1.9em; padding: 0; }
   #sidebar .marks button.accept { width: auto; padding: 0 0.5em; }
   #sidebar .marks button.star { margin-left: 0.6em; color: #b08800; }
   #sidebar .marks button.star.active { background: #fff3c4; border-color: #d4a017; }
