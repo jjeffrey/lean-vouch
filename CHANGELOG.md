@@ -3,7 +3,7 @@
 ## Unreleased
 
 - The pages explain less in place: a **?** at the top of the diagram and quiz pages opens a short tutorial, which opens by itself on a first visit. The diagram's controls fit on one row, with what it draws, library plumbing included, under a **View** menu; its key sits in a corner of the diagram; and « and » on the lines beside the panels hide them. Buttons and fields look the same across pages.
-- A statement whose declaration has more than one universe, which Lean prints after its name as `Name.{u, v}`, is laid out whole. Before, its name was cut off inside that list, and the arguments with it.
+- A statement whose declaration has more than one universe, which Lean prints after its name as `Name.{u, v}`, is laid out whole. Before, its name was cut off inside that list, and the arguments with it. The name is now shown without its universes, as doc-gen4 does.
 
 ## 0.1.2 (2026-11-12)
 

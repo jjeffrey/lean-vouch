@@ -91,24 +91,26 @@ window.reviewLean = (() => {
     return root;
   }
 
-  // A signature as the graph has it, `Name binders : type`, split into its name, its binders and its
-  // type. No type if it can't be split.
   // The name a signature starts with, with its universes when Lean prints them, as in
   // `Pair.{u, v}`: the list has spaces, and may be broken across lines.
   const signatureName = signature => signature.match(/^(?:«[^»]*»|\.\{[^}]*\}|[^\s«])+/)?.[0] ?? "";
+  // A signature as the graph has it, `Name binders : type`, split into its name, its binders and its
+  // type. No type if it can't be split.
   function signatureParts(signature) {
     const flat = signature.replace(/\s+/g, " ");
     const name = signatureName(flat);
     const text = flat.slice(name.length).trimStart();
+    // Shown without its universes, as doc-gen4 does: they're in the arguments and the type.
+    const shown = name.replace(/\.\{[^}]*\}$/, "");
     const args = [];
     let depth = 0, start = -1;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
       if ("([{⦃".includes(c)) { if (depth++ === 0) start = i; }
       else if (")]}⦄".includes(c)) { if (--depth === 0) args.push(text.slice(start, i + 1)); }
-      else if (depth === 0 && c === ":" && text[i + 1] !== "=") return { name, args, type: text.slice(i + 1).trim() };
+      else if (depth === 0 && c === ":" && text[i + 1] !== "=") return { name: shown, args, type: text.slice(i + 1).trim() };
     }
-    return { name, args, type: "" };
+    return { name: shown, args, type: "" };
   }
 
   const css = ".lean-keyword { color: #8b2fc9; font-weight: 600; } .lean-comment { color: #6a737d; font-style: italic; } " +
